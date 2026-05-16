@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport } from '../api';
+import ObjectBrowser from './ObjectBrowser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -165,46 +166,7 @@ function ObjectDetail({ obj }: { obj: AnyObject }) {
 
 // ─── Objects table (flat, searchable) ──────────────────────────────────────
 
-function ObjectsTable({ objects, onSelect }: { objects: AnyObject[]; onSelect: (r: string) => void }) {
-  const [search, setSearch] = useState('');
-  const filtered = search
-    ? objects.filter(o => displayName(o).toLowerCase().includes(search.toLowerCase()) || o.className.toLowerCase().includes(search.toLowerCase()))
-    : objects;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input type="text" placeholder="Filter by name, class…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, maxWidth: 280 }} />
-        <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{filtered.length.toLocaleString()} objects</span>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-          <thead style={{ position: 'sticky', top: 0, background: 'var(--sidebar-bg)' }}>
-            <tr style={{ fontSize: 11, color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
-              <th style={{ textAlign: 'left', padding: '4px 8px', width: 140 }}>Class</th>
-              <th style={{ textAlign: 'left', padding: '4px 8px' }}>Tag</th>
-              <th style={{ textAlign: 'left', padding: '4px 8px' }}>Description</th>
-              <th style={{ textAlign: 'left', padding: '4px 8px', width: 80 }}>Units</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(o => (
-              <tr key={o.ref} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
-                onClick={() => onSelect(o.ref)}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--hover)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              >
-                <td style={{ padding: '4px 8px', fontFamily: 'Consolas,monospace', fontSize: 11, color: 'var(--accent)' }}>{o.className}</td>
-                <td style={{ padding: '4px 8px', fontWeight: 500 }}>{o.tag}</td>
-                <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{o.description}</td>
-                <td style={{ padding: '4px 8px', fontSize: 11, color: 'var(--text-dim)' }}>{o.units ?? ''}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+// ObjectsTable replaced by ObjectBrowser (imported above)
 
 // ─── I/O table ──────────────────────────────────────────────────────────────
 
@@ -513,7 +475,7 @@ export default function FileViewerPane() {
       </div>
 
       {/* Content */}
-      {tab === 'objects' && <ObjectsTable objects={allObjects} onSelect={setSelected} />}
+      {tab === 'objects' && <ObjectBrowser objects={allObjects} onSelect={setSelected} />}
       {tab === 'io' && <div style={{ flex: 1, overflow: 'hidden' }}><IoTable objects={allObjects} /></div>}
       {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={file} /></div>}
       {tab === 'diff' && <DiffTab fileA={file} fileB={null} />}

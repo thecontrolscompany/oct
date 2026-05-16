@@ -1,0 +1,288 @@
+Reading .caf and .dbexport files from Metasys without SCT, CCT, or a JCI service visit — built a free browser-based viewer
+r/BuildingAutomation - Reading .caf and .dbexport files from Metasys without SCT, CCT, or a JCI service visit — built a free browser-based viewer
+**TL;DR**: Free, browser-only viewer for Metasys SCT archives (`.dbexport`) and CCT controller files (`.caf`). Drop a file on the page, see everything inside. No install, no login, no internet required after first load.
+
+**Live demo**: https://jmsboswell67-alt.github.io/dbexport-viewer/
+
+**Source**: https://github.com/jmsboswell67-alt/dbexport-viewer (Apache 2.0)
+
+## Why
+
+A few years ago someone here asked *"Is there any way to open up a .caf file without a service tech?"* — top answer was *"Without a copy of CCT or PCT there is not much you can do."*
+
+That sentence is true. It's also the wrong answer for everyone who already has the files. If you own the building, manage the facility, scoped a vendor change, took over from a previous contractor, or got handed an archive for an energy audit — you already have the file. You just couldn't read it.
+
+Now you can.
+
+## What it does
+
+- **Reads `.dbexport`** — full hierarchy (Site → Engine → Trunk → Equipment → Points) with class labels, property names, and the controller's model / firmware / IP at a glance.
+
+- **Reads `.caf`** — tells you the controller model, firmware version, every configured point and logic block.
+
+- **Diffs two snapshots** — object-level and property-level. SCT doesn't have this. If your contractor changed things between visits and you have backups, you can see exactly what they touched.
+
+- **Exports CSV/JSON** — points, schedules, alarms, trend logs, scoped to whatever you've selected. Open in Excel, share with a consultant, feed into your own analysis.
+
+- **Bulk-fixes unbound references** — drop your `UnboundReferences.csv`, get pattern detection like *"6,348 refs point to a renamed ADX"*, click one button to produce a fixed `.dbexport` with the dead refs repointed. **Including** the gnarly `Base64Zip`-wrapped ones inside User Trees, Graphics, and Programming logic. SCT makes you fix those one row at a time. This makes it a single bulk operation.
+
+- **"If I delete this point, what graphics break?"** — indexes every Metasys binding from every graphic in the archive. Drop in a dbexport, see exactly which graphics reference any given point.
+
+Tested against a real-world archive (109 graphics, 12,271 objects, 17 engines): repoint feature transformed **7,538 dead `DACC-ADX-01:` refs to `DACC-ADX-02:` in 30 seconds**. Graphics view indexed 92 graphics with 930 bound points in another ~5 seconds. Everything in-browser.
+
+## How it works
+
+Single HTML file, ~210 KB, runs entirely client-side. JSZip handles the unzip. Every parse happens locally — your file never leaves your machine. Works offline after the page loads.
+
+The class and attribute dictionaries (249 classes, 276 properties) were extracted from JCI's publicly-distributed Launcher resource bundles and the SMP/SCT Help PDFs — factual ID→name mappings only, not their code or files. Standard interop reference work (Sega v. Accolade / Feist v. Rural / EU Software Directive Art. 6 territory).
+
+## What it can't do (yet)
+
+- **Render graphics**. We extract the bindings but don't draw the symbols. Both the XAML and TSEGraph schemas would each need a real renderer.
+
+- **Edit object structure**. The repoint feature does prefix substitution only — no add/delete/rewire.
+
+- **Decode every property**. About 5 attribute IDs that account for ~25,000 occurrences in a typical archive (3135, 4306, 721, 52, 931) aren't in any JCI public document — they're runtime-only. We show them honestly as "Property NNNN" rather than guess.
+
+- **Talk to live engines**. Read-only against files you already have. No BACnet polling, no REST API client, no risk to your live system.
+
+## What would help most
+
+**Try it with your archive and tell me what's wrong**. The `references/inventory_unknowns.py` script in the repo scans a `.dbexport` and reports every unknown class/property ID. Paste output in an issue and the names get baked in.
+
+**Live engine enum captures** if you've got SMP or SCT online access. Specifically `GET /api/v6/schemas/enums/<setName>` for about a dozen documented enum sets (`reliabilityEnumSet`, `unitEnumSet`, `jciSystemStatusEnumSet`, `writePriorityEnumSet`, `displayPrecisionEnumSet`, `objectCategoryEnumSet`, `auditOriginAppEnumSet`, `auditClassesEnumSet`, `auditActionTypeEnumSet`...). One curl per set. Paste responses in an issue and we close the enum-decoding gap for the whole community.
+
+**CCT logic-block class IDs**. If you have CCT installed, about 30 class IDs in `.caf` files have no public name (526, 528, 530, 555, 556, 561, 568, 658-660 etc.). Open a sample `.caf`, tell me what kind of block each is, I'll add them.
+
+**Sample archives** — different firmware versions, oddball controllers, sites with non-college load profiles. Diversity helps the heuristics improve.
+
+**Cross-vendor extension** — the architecture maps to Tridium Niagara, Siemens Desigo, Honeywell EBI. If any of those are your world and you want to fork or contribute, open an issue.
+
+**Just kick the tires and report bugs**. Especially graphics from different generations, obscure property data types, anything that fails to load.
+
+---
+
+*Not affiliated with Johnson Controls. Metasys, SCT, CCT, ADX, NAE, NCE, SNE, and FEC are trademarks of Johnson Controls, used here for descriptive interoperability reference only.*
+
+
+Upvote
+19
+
+Downvote
+
+9
+Go to comments
+
+
+Share
+u/Intuit_QuickBooks avatar
+Intuit_QuickBooks
+•
+Promoted
+
+Manage books, customers, payments, and payroll—all in one place—with help from Intuit’s AI agents and trusted experts.
+Shop Now
+quickbooks.intuit.com
+Clickable image which will reveal the video player: Manage books, customers, payments, and payroll—all in one place—with help from Intuit’s AI agents and trusted experts.
+Collapse video player
+
+0:00 / 0:00
+
+
+
+
+Join the conversation
+Sort by:
+
+Best
+
+Search Comments
+Expand comment search
+Comments Section
+u/Gold_for_Gould avatar
+Gold_for_Gould
+•
+18h ago
+Love to see this.
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+ApexConsulting
+•
+12h ago
+Profile Badge for the Achievement Top 1% Poster Top 1% Poster
+AWESOME.
+
+Mind if I post this on HTalk.com? The guys over there will like this.
+
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Miserable-Hope-658 avatar
+Miserable-Hope-658
+OP
+•
+12h ago
+Yeah absolutely! I would love to get some feedback because the project is still in it's infancy, and I could really use some more info from the JCI side since I have limited access to their stuff
+
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+ApexConsulting
+•
+8h ago
+Profile Badge for the Achievement Top 1% Poster Top 1% Poster
+Done
+
+https://www.hvac-talk.com/threads/reading-caf-and-dbexport-files-from-metasys-without-sct-cct-or-a-jci-service-visit.2290556/
+
+I hope you get good feedback. I have Johnson software and expertise, but I am short on time at the moment.
+
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/BoilingShadows avatar
+BoilingShadows
+•
+12h ago
+Manufacturer
+Shit I'll try it on a few of my files to see if it works -JCI tech
+
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Miserable-Hope-658 avatar
+Miserable-Hope-658
+OP
+•
+12h ago
+that'd be great! tear into it and see whats wrong, I know there's a lot that needs fixing any assist you can make with the above items would be highly appreciated, especially the Live engine enum captures
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/twobarb avatar
+twobarb
+•
+11h ago
+•
+Edited 11h ago
+Factory controls are for the weak.
+Are you just parsing out the xml file that a caf actually is?
+
+Some odd errors with FX caf files.
+
+I'll dump some FX caf files in a repository for ya to play with.
+https://github.com/Crazy-Controls-Thoughts
+
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Miserable-Hope-658 avatar
+Miserable-Hope-658
+OP
+•
+4h ago
+Yes, .caf is just a zip with a single .caf.xml inside, same JCI xml namespace as archive.xml. FX is a real gap, I have nothing on that — anything you can drop in your repo would be huge. You mention custom CCT sequences, the ~30 logic block class IDs the dictionary doesn't know (526, 555, 568, 658, etc) are the biggest gap on my side.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+tcollins2
+•
+9m ago
+Ive been playing with a similar tool, mostly just for fun. I have fx and Metasys packages and sct (and all the N2 tools). I can generate some files if you want anything specific.
+
+I’m not sure when I’ll have time, but I’ll put my project on GitHub to share. I was aiming to make a generic (not vendor specific) bacnet scan/troubleshooting tool.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+1
+

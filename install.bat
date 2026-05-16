@@ -1,6 +1,6 @@
 @echo off
 echo ============================================================
-echo  CCT Web UI - First-Time Setup
+echo  OCT — Open Configuration Tool - First-Time Setup
 echo ============================================================
 echo.
 
@@ -31,6 +31,6 @@ if errorlevel 1 ( echo ERROR: UI build failed^. & pause & exit /b 1 )
 
 echo.
 echo ============================================================
-echo  Setup complete. Run start.bat to launch CCT Web UI.
+echo  Setup complete. Run start.bat to launch OCT — Open Configuration Tool.
 echo ============================================================
 pause

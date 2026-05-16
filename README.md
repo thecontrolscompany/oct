@@ -1,8 +1,8 @@
-# CCT Web UI
+# OCT — Open Configuration Tool
 
-A locally-hosted web UI for viewing, commissioning, and diagnosing Johnson Controls Metasys field controllers — built as a free, open-source alternative to the CCT desktop application.
+A free, open-source tool for viewing, editing, commissioning, and diagnosing Johnson Controls Metasys field controllers. Built by the building automation community as an open alternative to proprietary vendor tools.
 
-Runs entirely on your machine. No internet required after install. No cloud account. No JCI service call.
+Runs entirely on your machine. No internet required after install. No cloud account. No vendor service call.
 
 ---
 

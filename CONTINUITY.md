@@ -1,6 +1,6 @@
-# CCT Web UI — Project Continuity & Turnover
+# OCT — Open Configuration Tool — Project Continuity & Turnover
 
-**Last updated:** 2026-04-28  
+**Last updated:** 2026-05-16  
 **Status:** Active development — Phases 1–3 complete, Phase 4 not started
 
 ---

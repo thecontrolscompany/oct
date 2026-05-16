@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title CCT Web UI
+title OCT — Open Configuration Tool
 
 set "ROOT=%~dp0"
 set "SERVER=%ROOT%server"
@@ -28,7 +28,7 @@ REM Open browser after a short delay (runs in background)
 start "" cmd /c "timeout /t 4 /nobreak >nul && start %URL%"
 
 echo ============================================================
-echo  CCT Web UI  -  %URL%
+echo  OCT — Open Configuration Tool  -  %URL%
 echo  Close this window to stop the server.
 echo ============================================================
 echo.

@@ -72,13 +72,13 @@ function AppShell() {
   return (
     <div className="layout">
       <aside className="sidebar">
-        <div className="sidebar-header">CCT — Controller Library</div>
+        <div className="sidebar-header">OCT — Controller Library</div>
         <Sidebar onSelect={item => { setSelected(item); setView('library'); }} selected={selected} />
       </aside>
 
       <div className="main">
         <header className="topbar">
-          <span className="logo">CCT Web</span>
+          <span className="logo">OCT</span>
           <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
             {([
               ['library',  'Library',        null],

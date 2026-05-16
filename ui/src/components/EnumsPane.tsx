@@ -88,7 +88,7 @@ export default function EnumsPane() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontWeight: 500 }}>{s.Name}</span>
-                <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>{s.MemberCount}</span>
+                <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>{s.members.length}</span>
               </div>
               <div style={{ color: 'var(--text-dim)', fontSize: 11, fontFamily: 'Consolas, monospace' }}>
                 set {s.EnumSetId}

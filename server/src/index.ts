@@ -18,6 +18,7 @@ import packagesRouter from './routes/packages';
 import cafRouter from './routes/caf';
 import dbexportRouter from './routes/dbexport';
 import perspectivesRouter from './routes/perspectives';
+import metasysApiRouter from './routes/metasysApi';
 import { isConnected, getDevices, readMultiple, PROP, OBJECT_TYPE_NAME } from './bacnetService';
 import { onFrame, offFrame, getSession } from './mstpSerial';
 import type { MstpFrame } from './mstpSerial';
@@ -25,7 +26,18 @@ import type { MstpFrame } from './mstpSerial';
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
-app.use(cors());
+// Allow all origins in dev; restrict to CORS_ORIGINS (comma-separated) in production
+const corsOrigins = process.env.CORS_ORIGINS;
+app.use(cors({
+  origin: corsOrigins
+    ? (origin, cb) => {
+        const allowed = corsOrigins.split(',').map(s => s.trim());
+        if (!origin || allowed.includes(origin)) cb(null, true);
+        else cb(new Error('CORS not allowed'));
+      }
+    : true,
+  credentials: true,
+}));
 app.use(express.json());
 
 app.use('/api/spaces', spacesRouter);
@@ -40,6 +52,7 @@ app.use('/api/packages', packagesRouter);
 app.use('/api/caf', cafRouter);
 app.use('/api/dbexport', dbexportRouter);
 app.use('/api/perspectives', perspectivesRouter);
+app.use('/api/metasys', metasysApiRouter);
 
 app.get('/api/health', (_req, res) => {
   const s = getSession();

@@ -97,6 +97,7 @@ export interface ParsedCaf {
     ip: string | null;
   };
   objects: CafObject[];
+  references: ReferenceHit[];
   stats: Array<{ className: string; classid: number; count: number }>;
 }
 
@@ -127,7 +128,27 @@ export interface ParsedDbexport {
   site: NavNode | null;
   engines: Array<{ name: string; ref: string; modelName: string; firmwareRevision: string; ip: string | null; objectCount: number }>;
   objects: DbexportObject[];
+  references: ReferenceHit[];
   stats: Array<{ className: string; classid: number; count: number }>;
+}
+
+export interface ReferenceHit {
+  target: string;
+  referringItem: string;
+  referringAttr: string;
+  source: string;
+}
+
+export interface EnumSetSummary {
+  EnumSetId: number;
+  Name: string;
+  MemberCount: number;
+}
+
+export interface EnumSetDetail {
+  EnumSetId: number;
+  Name: string;
+  members: Array<{ EnumMemberId: number; Name: string }>;
 }
 
 export interface PerspectiveSummary {
@@ -247,15 +268,36 @@ export interface BacnetStatus {
   deviceCount: number;
 }
 
-const BASE = '/api';
+import { API_BASE } from './connection';
+const BASE = API_BASE;
+
+async function safeJson<T>(res: Response): Promise<T> {
+  const ct = res.headers.get('content-type') ?? '';
+  if (!ct.includes('json')) throw new Error(`Backend unreachable (HTTP ${res.status})`);
+  return res.json();
+}
+
+// Handles flat {"error":"msg"} and nested {"error":{"message":"msg"}} (Vercel 404 format)
+function extractError(body: unknown, fallback: string): string {
+  if (typeof body !== 'object' || body === null) return fallback;
+  const e = (body as Record<string, unknown>).error;
+  if (typeof e === 'string' && e) return e;
+  if (typeof e === 'object' && e !== null) {
+    const msg = (e as Record<string, unknown>).message;
+    if (typeof msg === 'string' && msg) return msg;
+    const code = (e as Record<string, unknown>).code;
+    if (typeof code === 'string' && code) return code;
+  }
+  return fallback;
+}
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? res.statusText);
+    const body = await safeJson<unknown>(res).catch(() => null);
+    throw new Error(extractError(body, `HTTP ${res.status}`));
   }
-  return res.json();
+  return safeJson<T>(res);
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
@@ -265,10 +307,10 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? res.statusText);
+    const b = await safeJson<unknown>(res).catch(() => null);
+    throw new Error(extractError(b, `HTTP ${res.status}`));
   }
-  return res.json();
+  return safeJson<T>(res);
 }
 
 async function put<T>(path: string, body: unknown): Promise<T> {
@@ -278,16 +320,16 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? res.statusText);
+    const b = await safeJson<unknown>(res).catch(() => null);
+    throw new Error(extractError(b, `HTTP ${res.status}`));
   }
-  return res.json();
+  return safeJson<T>(res);
 }
 
 async function del<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path, { method: 'DELETE' });
   if (!res.ok) throw new Error(res.statusText);
-  return res.json();
+  return safeJson<T>(res);
 }
 
 export const api = {
@@ -366,5 +408,9 @@ export const api = {
     list: () => get<PackageSummary[]>('/packages'),
     detail: (filename: string) => get<PackageDetail>(`/packages/${encodeURIComponent(filename)}`),
     allVersions: () => get<Array<{ name: string; version: string; filename: string }>>('/packages/all-versions'),
+  },
+  fdb: {
+    enumSets: () => get<EnumSetSummary[]>('/fdb/enums'),
+    enumSet: (setId: number) => get<EnumSetDetail>(`/fdb/enums/${setId}`),
   },
 };

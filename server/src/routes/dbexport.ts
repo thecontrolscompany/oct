@@ -4,6 +4,7 @@ import AdmZip from 'adm-zip';
 import { DOMParser } from '@xmldom/xmldom';
 import fs from 'fs';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
+import { collectReferenceHits, serializeNode, type ReferenceHit } from '../archiveAnalysis';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -46,21 +47,22 @@ export interface ParsedDbexport {
   site: NavNode | null;
   engines: EngineInfo[];
   objects: DbexportObject[];
+  references: ReferenceHit[];
   stats: Array<{ className: string; classid: number; count: number }>;
 }
 
 // ─── Nav tree parser ────────────────────────────────────────────────────────
 
-function parseNavNode(el: Element): NavNode {
+function parseNavNode(el: any): NavNode {
   const label = el.getAttribute('label') ?? el.getAttribute('name') ?? '';
   const reference = el.getAttribute('reference') ?? el.getAttribute('ref') ?? '';
   const classid = parseInt(el.getAttribute('classid') ?? el.getAttribute('typeId') ?? '0') || 0;
   const children: NavNode[] = [];
 
   for (let i = 0; i < el.childNodes.length; i++) {
-    const child = el.childNodes[i];
-    if ((child as Element).tagName === 'node' || (child as Element).tagName === 'item') {
-      children.push(parseNavNode(child as Element));
+    const child = el.childNodes[i] as any;
+    if (child.tagName === 'node' || child.tagName === 'item') {
+      children.push(parseNavNode(child));
     }
   }
 
@@ -75,7 +77,7 @@ function parseNavTree(xml: string): NavNode | null {
 
   // Try to find the first meaningful node child
   for (let i = 0; i < root.childNodes.length; i++) {
-    const child = root.childNodes[i] as Element;
+    const child = root.childNodes[i] as any;
     if (child.tagName === 'node' || child.tagName === 'item' || child.tagName === 'site') {
       return parseNavNode(child);
     }
@@ -93,13 +95,14 @@ function getTextContent(el: { textContent?: string | null } | null): string {
   return el?.textContent?.trim() ?? '';
 }
 
-function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef: string): DbexportObject[] {
+function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef: string, sourceName: string): { objects: DbexportObject[]; references: ReferenceHit[] } {
   const doc = new DOMParser().parseFromString(stripBom(xml), 'text/xml');
   const objectEls = doc.getElementsByTagName('object');
   const objects: DbexportObject[] = [];
+  const references: ReferenceHit[] = [];
 
   for (let i = 0; i < objectEls.length; i++) {
-    const el = objectEls[i];
+    const el = objectEls[i] as any;
     const ref = el.getAttribute('ref') ?? '';
     const classid = parseInt(el.getAttribute('classid') ?? '0') || 0;
     const objectid = parseInt(el.getAttribute('objectid') ?? '0') || 0;
@@ -110,7 +113,7 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
 
     const propEls = el.getElementsByTagName('property');
     for (let j = 0; j < propEls.length; j++) {
-      const prop = propEls[j];
+      const prop = propEls[j] as any;
       if (prop.parentNode !== el) continue;
       const pid = parseInt(prop.getAttribute('id') ?? '0');
       const dataEl = prop.getElementsByTagName('data')[0];
@@ -127,6 +130,12 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
           break;
         }
       }
+
+      const propXml = serializeNode(prop);
+      if (propXml) {
+        const attrName = `Property ${pid}`;
+        references.push(...collectReferenceHits(propXml, ref, attrName, sourceName));
+      }
     }
 
     objects.push({
@@ -137,7 +146,7 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
       engineRef,
     });
   }
-  return objects;
+  return { objects, references };
 }
 
 // ─── Main parser ─────────────────────────────────────────────────────────────
@@ -162,13 +171,16 @@ async function loadDbexport(buffer: Buffer): Promise<ParsedDbexport> {
   );
 
   const allObjects: DbexportObject[] = [];
+  const references: ReferenceHit[] = [];
   const engines: EngineInfo[] = [];
 
   for (const entry of archiveEntries) {
     // Use zip folder as a temporary key; real ref is derived from object refs below
     const zipFolder = entry.entryName.replace(/[/\\][^/\\]+$/, '');
-    const objects = parseArchiveXml(zip.readAsText(entry), unitMap, zipFolder);
+    const parsed = parseArchiveXml(zip.readAsText(entry), unitMap, zipFolder, entry.entryName);
+    const objects = parsed.objects;
     allObjects.push(...objects);
+    references.push(...parsed.references);
 
     // Derive proper Metasys ref (server:engine) from object refs.
     // Zip folder names concatenate server+engine with no separator (e.g. "ADS-1NAE-18"),
@@ -205,7 +217,7 @@ async function loadDbexport(buffer: Buffer): Promise<ParsedDbexport> {
     .map(([classid, count]) => ({ classid, className: CLASS_NAMES[classid] ?? `Class${classid}`, count }))
     .sort((a, b) => b.count - a.count);
 
-  return { site, engines, objects: allObjects, stats };
+  return { site, engines, objects: allObjects, references, stats };
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────

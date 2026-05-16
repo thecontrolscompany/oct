@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { wsUrl } from '../connection';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ export default function MstpSerialPane() {
 
   const startWs = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
-    const ws = new WebSocket(`ws://${window.location.hostname}:3001/ws`);
+    const ws = new WebSocket(wsUrl('/ws'));
     wsRef.current = ws;
     ws.onopen = () => ws.send(JSON.stringify({ type: 'mstp-stream-start' }));
     ws.onmessage = (evt) => {

@@ -7,6 +7,8 @@ import MstpSerialPane from './components/MstpSerialPane';
 import PackagesPane from './components/PackagesPane';
 import FileViewerPane from './components/FileViewerPane';
 import CommissioningPreviewPane from './components/CommissioningPreviewPane';
+import DictionaryPane from './components/DictionaryPane';
+import EnumsPane from './components/EnumsPane';
 import QuickTrendPane from './components/QuickTrendPane';
 import type { CctItem } from './api';
 import { api } from './api';
@@ -23,7 +25,7 @@ export default function App() {
   );
 }
 
-type View = 'library' | 'live' | 'quick-trend' | 'preview' | 'serial' | 'packages' | 'caf';
+type View = 'library' | 'live' | 'quick-trend' | 'preview' | 'serial' | 'packages' | 'caf' | 'dictionary' | 'enums';
 
 const CIDR_OPTIONS = [8, 16, 24, 28, 30];
 
@@ -86,8 +88,10 @@ function AppShell() {
               ['quick-trend', 'Quick Trend', null],
               ['preview',  'Preview',        null],
               ['serial',   'MS/TP Serial',   health?.mstpSerial?.connected ? '●' : null],
-              ['packages', 'Packages',       null],
-              ['caf',      'File Viewer',    null],
+              ['packages',    'Packages',       null],
+              ['caf',         'File Viewer',    null],
+              ['dictionary',  'Dictionary',     null],
+              ['enums',       'Enums',          null],
             ] as [View, string, string | null][]).map(([id, label, badge]) => (
               <button
                 key={id}
@@ -184,8 +188,10 @@ function AppShell() {
         {view === 'quick-trend' && <QuickTrendPane />}
         {view === 'preview'  && <CommissioningPreviewPane />}
         {view === 'serial'   && <MstpSerialPane />}
-        {view === 'packages' && <PackagesPane />}
-        {view === 'caf'      && <FileViewerPane />}
+        {view === 'packages'    && <PackagesPane />}
+        {view === 'caf'         && <FileViewerPane />}
+        {view === 'dictionary'  && <DictionaryPane />}
+        {view === 'enums'       && <EnumsPane />}
       </div>
     </div>
   );

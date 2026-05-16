@@ -91,6 +91,41 @@ router.get('/definitions/:classId', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/fdb/enums — all enum sets with member counts
+router.get('/enums', async (_req: Request, res: Response) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT s.EnumSetId, s.Name, COUNT(m.EnumMemberId) AS MemberCount
+      FROM ${FDB}.dbo.tblEnumSet s
+      LEFT JOIN ${FDB}.dbo.tblEnumMember m ON m.EnumSetId = s.EnumSetId
+      GROUP BY s.EnumSetId, s.Name
+      ORDER BY s.Name
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /api/fdb/enums/:setId — all members for one enum set
+router.get('/enums/:setId', async (req: Request, res: Response) => {
+  try {
+    const pool = await getPool();
+    const setId = parseInt(routeParam(req, 'setId'), 10);
+    const [setResult, membersResult] = await Promise.all([
+      pool.request().input('setId', setId)
+        .query(`SELECT EnumSetId, Name FROM ${FDB}.dbo.tblEnumSet WHERE EnumSetId = @setId`),
+      pool.request().input('setId', setId)
+        .query(`SELECT EnumMemberId, Name FROM ${FDB}.dbo.tblEnumMember WHERE EnumSetId = @setId ORDER BY EnumMemberId`),
+    ]);
+    if (!setResult.recordset.length) { res.status(404).json({ error: 'Enum set not found' }); return; }
+    res.json({ ...setResult.recordset[0], members: membersResult.recordset });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 function routeParam(req: Request, key: string): string {
   const value = req.params[key];
   return Array.isArray(value) ? value[0] : value;

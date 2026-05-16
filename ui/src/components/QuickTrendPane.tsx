@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import { wsUrl } from '../connection';
 import type { IoPoint } from '../api';
 
 type TrendReading = {
@@ -475,8 +476,7 @@ function useQuickTrendManager(): TrendManager {
     }
 
     if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${protocol}://${window.location.host}/ws`);
+      const ws = new WebSocket(wsUrl('/ws'));
       wsRef.current = ws;
       ws.onopen = () => {
         setConnected(true);

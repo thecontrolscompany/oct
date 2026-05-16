@@ -40,7 +40,6 @@ export const CLASS_NAMES: Record<number, string> = {
   // ── Metasys network engines & servers ───────────────────────────────────
   129: 'BACnet Protocol Engine',
   135: 'Subscription Server',
-  173: 'BBMD',
   176: 'User Tree / Folder',
   185: 'NAE',
   192: 'NAE',
@@ -48,8 +47,6 @@ export const CLASS_NAMES: Record<number, string> = {
   196: 'SA Bus',
   197: 'Equipment Definition',
   209: 'Accumulator',
-  239: 'BO HW (SNC)',
-  242: 'BI HW (SNC)',
   274: 'Totalization',
   275: 'Totalization',
   278: 'N2 Device',

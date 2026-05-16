@@ -4,6 +4,7 @@ import AdmZip from 'adm-zip';
 import { DOMParser } from '@xmldom/xmldom';
 import fs from 'fs';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
+import { collectReferenceHits, serializeNode, type ReferenceHit } from '../archiveAnalysis';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -19,6 +20,7 @@ export interface ParsedCaf {
     ip: string | null;
   };
   objects: ParsedObject[];
+  references: ReferenceHit[];
   stats: Array<{ className: string; classid: number; count: number }>;
 }
 
@@ -51,16 +53,17 @@ function getTextContent(el: { textContent?: string | null } | null): string {
   return el?.textContent?.trim() ?? '';
 }
 
-function parseCafXml(xml: string, unitMap: Record<number, string>): ParsedCaf {
+function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: string): ParsedCaf {
   const doc = new DOMParser().parseFromString(stripBom(xml), 'text/xml');
   const objectEls = doc.getElementsByTagName('object');
 
   const objects: ParsedObject[] = [];
+  const references: ReferenceHit[] = [];
   const classCounts = new Map<number, number>();
   let controller: ParsedCaf['controller'] | null = null;
 
   for (let i = 0; i < objectEls.length; i++) {
-    const el = objectEls[i];
+    const el = objectEls[i] as any;
     const ref = el.getAttribute('ref') ?? '';
     const classid = parseInt(el.getAttribute('classid') ?? '0');
     const objectid = parseInt(el.getAttribute('objectid') ?? '0');
@@ -74,7 +77,7 @@ function parseCafXml(xml: string, unitMap: Record<number, string>): ParsedCaf {
 
     const propEls = el.getElementsByTagName('property');
     for (let j = 0; j < propEls.length; j++) {
-      const prop = propEls[j];
+      const prop = propEls[j] as any;
       // Only direct-child properties (not from nested objects)
       if (prop.parentNode !== el) continue;
 
@@ -116,6 +119,12 @@ function parseCafXml(xml: string, unitMap: Record<number, string>): ParsedCaf {
           break;
         }
       }
+
+      const propXml = serializeNode(prop);
+      if (propXml) {
+        const attrName = `Property ${pid}`;
+        references.push(...collectReferenceHits(propXml, ref, attrName, sourceName));
+      }
     }
 
     classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
@@ -143,6 +152,7 @@ function parseCafXml(xml: string, unitMap: Record<number, string>): ParsedCaf {
   return {
     controller: controller ?? { ref: '?', modelName: '?', appVersion: '?', description: '?', tag: '?', objectId: 0, ip: null },
     objects,
+    references,
     stats,
   };
 }
@@ -151,7 +161,7 @@ async function loadCaf(buffer: Buffer): Promise<ParsedCaf> {
   const zip = new AdmZip(buffer);
   const entry = zip.getEntries().find(e => e.entryName.endsWith('.xml'));
   if (!entry) throw new Error('No XML file found inside .caf');
-  return parseCafXml(zip.readAsText(entry), await getUnitMap());
+  return parseCafXml(zip.readAsText(entry), await getUnitMap(), entry.entryName);
 }
 
 // POST /api/caf/upload — multipart file upload

@@ -1,0 +1,5 @@
+{
+  "buildCommand": "npm --prefix ui install && npm --prefix ui run build",
+  "outputDirectory": "ui/dist",
+  "framework": null
+}

@@ -1,13 +1,13 @@
 import { useState, useCallback, useMemo } from 'react';
 import { api } from '../api';
-import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport } from '../api';
+import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import ObjectBrowser from './ObjectBrowser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
 type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
 type AnyObject = CafObject | DbexportObject;
-type ViewTab = 'tree' | 'objects' | 'io' | 'diff' | 'export';
+type ViewTab = 'tree' | 'objects' | 'io' | 'refs' | 'diff' | 'export';
 
 const HW_IO_CLASSES = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
@@ -21,6 +21,15 @@ function displayName(o: AnyObject): string {
 }
 
 function getRef(o: AnyObject): string { return o.ref; }
+
+function buildReferenceMap(references: ReferenceHit[]): Map<string, ReferenceHit[]> {
+  const map = new Map<string, ReferenceHit[]>();
+  for (const hit of references) {
+    if (!map.has(hit.target)) map.set(hit.target, []);
+    map.get(hit.target)!.push(hit);
+  }
+  return map;
+}
 
 // ─── Drop zone ─────────────────────────────────────────────────────────────
 
@@ -137,7 +146,7 @@ function NavTreeNode({ node, depth, selected, onSelect }: {
 
 // ─── Object detail ──────────────────────────────────────────────────────────
 
-function ObjectDetail({ obj }: { obj: AnyObject }) {
+function ObjectDetail({ obj, incoming }: { obj: AnyObject; incoming: ReferenceHit[] }) {
   const rows: [string, string][] = [];
   if (obj.tag) rows.push(['Tag', obj.tag]);
   if (obj.description) rows.push(['Description', obj.description]);
@@ -160,6 +169,33 @@ function ObjectDetail({ obj }: { obj: AnyObject }) {
           ))}
         </tbody>
       </table>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
+          REFERENCED BY
+        </div>
+        {incoming.length === 0 ? (
+          <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No incoming references found in the parsed archive.</div>
+        ) : (
+          <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Referring item</th>
+                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Attribute</th>
+                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {incoming.slice(0, 12).map(hit => (
+                <tr key={`${hit.referringItem}|${hit.referringAttr}|${hit.source}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all' }}>{hit.referringItem}</td>
+                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
+                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
@@ -367,6 +403,135 @@ function ExportTab({ file }: { file: LoadedFile }) {
   );
 }
 
+function ReferencesTab({
+  file,
+  referenceMap,
+  selectedTarget,
+  onSelectTarget,
+}: {
+  file: LoadedFile;
+  referenceMap: Map<string, ReferenceHit[]>;
+  selectedTarget: string | null;
+  onSelectTarget: (target: string) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const targets = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return [...referenceMap.entries()]
+      .filter(([target, hits]) => {
+        if (!q) return true;
+        return target.toLowerCase().includes(q) || hits.some(hit =>
+          hit.referringItem.toLowerCase().includes(q) ||
+          hit.referringAttr.toLowerCase().includes(q) ||
+          hit.source.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  }, [referenceMap, search]);
+
+  const activeTarget = selectedTarget && referenceMap.has(selectedTarget)
+    ? selectedTarget
+    : targets[0]?.[0] ?? null;
+  const activeHits = activeTarget ? referenceMap.get(activeTarget) ?? [] : [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ padding: 12, borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>REFERENCE INDEX</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{file.name}</div>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>
+            {referenceMap.size.toLocaleString()} targets · {file.data.references.length.toLocaleString()} hits
+          </span>
+          <input
+            type="text"
+            placeholder="Search target, referrer, source…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ width: 280 }}
+          />
+        </div>
+      </div>
+
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '360px 1fr', minHeight: 0 }}>
+        <div style={{ borderRight: '1px solid var(--border)', overflowY: 'auto' }}>
+          {targets.length === 0 ? (
+            <div style={{ padding: 18, color: 'var(--text-dim)' }}>No references found in this file.</div>
+          ) : (
+            targets.map(([target, hits]) => {
+              const active = target === activeTarget;
+              return (
+                <button
+                  key={target}
+                  onClick={() => onSelectTarget(target)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 12,
+                    textAlign: 'left',
+                    padding: '8px 12px',
+                    border: 'none',
+                    borderBottom: '1px solid var(--border)',
+                    background: active ? 'rgba(100,160,255,0.12)' : 'transparent',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontFamily: 'Consolas, monospace', fontSize: 11, wordBreak: 'break-all' }}>{target}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{hits[0]?.source ?? 'unknown source'}</div>
+                  </div>
+                  <span style={{ color: 'var(--accent)', fontFamily: 'Consolas, monospace', flexShrink: 0 }}>
+                    {hits.length}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div style={{ overflowY: 'auto' }}>
+          {!activeTarget ? (
+            <div style={{ padding: 18, color: 'var(--text-dim)' }}>Select a target to inspect the incoming references.</div>
+          ) : (
+            <div style={{ padding: 18 }}>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>TARGET</div>
+                <div style={{ fontFamily: 'Consolas, monospace', wordBreak: 'break-all', fontSize: 13 }}>{activeTarget}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+                  {activeHits.length.toLocaleString()} incoming reference(s)
+                </div>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Referring item</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Attribute</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeHits.map(hit => (
+                    <tr key={`${hit.referringItem}|${hit.referringAttr}|${hit.source}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all' }}>{hit.referringItem}</td>
+                      <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
+                      <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main pane ───────────────────────────────────────────────────────────────
 
 export default function FileViewerPane() {
@@ -387,6 +552,11 @@ export default function FileViewerPane() {
       childMap.get(o.parentRef)!.push(o);
     }
     return { objMap, childMap, cafRoots: childMap.get(null) ?? [] };
+  }, [file]);
+
+  const referenceMap = useMemo(() => {
+    if (!file) return new Map<string, ReferenceHit[]>();
+    return buildReferenceMap(file.data.references);
   }, [file]);
 
   const selectedObj = selected && file
@@ -441,7 +611,7 @@ export default function FileViewerPane() {
   if (!file) return null;
 
   const allObjects = getObjects(file);
-  const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['diff', 'Diff'], ['export', 'Export']];
+  const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['refs', 'References'], ['diff', 'Diff'], ['export', 'Export']];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -455,8 +625,8 @@ export default function FileViewerPane() {
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
           {file.type === 'caf'
-            ? `${file.data.controller.modelName} · fw ${file.data.controller.appVersion} · ${allObjects.length} objects`
-            : `${file.data.engines.length} engine(s) · ${allObjects.length} objects`
+            ? `${file.data.controller.modelName} · fw ${file.data.controller.appVersion} · ${allObjects.length} objects · ${file.data.references.length} refs`
+            : `${file.data.engines.length} engine(s) · ${allObjects.length} objects · ${file.data.references.length} refs`
           }
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
@@ -477,6 +647,14 @@ export default function FileViewerPane() {
       {/* Content */}
       {tab === 'objects' && <ObjectBrowser objects={allObjects} onSelect={setSelected} />}
       {tab === 'io' && <div style={{ flex: 1, overflow: 'hidden' }}><IoTable objects={allObjects} /></div>}
+      {tab === 'refs' && (
+        <ReferencesTab
+          file={file}
+          referenceMap={referenceMap}
+          selectedTarget={selected}
+          onSelectTarget={setSelected}
+        />
+      )}
       {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={file} /></div>}
       {tab === 'diff' && <DiffTab fileA={file} fileB={null} />}
 
@@ -492,7 +670,7 @@ export default function FileViewerPane() {
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {selectedObj
-              ? <ObjectDetail obj={selectedObj} />
+              ? <ObjectDetail obj={selectedObj} incoming={referenceMap.get(selectedObj.ref) ?? []} />
               : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
             }
           </div>

@@ -97,7 +97,16 @@ export default function Sidebar({ selected, onSelect }: Props) {
   }
 
   if (isLoading) return <div className="loading">Loading controllers…</div>;
-  if (error) return <div className="error-msg">Error: {String(error)}</div>;
+  if (error) return (
+    <div style={{ padding: '16px 12px', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+      <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Backend offline</div>
+      Start the local server to browse the controller library.
+      <br /><br />
+      <span style={{ fontFamily: 'Consolas, monospace', fontSize: 11, color: 'var(--border)' }}>
+        cd server &amp;&amp; npm run dev
+      </span>
+    </div>
+  );
 
   return (
     <>

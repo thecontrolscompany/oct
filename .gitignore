@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+server/dist/
+ui/dist/
+
+# Environment / secrets
+server/.env
+*.env
+
+# SQL Server database files
+*.mdf
+*.ldf
+
+# Controller programs (user-supplied, not committed)
+CAFs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+*.suo
+*.user

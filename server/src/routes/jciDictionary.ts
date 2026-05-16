@@ -1,8 +1,11 @@
 import { getPool } from '../db';
 
 // Classid → human-readable name
-// Source: M4-CGE09090-11.0.4.9 Primitives.xml + common JCI Metasys classes
+// Sources:
+//   - CCT: M4-CGE09090-11.0.4.9 Primitives.xml (field controller logic blocks)
+//   - SCT: DaytonaStateCollege.dbexport (real-world campus, identified by bacoidType + ref path)
 export const CLASS_NAMES: Record<number, string> = {
+  // ── CCT field controller logic blocks ───────────────────────────────────
   128: 'Standard', 141: 'JCI MV', 155: 'Trend Log', 161: 'JCI Calendar',
   163: 'JCI AI', 164: 'JCI AO', 165: 'JCI AV', 166: 'JCI BI', 167: 'JCI BO', 168: 'JCI BV',
   173: 'Broadcast Mgmt', 194: 'FEC', 213: 'Supervisor Status', 218: 'Event Log',
@@ -33,6 +36,120 @@ export const CLASS_NAMES: Record<number, string> = {
   745: 'Tower Selector', 768: 'Heat Exchanger Selector', 776: 'Expression',
   779: 'Fault Manager', 798: 'Global Sequencer', 862: 'IP_FEC', 880: 'Moving Avg Filter',
   910: 'SA Bus Device', 916: 'Device Stager', 917: 'Boiler Stager', 918: 'Chiller Stager',
+
+  // ── Metasys network engines & servers ───────────────────────────────────
+  129: 'BACnet Protocol Engine',
+  135: 'Subscription Server',
+  173: 'BBMD',
+  176: 'User Tree / Folder',
+  185: 'NAE',
+  192: 'NAE',
+  195: 'Field Controller',
+  196: 'SA Bus',
+  197: 'Equipment Definition',
+  209: 'Accumulator',
+  239: 'BO HW (SNC)',
+  242: 'BI HW (SNC)',
+  274: 'Totalization',
+  275: 'Totalization',
+  278: 'N2 Device',
+  286: 'DBCC',
+  290: 'N2 Trunk',
+  343: 'BACnet Network',
+  348: 'User Tree Container',
+  425: 'ADS',
+  448: 'SNC',
+  449: 'Hardware IO Container',
+  450: 'Programming Container',
+  508: 'Device Integration',
+  549: 'Hardware Manager',
+  661: 'Subscription Client',
+  651: 'NCE / NAE',
+  699: 'Summary Definition',
+  807: 'Summary Definition Entry',
+  847: 'Generic Archive',
+  871: 'SNE',
+  872: 'SNE',
+  877: 'SNE',
+  907: 'Firmware Update',
+  908: 'Network Port',
+
+  // ── N2 Bus points (NAE N2 trunk devices) ────────────────────────────────
+  147: 'N2 AI',
+  148: 'N2 BI',
+  149: 'N2 AO',
+  150: 'N2 BO',
+  151: 'N2 MSI',
+
+  // ── FC Bus points (controller FC bus, identified by bacoidType) ─────────
+  500: 'FC AI',
+  501: 'FC AO',
+  502: 'FC AV',
+  503: 'FC BI',
+  504: 'FC BO',
+  505: 'FC BV',
+  506: 'FC Calendar',
+  513: 'FC MSI',
+  515: 'FC Notification',
+  517: 'FC Schedule',
+  519: 'FC MSV',
+
+  // ── NAE/SNE-level Metasys points (identified by bacoidType in real data) ─
+  599: 'Metasys AI',
+  600: 'Metasys AO',
+  601: 'Metasys AV',
+  602: 'Metasys BI',
+  603: 'Metasys BO',
+  604: 'Metasys BV',
+  606: 'Metasys MSV',
+  608: 'Metasys Accumulator',
+
+  // ── Schedule & calendar types ────────────────────────────────────────────
+  143: 'JCI Schedule',
+  146: 'JCI Calendar',
+  156: 'Event Log',
+  172: 'Alarm',
+  249: 'Solar Clock',
+  326: 'Schedule Entry',
+  327: 'Schedule Entry',
+  328: 'Schedule Entry',
+  329: 'Schedule Sub-object',
+  335: 'Schedule Sub-object',
+  336: 'JCI Calendar',
+  337: 'Schedule Exception Entry',
+  338: 'Schedule Exception Entry',
+  341: 'Schedule Sub-object',
+  342: 'Schedule Exception',
+  344: 'Graphic Panel',
+  361: 'Schedule Sub-object',
+  362: 'Schedule Sub-object',
+  761: 'BACnet Schedule',
+  758: 'Trend Log',
+  760: 'Trend Log',
+
+  // ── Algorithm / programming objects ─────────────────────────────────────
+  130: 'Algorithm Sub-object',
+  174: 'Algorithm',
+  177: 'Algorithm',
+  178: 'Algorithm',
+  186: 'Algorithm',
+  236: 'Local Application',
+  257: 'Algorithm Sub-object',
+  305: 'Algorithm Sub-object',
+
+  // ── Graphics ─────────────────────────────────────────────────────────────
+  357: 'Graphic Binding',
+  717: 'Graphic',
+  844: 'Facility Graphic',
+
+  // ── SCT system objects ───────────────────────────────────────────────────
+  2000: 'Site',
+  2004: 'SCT Configuration',
+  2006: 'SCT Controller Templates',
+  2008: 'SCT Controller Template',
+  2009: 'SCT Device',
+  2011: 'SCT Summary Definitions',
+  2013: 'SCT Parameter Sheets',
 };
 
 const UNIT_ENUM_SET_ID = 507;

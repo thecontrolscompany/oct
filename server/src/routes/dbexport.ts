@@ -165,16 +165,32 @@ async function loadDbexport(buffer: Buffer): Promise<ParsedDbexport> {
   const engines: EngineInfo[] = [];
 
   for (const entry of archiveEntries) {
-    // Derive engine ref from path: e.g. "Site/Engine-001/archive.xml" → "Site/Engine-001"
-    const engineRef = entry.entryName.replace(/[/\\][^/\\]+$/, '');
-    const objects = parseArchiveXml(zip.readAsText(entry), unitMap, engineRef);
+    // Use zip folder as a temporary key; real ref is derived from object refs below
+    const zipFolder = entry.entryName.replace(/[/\\][^/\\]+$/, '');
+    const objects = parseArchiveXml(zip.readAsText(entry), unitMap, zipFolder);
     allObjects.push(...objects);
 
-    // Find device object (classid 8 = BACnet Device, or classid 862 = IP_FEC)
-    const deviceObj = objects.find(o => o.classid === 862 || (o.bacoidType === 8));
+    // Derive proper Metasys ref (server:engine) from object refs.
+    // Zip folder names concatenate server+engine with no separator (e.g. "ADS-1NAE-18"),
+    // but object refs use colon notation (e.g. "ADS-1:NAE-18/FC-1.CHWS.CLG-O").
+    // Find the first object ref that contains both '/' and ':' — that's a deep object with a proper prefix.
+    const deepRef = objects.find(o => o.ref.includes('/') && o.ref.includes(':'))?.ref ?? '';
+    const properEngineRef = deepRef ? deepRef.split('/')[0] : zipFolder;
+
+    // Update all objects to use the proper ref prefix
+    if (properEngineRef !== zipFolder) {
+      for (const o of objects) {
+        if (o.engineRef === zipFolder) o.engineRef = properEngineRef;
+      }
+    }
+
+    // Find device object for engine name (bacoidType=8 = BACnet Device)
+    const deviceObj = objects.find(o => o.bacoidType === 8 || o.classid === 862);
+    const engineLabel = deviceObj?.tag || deviceObj?.description || properEngineRef.split(':')[1] || properEngineRef;
+
     engines.push({
-      name: deviceObj?.tag || deviceObj?.description || engineRef.split(/[/\\]/).pop() || engineRef,
-      ref: engineRef,
+      name: engineLabel,
+      ref: properEngineRef,
       modelName: '',
       firmwareRevision: '',
       ip: null,

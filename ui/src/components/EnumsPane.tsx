@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../api';
-import type { EnumSetSummary } from '../api';
+import { FDB_ENUM_SETS } from '../data/fdbEnums';
+import type { FdbEnumSet } from '../data/fdbEnums';
 
 const PAGE_SIZES = [25, 50, 100] as const;
 
@@ -27,42 +26,28 @@ function exportCsv(name: string, members: Array<{ EnumMemberId: number; Name: st
 }
 
 export default function EnumsPane() {
-  const [search, setSearch]         = useState('');
-  const [selected, setSelected]     = useState<EnumSetSummary | null>(null);
+  const [search, setSearch]             = useState('');
+  const [selected, setSelected]         = useState<FdbEnumSet | null>(null);
   const [memberSearch, setMemberSearch] = useState('');
-  const [page, setPage]             = useState(1);
-  const [pageSize, setPageSize]     = useState<number>(50);
-
-  const { data: sets, isLoading, error } = useQuery({
-    queryKey: ['fdb-enum-sets'],
-    queryFn: api.fdb.enumSets,
-    staleTime: 300_000,
-  });
-
-  const { data: detail, isLoading: detailLoading } = useQuery({
-    queryKey: ['fdb-enum-set', selected?.EnumSetId],
-    queryFn: () => api.fdb.enumSet(selected!.EnumSetId),
-    enabled: selected != null,
-    staleTime: 300_000,
-  });
+  const [page, setPage]                 = useState(1);
+  const [pageSize, setPageSize]         = useState<number>(50);
 
   const filteredSets = useMemo(() => {
-    if (!sets) return [];
     const q = search.toLowerCase();
-    if (!q) return sets;
-    return sets.filter(s =>
+    if (!q) return FDB_ENUM_SETS;
+    return FDB_ENUM_SETS.filter(s =>
       String(s.EnumSetId).includes(q) || s.Name.toLowerCase().includes(q)
     );
-  }, [sets, search]);
+  }, [search]);
 
   const filteredMembers = useMemo(() => {
-    if (!detail) return [];
+    if (!selected) return [];
     const q = memberSearch.toLowerCase();
-    if (!q) return detail.members;
-    return detail.members.filter(m =>
+    if (!q) return selected.members;
+    return selected.members.filter(m =>
       String(m.EnumMemberId).includes(q) || m.Name.toLowerCase().includes(q)
     );
-  }, [detail, memberSearch]);
+  }, [selected, memberSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filteredMembers.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -77,9 +62,9 @@ export default function EnumsPane() {
         <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg-alt)' }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
             Enum Sets
-            {sets && <span style={{ fontWeight: 400, color: 'var(--text-dim)', fontSize: 11, marginLeft: 8 }}>
-              {filteredSets.length}{search ? ` of ${sets.length}` : ''}
-            </span>}
+            <span style={{ fontWeight: 400, color: 'var(--text-dim)', fontSize: 11, marginLeft: 8 }}>
+              {filteredSets.length}{search ? ` of ${FDB_ENUM_SETS.length}` : ''}
+            </span>
           </div>
           <input
             type="text" placeholder="Search ID or name…"
@@ -90,8 +75,6 @@ export default function EnumsPane() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {isLoading && <div style={{ padding: 12, color: 'var(--text-dim)', fontSize: 12 }}>Loading…</div>}
-          {error && <div style={{ padding: 12, color: 'var(--text-dim)', fontSize: 12 }}>Backend offline</div>}
           {filteredSets.map(s => (
             <div key={s.EnumSetId}
               onClick={() => { setSelected(s); setMemberSearch(''); setPage(1); }}
@@ -130,20 +113,18 @@ export default function EnumsPane() {
               <div>
                 <span style={{ fontWeight: 700, fontSize: 14 }}>{selected.Name}</span>
                 <span style={{ color: 'var(--text-dim)', fontSize: 12, marginLeft: 10 }}>
-                  set {selected.EnumSetId} · {detail ? filteredMembers.length : '…'} member{filteredMembers.length !== 1 ? 's' : ''}
+                  set {selected.EnumSetId} · {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-                {detail && <>
-                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: '3px 10px' }}
-                    onClick={() => exportCsv(selected.Name, detail.members)}>
-                    CSV
-                  </button>
-                  <button className="btn btn-primary" style={{ fontSize: 12, padding: '3px 10px' }}
-                    onClick={() => exportJson(selected.EnumSetId, selected.Name, detail.members)}>
-                    JSON
-                  </button>
-                </>}
+                <button className="btn btn-ghost" style={{ fontSize: 12, padding: '3px 10px' }}
+                  onClick={() => exportCsv(selected.Name, selected.members)}>
+                  CSV
+                </button>
+                <button className="btn btn-primary" style={{ fontSize: 12, padding: '3px 10px' }}
+                  onClick={() => exportJson(selected.EnumSetId, selected.Name, selected.members)}>
+                  JSON
+                </button>
               </div>
             </div>
 
@@ -166,34 +147,29 @@ export default function EnumsPane() {
 
             {/* Members table */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              {detailLoading
-                ? <div style={{ padding: 16, color: 'var(--text-dim)', fontSize: 12 }}>Loading…</div>
-                : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0 }}>
-                      <tr>
-                        <th style={{ padding: '5px 16px', borderBottom: '1px solid var(--border)',
-                          background: 'var(--bg)', textAlign: 'left', width: 80, fontWeight: 600 }}>ID</th>
-                        <th style={{ padding: '5px 16px', borderBottom: '1px solid var(--border)',
-                          background: 'var(--bg)', textAlign: 'left', fontWeight: 600 }}>Name</th>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead style={{ position: 'sticky', top: 0 }}>
+                  <tr>
+                    <th style={{ padding: '5px 16px', borderBottom: '1px solid var(--border)',
+                      background: 'var(--bg)', textAlign: 'left', width: 80, fontWeight: 600 }}>ID</th>
+                    <th style={{ padding: '5px 16px', borderBottom: '1px solid var(--border)',
+                      background: 'var(--bg)', textAlign: 'left', fontWeight: 600 }}>Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {memberSlice.length === 0
+                    ? <tr><td colSpan={2} style={{ padding: 16, color: 'var(--text-dim)', textAlign: 'center' }}>No members match</td></tr>
+                    : memberSlice.map((m, i) => (
+                      <tr key={m.EnumMemberId}
+                        style={{ background: i % 2 === 0 ? 'var(--bg)' : 'var(--bg-alt)' }}>
+                        <td style={{ padding: '4px 16px', fontFamily: 'Consolas, monospace',
+                          color: 'var(--accent)', width: 80 }}>{m.EnumMemberId}</td>
+                        <td style={{ padding: '4px 16px' }}>{m.Name}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {memberSlice.length === 0
-                        ? <tr><td colSpan={2} style={{ padding: 16, color: 'var(--text-dim)', textAlign: 'center' }}>No members match</td></tr>
-                        : memberSlice.map((m, i) => (
-                          <tr key={m.EnumMemberId}
-                            style={{ background: i % 2 === 0 ? 'var(--bg)' : 'var(--bg-alt)' }}>
-                            <td style={{ padding: '4px 16px', fontFamily: 'Consolas, monospace',
-                              color: 'var(--accent)', width: 80 }}>{m.EnumMemberId}</td>
-                            <td style={{ padding: '4px 16px' }}>{m.Name}</td>
-                          </tr>
-                        ))
-                      }
-                    </tbody>
-                  </table>
-                )
-              }
+                    ))
+                  }
+                </tbody>
+              </table>
             </div>
 
             {/* Pagination */}

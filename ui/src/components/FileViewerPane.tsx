@@ -42,8 +42,8 @@ interface ArchiveSummary {
 const HW_IO_CLASSES = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
 
-function getObjects(f: LoadedArchive): AnyObject[] {
-  return f.data.objects;
+function getObjects(f: LoadedFile): AnyObject[] {
+  return f.type === 'winpro' ? [] : f.data.objects;
 }
 
 function displayName(o: AnyObject): string {
@@ -60,7 +60,8 @@ function isDbexportSection(ref: string, needle: string): boolean {
   return new RegExp(`(?:^|[/.])${needle}(?:[/.]|$)`, 'i').test(ref);
 }
 
-function summarizeArchive(file: LoadedArchive): ArchiveSummary {
+function summarizeArchive(file: LoadedFile): ArchiveSummary {
+  if (file.type === 'winpro') return { objectCount: 0, referenceCount: 0, classCount: 0, engineCount: 0, scheduleCount: 0, graphicsCount: 0, programmingCount: 0 };
   const objects = getObjects(file);
   const classCount = new Set(objects.map(o => o.classid)).size;
   const engineCount = file.type === 'dbexport' ? file.data.engines.length : 0;
@@ -1330,7 +1331,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   }, [currentFile, cafRoots]);
 
   const treeQuery = useMemo(() => normalizeTreeQuery(treeSearch), [treeSearch]);
-  const archiveFile = currentFile && currentFile.type !== 'winpro' ? currentFile : null;
+  const archiveFile = (currentFile?.type === 'caf' || currentFile?.type === 'dbexport' ? currentFile : null) as LoadedArchive | null;
 
   const referenceIndex = useMemo(() => {
     if (!archiveFile) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
@@ -1370,7 +1371,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     const node = selectedNavNode;
     if (!node) return [];
     return node.children.map((child: NavNode) => {
-      const childObj = archiveFile.data.objects.find(o => o.ref === child.reference);
+      const childObj = archiveFile.type === 'dbexport' ? archiveFile.data.objects.find(o => o.ref === child.reference) : undefined;
       return {
         ref: child.reference,
         label: child.label || child.reference.split(/[/\\]/).pop() || child.reference,

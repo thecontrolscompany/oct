@@ -350,6 +350,11 @@ export const api = {
       return res.json();
     },
     parsePath: (path: string) => get<ParsedDbexport>(`/dbexport/parse?path=${encodeURIComponent(path)}`),
+    graphic: async (filename: string): Promise<string> => {
+      const res = await fetch(`${BASE}/dbexport/graphic?filename=${encodeURIComponent(filename)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
+    },
   },
 
   sctArchive: {

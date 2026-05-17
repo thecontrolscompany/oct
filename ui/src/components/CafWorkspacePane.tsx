@@ -16,8 +16,6 @@ type PanelKey =
   | 'outputs'
   | 'misc-outputs';
 
-const INPUT_BACOID_TYPES = new Set([0, 2, 3, 5, 13, 19]);
-const OUTPUT_BACOID_TYPES = new Set([1, 4, 14]);
 const HW_INPUT_CLASSES = new Set([240, 242, 243, 671, 673]);
 const HW_OUTPUT_CLASSES = new Set([239, 241, 672, 674]);
 const LOGIC_CLASSES = new Set([307, 526, 527, 528, 529, 530, 531, 540, 555, 575, 585, 862]);
@@ -58,6 +56,16 @@ function buildSearchText(obj: CafObject): string {
   return [obj.tag, obj.shortTag, obj.description, obj.className, obj.ref].filter(Boolean).join(' ').toLowerCase();
 }
 
+function looksLikeCafRef(value: string): boolean {
+  return /^8-1([/.].+)?$/i.test(value.trim());
+}
+
+function hasFriendlyLabel(obj: CafObject): boolean {
+  return [obj.tag, obj.description, obj.shortTag]
+    .map(value => value?.trim() ?? '')
+    .some(value => value !== '' && !looksLikeCafRef(value));
+}
+
 function isLogicLike(obj: CafObject): boolean {
   const hay = buildSearchText(obj);
   return LOGIC_CLASSES.has(obj.classid)
@@ -74,36 +82,37 @@ function isOutputControlLike(obj: CafObject): boolean {
   return /output|control|cmd|actuator|drive|valve|relay|fan|open|close/.test(hay);
 }
 
-function isInputLike(obj: CafObject): boolean {
-  const hay = buildSearchText(obj);
-  return /input|sensor|read|feedback|status|switch|temp|flow|press|analog|binary/.test(hay);
+function isRenderableWorkspaceObject(obj: CafObject, mode: WorkspaceMode): boolean {
+  if (obj.classid === 575 || obj.classid === 555 || obj.classid === 540 || obj.classid === 585) return true;
+  if (HW_INPUT_CLASSES.has(obj.classid) || HW_OUTPUT_CLASSES.has(obj.classid)) return true;
+  if (isLogicLike(obj)) return true;
+  if (mode === 'logic' && isOutputControlLike(obj)) return true;
+  if (mode === 'control') {
+    if (isSetpointLike(obj) || isOutputControlLike(obj)) return true;
+    if (hasFriendlyLabel(obj) && /command|setup|status|reset|delay|enable|maintenance|manual|alarm|usage/i.test(buildSearchText(obj))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
-  const bacoidType = obj.bacoidType;
-  const isNetworkInput = bacoidType !== null && INPUT_BACOID_TYPES.has(bacoidType);
-  const isNetworkOutput = bacoidType !== null && OUTPUT_BACOID_TYPES.has(bacoidType);
   const isHardwareInput = HW_INPUT_CLASSES.has(obj.classid);
   const isHardwareOutput = HW_OUTPUT_CLASSES.has(obj.classid);
   const logicLike = isLogicLike(obj);
   const setpointLike = isSetpointLike(obj);
   const outputControlLike = isOutputControlLike(obj);
-  const inputLike = isInputLike(obj);
 
   if (mode === 'logic') {
     if (logicLike) return 'state-generation';
     if (outputControlLike) return 'output-control';
   }
 
-  if (isNetworkInput) return 'network-inputs';
   if (isHardwareInput) return 'inputs';
-  if (isNetworkOutput) return 'network-outputs';
   if (isHardwareOutput) return 'outputs';
   if (setpointLike) return 'setpoint-misc';
   if (logicLike) return 'state-generation';
   if (outputControlLike) return 'output-control';
-  if (mode === 'control' && inputLike && bacoidType !== null) return 'misc-inputs';
-  if (mode === 'control' && /output/.test(buildSearchText(obj)) && bacoidType !== null) return 'misc-outputs';
   return 'setpoint-misc';
 }
 
@@ -318,15 +327,13 @@ export default function CafWorkspacePane({
     const subtree = collectDescendants(activeApplicationRoot.ref, byParent);
     return [activeApplicationRoot, ...subtree];
   }, [activeApplicationRoot, byParent]);
-  const workspaceRefSet = useMemo(() => new Set(workspaceObjects.map(obj => obj.ref)), [workspaceObjects]);
+  const renderedWorkspaceObjects = useMemo(
+    () => workspaceObjects.filter(obj => isRenderableWorkspaceObject(obj, mode)),
+    [mode, workspaceObjects],
+  );
+  const workspaceRefSet = useMemo(() => new Set(renderedWorkspaceObjects.map(obj => obj.ref)), [renderedWorkspaceObjects]);
 
-  useEffect(() => {
-    if (!selected || workspaceRefSet.has(selected)) return;
-    const fallback = objMap.get(activeApplicationRoot.ref) ?? caf.objects[0] ?? null;
-    if (fallback && fallback.ref !== selected) onSelect(fallback.ref);
-  }, [activeApplicationRoot.ref, caf.objects, objMap, onSelect, selected, workspaceRefSet]);
-
-  const selectedObject = selected && workspaceRefSet.has(selected) ? objMap.get(selected) ?? null : null;
+  const selectedObject = selected ? objMap.get(selected) ?? null : null;
   const activeObject = selectedObject ?? objMap.get(activeApplicationRoot.ref) ?? caf.objects[0] ?? null;
   const selectedIncoming = useMemo(() => (
     activeObject ? buildReferenceRows(referenceIndex, activeObject.ref) : []
@@ -345,7 +352,7 @@ export default function CafWorkspacePane({
       'misc-outputs': [],
     };
 
-    for (const obj of workspaceObjects) {
+    for (const obj of renderedWorkspaceObjects) {
       const bucket = classifyPanelKey(obj, mode);
       buckets[bucket].push(obj);
     }
@@ -355,17 +362,17 @@ export default function CafWorkspacePane({
     }
 
     return buckets;
-  }, [mode, workspaceObjects]);
+  }, [mode, renderedWorkspaceObjects]);
 
   const stateTableCandidates = useMemo(() => {
     if (!activeObject) return [];
-    const descendants = collectDescendants(activeObject.ref, byParent).filter(candidate => workspaceObjects.some(obj => obj.ref === candidate.ref));
+    const descendants = collectDescendants(activeObject.ref, byParent).filter(candidate => workspaceRefSet.has(candidate.ref));
     return descendants.filter(candidate => {
       const hay = buildSearchText(candidate);
       return /state|table|logic|sequence|program|compare|calc|pid/.test(hay)
         || LOGIC_CLASSES.has(candidate.classid);
     });
-  }, [activeObject, byParent, workspaceObjects]);
+  }, [activeObject, byParent, workspaceRefSet]);
 
   useEffect(() => {
     setFeatureSection(current => {
@@ -445,7 +452,7 @@ export default function CafWorkspacePane({
         <div className="card-header">
           CAF Workspace
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)' }}>
-            {activeApplicationLabel} · {workspaceObjects.length} layout object(s)
+            {activeApplicationLabel} · {renderedWorkspaceObjects.length} rendered object(s)
           </span>
         </div>
         <div className="card-body" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -465,7 +472,7 @@ export default function CafWorkspacePane({
             Logic
           </button>
           {applicationRoots.length > 1 && (
-            <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-dim)' }}>
+              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-dim)' }}>
               Applications: {applicationRoots.length}
             </span>
           )}

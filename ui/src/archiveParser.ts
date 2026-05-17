@@ -4,9 +4,13 @@ import type { ArchiveProperty, CafObject, DbexportObject, NavNode, ParsedCaf, Pa
 import { getPropertyName as resolvePropertyName } from '@oct/shared';
 import { CLASS_NAMES, UNIT_LABELS } from './data/jciDictionary';
 
+export interface GraphicResolver {
+  resolve(svgFilename: string): Promise<string | null>;
+}
+
 export type LoadedArchive =
   | { type: 'caf'; data: ParsedCaf; name: string }
-  | { type: 'dbexport'; data: ParsedDbexport; name: string };
+  | { type: 'dbexport'; data: ParsedDbexport; name: string; graphicResolver?: GraphicResolver };
 
 const REF_ATTR_RE = /\b(?:ref|reference|target|source|objectref|objectRef)\s*=\s*"([^"]+)"/gi;
 const REF_TAG_RE = /<(?:ref|reference|target|source|objectref|objectRef)>([^<]+)<\/(?:ref|reference|target|source|objectref|objectRef)>/gi;
@@ -812,10 +816,29 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
       .map(([classid, count]) => ({ classid, className: makeClassName(classid), count }))
       .sort((a, b) => b.count - a.count);
 
+    // Closure over the live JSZip instance so the Graphics tab can render SVG
+    // content on demand without re-uploading. The function is intentionally
+    // non-serializable — IndexedDB drops it on save, and the UI shows a graceful
+    // fallback ("re-upload to render") when the archive is restored from cache.
+    const zipRef = zip;
+    const graphicResolver: GraphicResolver = {
+      async resolve(svgFilename: string): Promise<string | null> {
+        for (const entry of Object.values(zipRef.files)) {
+          if (entry.dir) continue;
+          const n = entry.name.replace(/\\/g, '/');
+          if (n === svgFilename || n.endsWith(`/${svgFilename}`)) {
+            return await entry.async('string');
+          }
+        }
+        return null;
+      },
+    };
+
     return {
       type: 'dbexport',
       name,
       data: { site, engines, objects, references, stats },
+      graphicResolver,
     };
   }
 

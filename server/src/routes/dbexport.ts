@@ -306,12 +306,41 @@ async function loadDbexport(buffer: Buffer): Promise<ParsedDbexport> {
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
+// Module-level cache of the most recently uploaded or path-parsed archive buffer.
+// Used by GET /graphic to serve individual SVG files without a re-upload.
+// Single-user tool: last-write-wins is acceptable.
+let lastArchiveBuffer: Buffer | null = null;
+
 router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
   try {
+    lastArchiveBuffer = req.file.buffer;
     res.json(await loadDbexport(req.file.buffer));
   } catch (err) {
     res.status(400).json({ error: String(err) });
+  }
+});
+
+// GET /api/dbexport/graphic?filename=... — return raw SVG/text for one graphic file.
+// The filename is the basename from DbexportObject.bindingFileName on class-844/717 objects.
+router.get('/graphic', async (req: Request, res: Response) => {
+  if (!lastArchiveBuffer) {
+    res.status(503).json({ error: 'No archive loaded. Upload a .dbexport file first.' });
+    return;
+  }
+  const filename = String(req.query.filename ?? '').trim();
+  if (!filename) { res.status(400).json({ error: 'filename query param required' }); return; }
+  try {
+    const zip = new AdmZip(lastArchiveBuffer);
+    const normalized = normalizeEntryPath(filename);
+    const entry = zip.getEntries().find(e => {
+      const n = normalizeEntryPath(e.entryName);
+      return n === normalized || n.endsWith(`/${normalized}`);
+    });
+    if (!entry) { res.status(404).json({ error: `Graphic file not found: ${filename}` }); return; }
+    res.type('text/plain; charset=utf-8').send(zip.readAsText(entry));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
   }
 });
 
@@ -320,7 +349,9 @@ router.get('/parse', async (req: Request, res: Response) => {
   if (!filePath) { res.status(400).json({ error: 'path required' }); return; }
   if (!fs.existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return; }
   try {
-    res.json(await loadDbexport(fs.readFileSync(filePath)));
+    const buf = fs.readFileSync(filePath);
+    lastArchiveBuffer = buf;
+    res.json(await loadDbexport(buf));
   } catch (err) {
     res.status(400).json({ error: String(err) });
   }

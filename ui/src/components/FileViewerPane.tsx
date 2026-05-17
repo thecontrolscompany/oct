@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
+import type { GraphicResolver } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import { buildArchiveAudit } from './archiveAudit';
 import CafWorkspacePane from './CafWorkspacePane';
@@ -13,7 +14,7 @@ import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
-type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
+type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string; graphicResolver?: GraphicResolver };
 type ViewMode = 'online' | 'offline';
 type AnyObject = CafObject | DbexportObject;
 type ViewTab = 'tree' | 'workspace' | 'objects' | 'io' | 'graphics' | 'refs' | 'audit' | 'diff' | 'export';
@@ -924,7 +925,13 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
       return { type: 'caf', data, name };
     }
     const data = await api.dbexport.upload(f);
-    return { type: 'dbexport', data, name };
+    const graphicResolver: GraphicResolver = {
+      async resolve(svgFilename: string): Promise<string | null> {
+        try { return await api.dbexport.graphic(svgFilename); }
+        catch { return null; }
+      },
+    };
+    return { type: 'dbexport', data, name, graphicResolver };
   }, [mode]);
 
   useEffect(() => {
@@ -1160,6 +1167,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
             references={currentFile.data.references}
             referenceIndex={referenceIndex}
             onSelectObject={ref => { setSelected(ref); setTab('tree'); }}
+            graphicResolver={currentFile.type === 'dbexport' ? currentFile.graphicResolver : undefined}
           />
         </div>
       )}

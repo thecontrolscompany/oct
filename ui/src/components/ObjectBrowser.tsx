@@ -123,9 +123,11 @@ function NavBtn({ label, title, disabled, active, onClick }: {
 export default function ObjectBrowser({
   objects,
   onSelect,
+  incomingCounts,
 }: {
   objects: AnyObject[];
   onSelect?: (ref: string) => void;
+  incomingCounts?: Map<string, number>;
 }) {
   const [search, setSearch]       = useState('');
   const [classFilter, setClass]   = useState('');
@@ -197,9 +199,9 @@ export default function ObjectBrowser({
 
   // Export filtered data as CSV
   const exportCsv = () => {
-    const header = 'Class,ClassID,Tag,Description,Units,BACnet Type,Instance,Ref\n';
+    const header = 'Class,ClassID,Tag,Description,Units,BACnet Type,Instance,Refs,Ref\n';
     const rows = sorted.map(o =>
-      `"${o.className}",${o.classid},"${o.tag}","${o.description}","${o.units ?? ''}","${o.bacoidType !== null ? (BACNET_TYPE[o.bacoidType] ?? o.bacoidType) : ''}",${o.bacoidInstance ?? ''},"${o.ref}"`
+      `"${o.className}",${o.classid},"${o.tag}","${o.description}","${o.units ?? ''}","${o.bacoidType !== null ? (BACNET_TYPE[o.bacoidType] ?? o.bacoidType) : ''}",${o.bacoidInstance ?? ''},${incomingCounts?.get(o.ref) ?? 0},"${o.ref}"`
     ).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -273,7 +275,7 @@ export default function ObjectBrowser({
         <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--sidebar-bg)' }}>
             <tr style={{ borderBottom: '2px solid var(--border)' }}>
-              {COLS.map(col => (
+          {COLS.map(col => (
                 <th
                   key={col.key}
                   onClick={() => handleSort(col.key)}
@@ -289,6 +291,11 @@ export default function ObjectBrowser({
                 </th>
               ))}
               <th
+                style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: 'var(--text-dim)', fontWeight: 600, width: 70 }}
+              >
+                Refs
+              </th>
+              <th
                 style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: 'var(--text-dim)', fontWeight: 600 }}
               >
                 Ref
@@ -298,7 +305,7 @@ export default function ObjectBrowser({
           <tbody>
             {pageItems.length === 0 ? (
               <tr>
-                <td colSpan={COLS.length + 1} style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)' }}>
+                <td colSpan={COLS.length + 2} style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)' }}>
                   No objects match the current filters.
                 </td>
               </tr>
@@ -348,6 +355,19 @@ export default function ObjectBrowser({
                 </td>
                 <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace', fontSize: 11, color: 'var(--text-dim)' }}>
                   {o.bacoidInstance ?? ''}
+                </td>
+                <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace', fontSize: 11 }}>
+                  {incomingCounts?.get(o.ref) ? (
+                    <span style={{
+                      display: 'inline-block', minWidth: 24, textAlign: 'center',
+                      padding: '0 5px', borderRadius: 999, background: 'var(--bg)',
+                      border: '1px solid var(--border)', color: 'var(--accent)',
+                    }}>
+                      {incomingCounts.get(o.ref)}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-dim)' }}>0</span>
+                  )}
                 </td>
                 <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace', fontSize: 10, color: 'var(--text-dim)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   title={o.ref}>

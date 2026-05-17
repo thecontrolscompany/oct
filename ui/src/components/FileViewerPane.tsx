@@ -138,7 +138,15 @@ function NavTreeNode({ node, depth, selected, onSelect }: {
 
 // ─── Object detail ──────────────────────────────────────────────────────────
 
-function ObjectDetail({ obj, incoming }: { obj: AnyObject; incoming: ReferenceHit[] }) {
+function ObjectDetail({
+  obj,
+  incoming,
+  onSelectReference,
+}: {
+  obj: AnyObject;
+  incoming: ReferenceHit[];
+  onSelectReference?: (ref: string) => void;
+}) {
   const rows: [string, string][] = [];
   if (obj.tag) rows.push(['Tag', obj.tag]);
   if (obj.description) rows.push(['Description', obj.description]);
@@ -178,7 +186,13 @@ function ObjectDetail({ obj, incoming }: { obj: AnyObject; incoming: ReferenceHi
             </thead>
             <tbody>
               {incoming.slice(0, 12).map(hit => (
-                <tr key={`${hit.referringItem}|${hit.referringAttr}|${hit.source}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                <tr
+                  key={`${hit.referringItem}|${hit.referringAttr}|${hit.source}`}
+                  style={{ borderBottom: '1px solid var(--border)', cursor: onSelectReference ? 'pointer' : 'default' }}
+                  onClick={() => onSelectReference?.(hit.referringItem)}
+                  onMouseEnter={e => { if (onSelectReference) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+                  onMouseLeave={e => { if (onSelectReference) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
                   <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all' }}>{hit.referringItem}</td>
                   <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
                   <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.source}</td>
@@ -475,7 +489,9 @@ function ReferencesTab({
                 >
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'Consolas, monospace', fontSize: 11, wordBreak: 'break-all' }}>{target}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{hits[0]?.source ?? 'unknown source'}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                      {hits[0]?.source ?? 'unknown source'} · {hits.length.toLocaleString()} hit{hits.length === 1 ? '' : 's'}
+                    </div>
                   </div>
                   <span style={{ color: 'var(--accent)', fontFamily: 'Consolas, monospace', flexShrink: 0 }}>
                     {hits.length}
@@ -550,6 +566,12 @@ export default function FileViewerPane() {
     if (!file) return new Map<string, ReferenceHit[]>();
     return buildReferenceMap(file.data.references);
   }, [file]);
+
+  const incomingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const [target, hits] of referenceMap.entries()) counts.set(target, hits.length);
+    return counts;
+  }, [referenceMap]);
 
   const selectedObj = selected && file
     ? (file.type === 'caf' ? objMap.get(selected) : file.data.objects.find(o => o.ref === selected)) ?? null
@@ -637,7 +659,7 @@ export default function FileViewerPane() {
       </div>
 
       {/* Content */}
-      {tab === 'objects' && <ObjectBrowser objects={allObjects} onSelect={setSelected} />}
+      {tab === 'objects' && <ObjectBrowser objects={allObjects} onSelect={setSelected} incomingCounts={incomingCounts} />}
       {tab === 'io' && <div style={{ flex: 1, overflow: 'hidden' }}><IoTable objects={allObjects} /></div>}
       {tab === 'refs' && (
         <ReferencesTab
@@ -662,7 +684,7 @@ export default function FileViewerPane() {
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {selectedObj
-              ? <ObjectDetail obj={selectedObj} incoming={referenceMap.get(selectedObj.ref) ?? []} />
+              ? <ObjectDetail obj={selectedObj} incoming={referenceMap.get(selectedObj.ref) ?? []} onSelectReference={setSelected} />
               : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
             }
           </div>

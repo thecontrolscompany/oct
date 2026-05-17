@@ -659,7 +659,7 @@ export default function OfflineArchivePane() {
     if (!archive) return;
     if (seededArchiveRef.current === archive.name) return;
     seededArchiveRef.current = archive.name;
-    setExpanded(new Set(tree.map(node => node.key)));
+    setExpanded(new Set());
   }, [archive, tree]);
 
   const refreshArchiveMaps = useCallback(async () => {

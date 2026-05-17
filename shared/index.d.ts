@@ -38,6 +38,7 @@ export interface CafObject extends ArchiveObjectBase {
 
 export interface DbexportObject extends ArchiveObjectBase {
   engineRef: string;
+  bindingFileName?: string;
 }
 
 export interface EngineInfo {

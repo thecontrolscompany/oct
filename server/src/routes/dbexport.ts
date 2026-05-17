@@ -55,6 +55,19 @@ function getTextContent(el: { textContent?: string | null } | null): string {
   return el?.textContent?.trim() ?? '';
 }
 
+function normalizeEntryPath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '').toLowerCase();
+}
+
+function findZipEntry(entries: AdmZip.IZipEntry[], folder: string, fileName: string): AdmZip.IZipEntry | undefined {
+  const target = normalizeEntryPath(`${folder}/${fileName}`);
+  const basename = normalizeEntryPath(fileName);
+  return entries.find(entry => {
+    const entryPath = normalizeEntryPath(entry.entryName);
+    return entryPath === target || entryPath.endsWith(`/${basename}`) || entryPath.endsWith(basename);
+  });
+}
+
 function formatPropertyValue(dataEl: any): { value: string; valueType: string } {
   const children = Array.from((dataEl.childNodes ?? []) as any[]).filter((n: any) => n?.nodeType === 1) as any[];
   if (children.length === 0) {
@@ -97,7 +110,56 @@ function collectProperties(propEls: any, classid: number): ArchiveProperty[] {
   return properties.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id - b.id);
 }
 
-function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef: string, sourceName: string): { objects: DbexportObject[]; references: ReferenceHit[] } {
+function parseGraphicBindings(json: string, bindingObjectRef: string, sourceFile: string, serverPrefix: string): ReferenceHit[] {
+  let data: Record<string, string>;
+  try {
+    data = JSON.parse(json);
+  } catch {
+    return [];
+  }
+
+  const resolveBindingTarget = (equipmentContext: string | null | undefined, pointTag: string): string | null => {
+    const tag = pointTag.trim();
+    if (!tag) return null;
+
+    const context = (equipmentContext ?? '').trim();
+    if (!context || context === 'null') return tag;
+    if (!context.startsWith('equipment.')) return `${context}.${tag}`;
+
+    const parts = context.replace(/^equipment\./, '').split('.').filter(Boolean);
+    if (parts.length === 0) return tag;
+    const engineName = parts[0];
+    const pathSegments = parts.slice(1);
+    const prefix = serverPrefix || 'ADS-1';
+    const path = pathSegments.length > 0 ? `${pathSegments.join('.')}.${tag}` : tag;
+    return `${prefix}:${engineName}/${path}`;
+  };
+
+  const hits: ReferenceHit[] = [];
+  const seen = new Set<string>();
+  for (const [key, pointTag] of Object.entries(data)) {
+    const parts = key.split('$');
+    if (parts.length < 4) continue;
+    const [svgElement, , bindingType, ...rest] = parts;
+    const equipmentContext = rest.join('$');
+    const target = resolveBindingTarget(equipmentContext, pointTag);
+    if (!target) continue;
+    const hitKey = `${target}|${bindingObjectRef}|${bindingType}|${sourceFile}|${svgElement}`;
+    if (seen.has(hitKey)) continue;
+    seen.add(hitKey);
+    hits.push({
+      target,
+      referringItem: bindingObjectRef,
+      referringAttr: bindingType,
+      source: sourceFile,
+      sourcePath: sourceFile,
+      referringPath: `${bindingObjectRef}/${svgElement}`,
+    });
+  }
+  return hits;
+}
+
+async function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef: string, sourceName: string): Promise<{ objects: DbexportObject[]; references: ReferenceHit[] }> {
   const doc = new DOMParser().parseFromString(stripBom(xml), 'text/xml');
   const objectEls = doc.getElementsByTagName('object');
   const objects: DbexportObject[] = [];
@@ -112,6 +174,7 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
     let tag = '', description = '', unitsId: number | null = null;
     let defaultValue: number | null = null;
     let bacoidType: number | null = null, bacoidInstance: number | null = null;
+    let bindingFileName: string | undefined;
 
     const propEls = el.getElementsByTagName('property');
     for (let j = 0; j < propEls.length; j++) {
@@ -125,6 +188,11 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
         case 28: description = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null); break;
         case 117: { const e = dataEl.getElementsByTagName('enum')[0]; if (e) unitsId = parseInt(e.textContent ?? '0'); break; }
         case 2390: tag = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null); break;
+        case 902: {
+          const fileName = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null);
+          if (fileName) bindingFileName = fileName;
+          break;
+        }
         case 3113: { const f = dataEl.getElementsByTagName('float')[0]; if (f) defaultValue = parseFloat(f.textContent ?? '0'); break; }
         case 75: {
           const b = dataEl.getElementsByTagName('BACoid')[0];
@@ -150,6 +218,7 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
       units: unitsId !== null ? (unitMap[unitsId] ?? `unit${unitsId}`) : null,
       unitsId, defaultValue, bacoidType, bacoidInstance,
       properties,
+      bindingFileName,
       engineRef,
     });
   }
@@ -184,10 +253,18 @@ async function loadDbexport(buffer: Buffer): Promise<ParsedDbexport> {
   for (const entry of archiveEntries) {
     // Use zip folder as a temporary key; real ref is derived from object refs below
     const zipFolder = entry.entryName.replace(/[/\\][^/\\]+$/, '');
-    const parsed = parseArchiveXml(zip.readAsText(entry), unitMap, zipFolder, entry.entryName);
+    const parsed = await parseArchiveXml(zip.readAsText(entry), unitMap, zipFolder, entry.entryName);
     const objects = parsed.objects;
     allObjects.push(...objects);
     references.push(...parsed.references);
+
+    for (const obj of objects.filter(o => o.classid === 357 && o.bindingFileName)) {
+      const bindingEntry = findZipEntry(entries, zipFolder, obj.bindingFileName!);
+      if (!bindingEntry) continue;
+      const bindingsJson = zip.readAsText(bindingEntry);
+      const serverPrefix = obj.ref.includes(':') ? obj.ref.split(':')[0] : 'ADS-1';
+      references.push(...parseGraphicBindings(bindingsJson, obj.ref, bindingEntry.entryName, serverPrefix));
+    }
 
     // Derive proper Metasys ref (server:engine) from object refs.
     // Zip folder names concatenate server+engine with no separator (e.g. "ADS-1NAE-18"),

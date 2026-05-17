@@ -122,9 +122,12 @@ function isRenderableWorkspaceObject(obj: CafObject, _mode: WorkspaceMode, ctrl5
 }
 
 function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
-  // Network interface — signal blocks always stay in their respective I/O columns
+  // Network interface — inputs always go left; outputs with setpoint names go to setpoint-misc
   if (NETWORK_INPUT_CLASSES.has(obj.classid)) return 'network-inputs';
-  if (NETWORK_OUTPUT_CLASSES.has(obj.classid)) return 'network-outputs';
+  if (NETWORK_OUTPUT_CLASSES.has(obj.classid)) {
+    if (isSetpointLike(obj)) return 'setpoint-misc';
+    return 'network-outputs';
+  }
 
   // Physical hardware I/O
   if (HW_INPUT_CLASSES.has(obj.classid)) return 'inputs';

@@ -82,20 +82,9 @@ function cafNodeMatches(obj: CafObject, query: string): boolean {
     .some(value => value.toLowerCase().includes(query));
 }
 
-function navNodeMatches(node: NavNode, query: string): boolean {
-  if (!query) return true;
-  return [node.label, node.reference, node.className]
-    .some(value => value.toLowerCase().includes(query));
-}
-
 function cafNodeHasMatch(obj: CafObject, query: string, childMap: Map<string | null, CafObject[]>): boolean {
   if (!query || cafNodeMatches(obj, query)) return true;
   return (childMap.get(obj.ref) ?? []).some(child => cafNodeHasMatch(child, query, childMap));
-}
-
-function navNodeHasMatch(node: NavNode, query: string): boolean {
-  if (!query || navNodeMatches(node, query)) return true;
-  return node.children.some(child => navNodeHasMatch(child, query));
 }
 
 function findNavNode(root: NavNode | null, ref: string): NavNode | null {

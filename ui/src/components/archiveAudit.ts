@@ -51,6 +51,9 @@ export interface AuditReport {
     replacement: string;
     reason: string;
     score: number;
+    findingId: string;
+    findingTitle: string;
+    source?: string;
   }>;
   summary: {
     total: number;
@@ -248,6 +251,23 @@ function summarizeRefs(refs: string[]): string {
   return refs.length > 4 ? `${shown}, +${refs.length - 4} more` : shown;
 }
 
+function dedupeCleanupEntries(entries: CleanupManifestEntry[]): CleanupManifestEntry[] {
+  const best = new Map<string, CleanupManifestEntry>();
+  for (const entry of entries) {
+    const existing = best.get(entry.target);
+    if (!existing) {
+      best.set(entry.target, entry);
+      continue;
+    }
+    const existingRank = existing.action === 'delete' ? 1 : 0;
+    const entryRank = entry.action === 'delete' ? 1 : 0;
+    if (entryRank > existingRank || (entry.score > existing.score) || (entry.score === existing.score && entry.reason.length > existing.reason.length)) {
+      best.set(entry.target, entry);
+    }
+  }
+  return [...best.values()].sort((a, b) => b.score - a.score || a.target.localeCompare(b.target));
+}
+
 function cloneFile<T extends LoadedArchive>(file: T): T {
   return structuredClone(file);
 }
@@ -324,6 +344,19 @@ function applyEntryToArchive(file: LoadedArchive, entry: CleanupManifestEntry, s
   }
 }
 
+export function buildSuggestedCleanupManifest(report: AuditReport): CleanupManifestEntry[] {
+  return dedupeCleanupEntries(report.cleanupPlan.map(item => ({
+    target: item.target,
+    replacement: item.replacement,
+    reason: item.reason,
+    score: item.score,
+    findingId: item.findingId,
+    findingTitle: item.findingTitle,
+    source: item.source,
+    action: 'repoint',
+  })));
+}
+
 export function buildArchiveAudit(file: LoadedArchive, referenceIndex: ReferenceIndex): AuditReport {
   const objects = getObjects(file);
   const objectMap = new Map(objects.map(o => [o.ref, o]));
@@ -387,6 +420,9 @@ export function buildArchiveAudit(file: LoadedArchive, referenceIndex: Reference
         replacement: suggestions[0].ref,
         reason: suggestions[0].reason || 'best textual match',
         score: suggestions[0].score,
+        findingId: `unbound-reference:${target}`,
+        findingTitle: 'Unbound reference',
+        source: hits[0]?.source,
       });
     }
   }
@@ -584,6 +620,7 @@ export function exportCleanupManifestJson(entries: CleanupManifestEntry[]): stri
 
 export function applyCleanupManifest(file: LoadedArchive, entries: CleanupManifestEntry[]): RewriteResult {
   const next = cloneFile(file);
+  const normalized = dedupeCleanupEntries(entries);
   const summary: RewriteChangeSummary = {
     changedReferences: 0,
     changedReferrers: 0,
@@ -594,14 +631,14 @@ export function applyCleanupManifest(file: LoadedArchive, entries: CleanupManife
     deletedReferences: 0,
   };
 
-  for (const entry of entries) {
+  for (const entry of normalized) {
     applyEntryToArchive(next, entry, summary);
   }
 
   return {
     file: next,
     summary,
-    acceptedEntries: entries,
+    acceptedEntries: normalized,
   };
 }
 

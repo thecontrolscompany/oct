@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { exportCleanupCsv, exportCleanupManifestJson, exportFindingsCsv, buildArchiveAudit, applyCleanupManifest, buildAsBuiltReport } from './archiveAudit';
+import { exportCleanupCsv, exportCleanupManifestJson, exportFindingsCsv, buildArchiveAudit, applyCleanupManifest, buildAsBuiltReport, buildSuggestedCleanupManifest } from './archiveAudit';
 import type { LoadedArchive } from './archiveAudit';
 import type { ReferenceIndex } from '@oct/shared';
 
@@ -99,10 +99,21 @@ export default function ArchiveAuditTab({
 
   const cleanupCsv = useMemo(() => exportCleanupCsv(report.cleanupPlan), [report.cleanupPlan]);
   const findingsCsv = useMemo(() => exportFindingsCsv(report.findings), [report.findings]);
+  const suggestedManifest = useMemo(() => buildSuggestedCleanupManifest(report), [report]);
   const acceptedEntries = useMemo(() => Object.values(accepted).sort((a, b) => b.score - a.score || a.target.localeCompare(b.target)), [accepted]);
   const acceptedManifest = useMemo(() => exportCleanupManifestJson(acceptedEntries), [acceptedEntries]);
   const rewritePreview = useMemo(() => applyCleanupManifest(file, acceptedEntries), [file, acceptedEntries]);
   const asBuiltHtml = useMemo(() => buildAsBuiltReport(file, report, rewritePreview), [file, report, rewritePreview]);
+
+  const acceptAllSuggestions = () => {
+    setAccepted(prev => {
+      const next = { ...prev };
+      for (const entry of suggestedManifest) {
+        next[entry.target] = entry;
+      }
+      return next;
+    });
+  };
 
   const acceptSuggestion = (findingId: string, findingTitle: string, suggestion: { ref: string; reason: string; score: number }, source?: string, target?: string) => {
     const resolvedTarget = target ?? selected?.target ?? '';
@@ -181,6 +192,9 @@ export default function ArchiveAuditTab({
             </button>
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => copyText(acceptedManifest)}>
               Copy manifest
+            </button>
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={acceptAllSuggestions} disabled={suggestedManifest.length === 0}>
+              Accept all suggestions
             </button>
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setAccepted({})} disabled={acceptedEntries.length === 0}>
               Clear accepted

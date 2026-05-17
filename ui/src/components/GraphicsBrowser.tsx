@@ -905,7 +905,6 @@ function LegacyGraphicStage({
         className="oct-legacy-overlay"
         width={model.width}
         height={model.height}
-        viewBox={`0 0 ${model.width} ${model.height}`}
         style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'auto' }}
       >
         {graphChildren}

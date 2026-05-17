@@ -618,6 +618,17 @@ export function exportCleanupManifestJson(entries: CleanupManifestEntry[]): stri
   }, null, 2);
 }
 
+export function exportRewriteSnapshotJson(result: RewriteResult): string {
+  return JSON.stringify({
+    createdAt: new Date().toISOString(),
+    fileName: result.file.name,
+    archiveType: result.file.type,
+    summary: result.summary,
+    acceptedEntries: result.acceptedEntries,
+    file: result.file,
+  }, null, 2);
+}
+
 export function applyCleanupManifest(file: LoadedArchive, entries: CleanupManifestEntry[]): RewriteResult {
   const next = cloneFile(file);
   const normalized = dedupeCleanupEntries(entries);

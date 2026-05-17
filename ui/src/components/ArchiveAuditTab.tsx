@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { exportCleanupCsv, exportCleanupManifestJson, exportFindingsCsv, buildArchiveAudit, applyCleanupManifest, buildAsBuiltReport, buildSuggestedCleanupManifest } from './archiveAudit';
+import { exportCleanupCsv, exportCleanupManifestJson, exportFindingsCsv, exportRewriteSnapshotJson, buildArchiveAudit, applyCleanupManifest, buildAsBuiltReport, buildSuggestedCleanupManifest } from './archiveAudit';
 import type { LoadedArchive } from './archiveAudit';
 import type { ReferenceIndex } from '@oct/shared';
 
@@ -104,6 +104,7 @@ export default function ArchiveAuditTab({
   const acceptedManifest = useMemo(() => exportCleanupManifestJson(acceptedEntries), [acceptedEntries]);
   const rewritePreview = useMemo(() => applyCleanupManifest(file, acceptedEntries), [file, acceptedEntries]);
   const asBuiltHtml = useMemo(() => buildAsBuiltReport(file, report, rewritePreview), [file, report, rewritePreview]);
+  const rewriteSnapshot = useMemo(() => exportRewriteSnapshotJson(rewritePreview), [rewritePreview]);
 
   const acceptAllSuggestions = () => {
     setAccepted(prev => {
@@ -186,6 +187,9 @@ export default function ArchiveAuditTab({
             </button>
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => downloadText(`${file.name.replace(/\.[^.]+$/, '')}.cleanup-manifest.json`, acceptedManifest, 'application/json')}>
               Export accepted
+            </button>
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => downloadText(`${file.name.replace(/\.[^.]+$/, '')}.rewritten-snapshot.json`, rewriteSnapshot, 'application/json')}>
+              Export rewritten snapshot
             </button>
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => downloadText(`${file.name.replace(/\.[^.]+$/, '')}.as-built.html`, asBuiltHtml, 'text/html')}>
               Export as-built

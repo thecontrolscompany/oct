@@ -85,14 +85,14 @@ function formatPropertyValue(dataEl: any): { value: string; valueType: string } 
   return { value: parts.join(', '), valueType };
 }
 
-function collectProperties(propEls: any): ArchiveProperty[] {
+function collectProperties(propEls: any, classid: number): ArchiveProperty[] {
   const properties: ArchiveProperty[] = [];
   for (const prop of Array.from(propEls as any[])) {
     const pid = parseInt(prop.getAttribute('id') ?? '0', 10) || 0;
     const dataEl = prop.getElementsByTagName('data')[0] ?? null;
     if (!dataEl) continue;
     const { value, valueType } = formatPropertyValue(dataEl);
-    properties.push({ id: pid, name: resolvePropertyName(pid, prop.getAttribute('name')), value, valueType });
+    properties.push({ id: pid, name: resolvePropertyName(pid, prop.getAttribute('name'), classid), value, valueType });
   }
   return properties.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id - b.id);
 }
@@ -133,7 +133,7 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
         }
       }
 
-      const attrName = resolvePropertyName(pid, prop.getAttribute('name'));
+      const attrName = resolvePropertyName(pid, prop.getAttribute('name'), classid);
       references.push(...collectReferenceHitsFromNode(prop, {
         referringItem: ref,
         referringAttr: attrName,
@@ -142,7 +142,7 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
         referringPath: `${ref}/${attrName}`,
       }));
     }
-    const properties = collectProperties(propEls);
+    const properties = collectProperties(propEls, classid);
 
     objects.push({
       ref, classid, className: CLASS_NAMES[classid] ?? `Class${classid}`, objectid,

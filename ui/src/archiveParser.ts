@@ -68,7 +68,7 @@ function formatPropertyValue(dataEl: Element): { value: string; valueType: strin
   return { value: parts.join(', '), valueType };
 }
 
-function collectProperties(propEls: ArrayLike<Element> | Iterable<Element>): ArchiveProperty[] {
+function collectProperties(propEls: ArrayLike<Element> | Iterable<Element>, classid: number): ArchiveProperty[] {
   const properties: ArchiveProperty[] = [];
   for (const prop of Array.from(propEls)) {
     const pid = parseInt(prop.getAttribute('id') ?? '0', 10) || 0;
@@ -77,7 +77,7 @@ function collectProperties(propEls: ArrayLike<Element> | Iterable<Element>): Arc
     const { value, valueType } = formatPropertyValue(dataEl);
     properties.push({
       id: pid,
-      name: resolvePropertyName(pid, prop.getAttribute('name')),
+      name: resolvePropertyName(pid, prop.getAttribute('name'), classid),
       value,
       valueType,
     });
@@ -186,7 +186,7 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
         }
       }
 
-      const attrName = resolvePropertyName(pid, prop.getAttribute('name'));
+      const attrName = resolvePropertyName(pid, prop.getAttribute('name'), classid);
       references.push(...collectHitsFromNode(prop, {
         referringItem: ref,
         referringAttr: attrName,
@@ -195,7 +195,7 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
         referringPath: `${ref}/${attrName}`,
       }));
     }
-    const properties = collectProperties(propEls);
+    const properties = collectProperties(propEls, classid);
 
     objects.push({
       ref,
@@ -360,7 +360,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           }
         }
 
-        const attrName = resolvePropertyName(pid, prop.getAttribute('name'));
+        const attrName = resolvePropertyName(pid, prop.getAttribute('name'), classid);
       references.push(...collectHitsFromNode(prop, {
           referringItem: ref,
           referringAttr: attrName,
@@ -369,7 +369,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           referringPath: `${ref}/${attrName}`,
         }));
       }
-      const properties = collectProperties(propEls);
+      const properties = collectProperties(propEls, classid);
 
       classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
       objects.push({
@@ -484,7 +484,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           }
         }
 
-        const attrName = resolvePropertyName(pid, prop.getAttribute('name'));
+        const attrName = resolvePropertyName(pid, prop.getAttribute('name'), classid);
         references.push(...collectHitsFromNode(prop, {
           referringItem: ref,
           referringAttr: attrName,
@@ -493,7 +493,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           referringPath: `${ref}/${attrName}`,
         }));
       }
-      const properties = collectProperties(propEls);
+      const properties = collectProperties(propEls, classid);
 
       classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
       const parsed: CafObject = {

@@ -110,7 +110,8 @@ export declare const PROPERTY_NAMES: Record<number, string>;
 
 export declare function getPropertyName(
   propertyId: number,
-  explicitName?: string | null
+  explicitName?: string | null,
+  classId?: number | null
 ): string;
 
 export declare function isGenericPropertyName(name: string | null | undefined): boolean;

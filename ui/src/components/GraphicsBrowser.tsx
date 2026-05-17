@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CafObject, DbexportObject, ReferenceHit } from '../api';
 import type { ReferenceIndex } from '@oct/shared';
 import type { GraphicResolver } from '../archiveParser';
+import TreeGlyph from './TreeGlyph';
 
 type AnyObject = CafObject | DbexportObject;
 
@@ -27,6 +28,200 @@ export function buildGraphicTagMap(objects: AnyObject[]): Map<string, string> {
     if (GRAPHIC_CLASS_IDS.has(o.classid)) m.set(o.ref, displayName(o));
   }
   return m;
+}
+
+interface GraphicTreeNode {
+  key: string;
+  label: string;
+  ref: string | null;
+  classid: number | null;
+  className: string;
+  graphic: AnyObject | null;
+  children: GraphicTreeNode[];
+}
+
+function parseGraphicRef(ref: string): { engine: string; segments: string[] } {
+  const colonIdx = ref.indexOf(':');
+  const after = colonIdx >= 0 ? ref.slice(colonIdx + 1) : ref;
+  const slashIdx = after.indexOf('/');
+  if (slashIdx < 0) return { engine: after, segments: [] };
+  return { engine: after.slice(0, slashIdx), segments: after.slice(slashIdx + 1).split('.').filter(Boolean) };
+}
+
+function categorizeGraphicSegment(seg: string): { label: string; kind: string } {
+  if (seg === 'Graphics') return { label: 'Graphics', kind: 'graphics' };
+  if (seg === '$FacilityGraphics') return { label: 'Facility Graphics', kind: 'graphics' };
+  if (/^\d+$/i.test(seg)) return { label: `Group ${seg}`, kind: 'group' };
+  if (/^\d{8}-\d{6}-[\w]+$/i.test(seg)) return { label: seg, kind: 'graphic' };
+  return { label: seg, kind: 'group' };
+}
+
+function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
+  const roots = new Map<string, GraphicTreeNode>();
+
+  for (const obj of objects) {
+    if (!GRAPHIC_CLASS_IDS.has(obj.classid)) continue;
+    const { engine, segments } = parseGraphicRef(obj.ref);
+    if (!engine) continue;
+
+    let node = roots.get(engine);
+    if (!node) {
+      node = {
+        key: engine,
+        label: engine,
+        ref: null,
+        classid: null,
+        className: 'Engine',
+        graphic: null,
+        children: [],
+      };
+      roots.set(engine, node);
+    }
+
+    if (segments.length === 0) {
+      node.graphic = obj;
+      node.ref = obj.ref;
+      node.classid = obj.classid;
+      node.className = obj.className;
+      continue;
+    }
+
+    let current = node;
+    let keyPath = engine;
+    for (let i = 0; i < segments.length; i += 1) {
+      const seg = segments[i];
+      keyPath = `${keyPath}#${seg}`;
+      let child = current.children.find(entry => entry.key === keyPath);
+      if (!child) {
+        const cat = i === 0 ? categorizeGraphicSegment(seg) : null;
+        child = {
+          key: keyPath,
+          label: cat?.label ?? seg,
+          ref: null,
+          classid: null,
+          className: cat?.kind ?? 'group',
+          graphic: null,
+          children: [],
+        };
+        current.children.push(child);
+      }
+      current = child;
+      if (i === segments.length - 1) {
+        current.graphic = obj;
+        current.ref = obj.ref;
+        current.classid = obj.classid;
+        current.className = obj.className;
+        if (/^\d+$/i.test(current.label) || /^\d{8}-\d{6}-[\w]+$/i.test(current.label)) {
+          current.label = displayName(obj);
+        }
+      }
+    }
+  }
+
+  const sortNodes = (nodes: GraphicTreeNode[]): GraphicTreeNode[] =>
+    nodes
+      .sort((a, b) => {
+        const aWeight = a.graphic ? 2 : a.children.length > 0 ? 1 : 0;
+        const bWeight = b.graphic ? 2 : b.children.length > 0 ? 1 : 0;
+        if (aWeight !== bWeight) return aWeight - bWeight;
+        return a.label.localeCompare(b.label, undefined, { numeric: true });
+      })
+      .map(node => ({
+        ...node,
+        children: sortNodes(node.children),
+      }));
+
+  return sortNodes([...roots.values()]);
+}
+
+function graphicTreeMatches(node: GraphicTreeNode, query: string): boolean {
+  if (!query) return true;
+  if ([node.label, node.ref ?? '', node.className].some(v => v.toLowerCase().includes(query))) return true;
+  return node.children.some(child => graphicTreeMatches(child, query));
+}
+
+function graphicTreeKind(node: GraphicTreeNode): 'engine' | 'folder' | 'point' {
+  if (node.graphic) return 'point';
+  if (node.children.length > 0) return node.className === 'Engine' ? 'engine' : 'folder';
+  return 'folder';
+}
+
+function GraphicTreeRow({
+  node,
+  depth,
+  selectedKey,
+  expanded,
+  onSelect,
+  onToggle,
+  query,
+  referenceIndex,
+}: {
+  node: GraphicTreeNode;
+  depth: number;
+  selectedKey: string | null;
+  expanded: Set<string>;
+  onSelect: (node: GraphicTreeNode) => void;
+  onToggle: (key: string) => void;
+  query: string;
+  referenceIndex: ReferenceIndex;
+}) {
+  const isSelected = selectedKey === node.ref;
+  const hasMatches = query ? graphicTreeMatches(node, query) : true;
+  const visibleChildren = query ? node.children.filter(child => graphicTreeMatches(child, query)) : node.children;
+  const isOpen = expanded.has(node.key) || (query ? visibleChildren.length > 0 : false);
+  const kind = graphicTreeKind(node);
+  const incomingCount = node.ref ? (referenceIndex.counts.get(node.ref) ?? 0) : 0;
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: `5px 10px 5px ${12 + depth * 14}px`,
+          cursor: 'pointer',
+          background: isSelected ? 'rgba(67,120,181,0.14)' : 'transparent',
+          borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+          borderBottom: '1px solid rgba(175,199,226,0.3)',
+          opacity: hasMatches ? 1 : 0.45,
+        }}
+        onClick={() => { if (node.ref) onSelect(node); if (node.children.length) onToggle(node.key); }}
+        onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+        onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      >
+        <span style={{ width: 12, fontSize: 10, flexShrink: 0, textAlign: 'center', color: 'var(--text-dim)' }}>
+          {node.children.length ? (isOpen ? '▾' : '▸') : ''}
+        </span>
+        <TreeGlyph kind={kind} active={isSelected} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {node.label}
+        </span>
+        {node.graphic && (
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0, background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(175,199,226,0.65)', borderRadius: 999, padding: '1px 6px' }}>
+            {CLASS_LABEL[node.classid ?? 0] ?? 'graphic'}
+          </span>
+        )}
+        {incomingCount > 0 && (
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0, background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(175,199,226,0.65)', borderRadius: 999, padding: '1px 6px' }}>
+            {incomingCount} in
+          </span>
+        )}
+      </div>
+      {isOpen && visibleChildren.map(child => (
+        <GraphicTreeRow
+          key={child.key}
+          node={child}
+          depth={depth + 1}
+          selectedKey={selectedKey}
+          expanded={expanded}
+          onSelect={onSelect}
+          onToggle={onToggle}
+          query={query}
+          referenceIndex={referenceIndex}
+        />
+      ))}
+    </div>
+  );
 }
 
 // ─── SVG utilities ────────────────────────────────────────────────────────────
@@ -75,6 +270,17 @@ export function GraphicViewer({
   const svgContainerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
+  const boundTargetMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const hit of bindings) {
+      const id = hit.referringPath?.split('/').pop()?.trim();
+      if (!id) continue;
+      const list = map.get(id);
+      if (list) list.push(hit.target);
+      else map.set(id, [hit.target]);
+    }
+    return map;
+  }, [bindings]);
 
   const svgFilename = getBindingFileName(graphic);
 
@@ -145,12 +351,18 @@ export function GraphicViewer({
     for (const id of boundIds) {
       try {
         const el = container.querySelector(`#${CSS.escape(id)}`);
-        if (el) el.classList.add('oct-bound');
+        if (el) {
+          el.classList.add('oct-bound');
+          const targets = boundTargetMap.get(id);
+          if (targets && targets.length > 0) {
+            el.setAttribute('data-oct-bound-target', targets.join('|'));
+          }
+        }
       } catch {
         // Malformed ID — skip
       }
     }
-  }, [svgContent, bindings]);
+  }, [svgContent, bindings, boundTargetMap]);
 
   // ─── Interaction handlers ─────────────────────────────────────────────────
 
@@ -165,6 +377,8 @@ export function GraphicViewer({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    const target = e.target as Element | null;
+    if (target?.closest?.('[data-oct-bound-target]')) return;
     isDragging.current = true;
     lastPos.current = { x: e.clientX, y: e.clientY };
     e.preventDefault();
@@ -177,6 +391,17 @@ export function GraphicViewer({
     setPan(p => ({ x: p.x + dx, y: p.y + dy }));
   };
   const handleMouseUp = () => { isDragging.current = false; };
+
+  const handleGraphicClick = (e: React.MouseEvent) => {
+    const target = e.target as Element | null;
+    const boundEl = target?.closest?.('[data-oct-bound-target]') as HTMLElement | null;
+    if (!boundEl) return;
+    const hitTarget = boundEl.dataset.octBoundTarget?.split('|')[0]?.trim();
+    if (!hitTarget) return;
+    if (!onSelectObject || !objectMap.has(hitTarget)) return;
+    e.stopPropagation();
+    onSelectObject(hitTarget);
+  };
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -322,8 +547,9 @@ export function GraphicViewer({
             transformOrigin: '0 0',
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             userSelect: 'none',
-            pointerEvents: 'none',
+            pointerEvents: 'auto',
           }}
+          onClick={handleGraphicClick}
           dangerouslySetInnerHTML={{ __html: svgContent }}
         />
       </div>
@@ -437,25 +663,22 @@ export default function GraphicsBrowser({
 }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
 
   const objectMap = useMemo(() => new Map(objects.map(o => [o.ref, o])), [objects]);
 
-  const graphicRefSet = useMemo(() => {
-    const s = new Set<string>();
-    for (const o of objects) { if (GRAPHIC_CLASS_IDS.has(o.classid)) s.add(o.ref); }
-    return s;
-  }, [objects]);
+  const graphicTreeRoots = useMemo(() => buildGraphicHierarchy(objects), [objects]);
 
   const outgoingMap = useMemo(() => {
     const map = new Map<string, ReferenceHit[]>();
     for (const hit of references) {
-      if (!graphicRefSet.has(hit.referringItem)) continue;
+      if (!GRAPHIC_CLASS_IDS.has(objectMap.get(hit.referringItem)?.classid ?? -1)) continue;
       const list = map.get(hit.referringItem);
       if (list) list.push(hit);
       else map.set(hit.referringItem, [hit]);
     }
     return map;
-  }, [references, graphicRefSet]);
+  }, [references, objectMap]);
 
   const graphicEntries = useMemo((): GraphicEntry[] => {
     const graphics = objects.filter(o => o.classid === 844 || o.classid === 717);
@@ -466,16 +689,6 @@ export default function GraphicsBrowser({
       }))
       .sort((a, b) => displayName(a.graphic).localeCompare(displayName(b.graphic)));
   }, [objects, objectMap]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return graphicEntries;
-    return graphicEntries.filter(
-      ({ graphic }) =>
-        displayName(graphic).toLowerCase().includes(q) ||
-        graphic.ref.toLowerCase().includes(q),
-    );
-  }, [graphicEntries, search]);
 
   const selectedEntry = useMemo(
     () => (selected ? graphicEntries.find(e => e.graphic.ref === selected) ?? null : null),
@@ -488,6 +701,37 @@ export default function GraphicsBrowser({
     if (bindRef) return outgoingMap.get(bindRef) ?? [];
     return outgoingMap.get(selectedEntry.graphic.ref) ?? [];
   }, [selectedEntry, outgoingMap]);
+
+  const filteredTreeRoots = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return graphicTreeRoots;
+    return graphicTreeRoots.filter(node => graphicTreeMatches(node, q));
+  }, [graphicTreeRoots, search]);
+
+  useEffect(() => {
+    setTreeExpanded(prev => {
+      if (search.trim()) {
+        const next = new Set(prev);
+        const walk = (nodes: GraphicTreeNode[]) => {
+          for (const node of nodes) {
+            if (graphicTreeMatches(node, search.trim().toLowerCase())) {
+              next.add(node.key);
+            }
+            walk(node.children);
+          }
+        };
+        walk(graphicTreeRoots);
+        return next;
+      }
+      return prev;
+    });
+  }, [graphicTreeRoots, search]);
+
+  useEffect(() => {
+    if (selected) return;
+    const firstGraphic = graphicEntries[0] ?? null;
+    if (firstGraphic) setSelected(firstGraphic.graphic.ref);
+  }, [graphicEntries, selected]);
 
   if (graphicEntries.length === 0) {
     return (
@@ -526,7 +770,7 @@ export default function GraphicsBrowser({
         )}
         <input
           type="text"
-          placeholder="Filter graphics…"
+          placeholder="Filter tree…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ marginLeft: 'auto', minWidth: 220 }}
@@ -539,48 +783,36 @@ export default function GraphicsBrowser({
       </div>
 
       {/* Two-panel body */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '260px 1fr', overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '300px 1fr', overflow: 'hidden', minHeight: 0 }}>
 
-        {/* Left — graphic list */}
+        {/* Left — navigation tree */}
         <div style={{ borderRight: '1px solid var(--border)', overflowY: 'auto', background: 'var(--sidebar-bg)' }}>
-          {filtered.length === 0 ? (
+          {filteredTreeRoots.length === 0 ? (
             <div style={{ padding: 18, color: 'var(--text-dim)', fontSize: 12 }}>No graphics match.</div>
-          ) : filtered.map(({ graphic, bindingChild }) => {
-            const isSelected = graphic.ref === selected;
-            const bindingRef = bindingChild?.ref ?? graphic.ref;
-            const bindingCount = outgoingMap.get(bindingRef)?.length ?? 0;
-            const incomingCount = referenceIndex.counts.get(graphic.ref) ?? 0;
-            return (
-              <div
-                key={graphic.ref}
-                onClick={() => setSelected(isSelected ? null : graphic.ref)}
-                style={{
-                  padding: '8px 12px',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid var(--border)',
-                  background: isSelected ? 'rgba(100,160,255,0.10)' : 'transparent',
-                  borderLeft: `3px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
+          ) : (
+            filteredTreeRoots.map(node => (
+              <GraphicTreeRow
+                key={node.key}
+                node={node}
+                depth={0}
+                selectedKey={selected}
+                expanded={treeExpanded}
+                onSelect={item => {
+                  if (item.ref) setSelected(item.ref);
                 }}
-                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
-                onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-              >
-                <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
-                  <span style={{ fontWeight: 600, fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {displayName(graphic)}
-                  </span>
-                  {bindingCount > 0 && (
-                    <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'Consolas, monospace', flexShrink: 0 }}>
-                      {bindingCount}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {CLASS_LABEL[graphic.classid] ?? graphic.className}
-                  {incomingCount > 0 && <span style={{ marginLeft: 8 }}>{incomingCount} in</span>}
-                </div>
-              </div>
-            );
-          })}
+                onToggle={key => {
+                  setTreeExpanded(prev => {
+                    const next = new Set(prev);
+                    if (next.has(key)) next.delete(key);
+                    else next.add(key);
+                    return next;
+                  });
+                }}
+                query={search.trim().toLowerCase()}
+                referenceIndex={referenceIndex}
+              />
+            ))
+          )}
         </div>
 
         {/* Right — viewer */}

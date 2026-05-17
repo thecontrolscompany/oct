@@ -2,11 +2,12 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import type { CctItem } from '../api';
+import TreeGlyph from './TreeGlyph';
 
-const TYPE_ICON: Record<number, string> = {
-  9:  '📁',
-  15: '🏗️',
-  21: '🎛️',
+const TYPE_KIND: Record<number, 'folder' | 'typical' | 'package'> = {
+  9:  'folder',
+  15: 'typical',
+  21: 'package',
 };
 
 const TYPE_LABEL: Record<number, string> = {
@@ -82,12 +83,12 @@ export default function Sidebar({ selected, onSelect }: Props) {
             onSelect(item);
             if (hasChildren) toggle(item.ItemId);
           }}
-        >
+          >
           {hasChildren
             ? <span className={`expand-arrow${isOpen ? ' open' : ''}`}>▶</span>
             : <span style={{ width: 14, flexShrink: 0 }} />
           }
-          <span className="node-icon">{TYPE_ICON[item.ItemTypeId] ?? '📄'}</span>
+          <TreeGlyph kind={TYPE_KIND[item.ItemTypeId] ?? 'document'} active={selected?.ItemId === item.ItemId} />
           <span className="node-label">{item.Name}</span>
           <span className="node-type-badge">{TYPE_LABEL[item.ItemTypeId] ?? item.ItemTypeId}</span>
         </div>
@@ -126,7 +127,7 @@ export default function Sidebar({ selected, onSelect }: Props) {
                 className={`tree-node${selected?.ItemId === item.ItemId ? ' selected' : ''}`}
                 onClick={() => onSelect(item)}
               >
-                <span className="node-icon">{TYPE_ICON[item.ItemTypeId] ?? '📄'}</span>
+                <TreeGlyph kind={TYPE_KIND[item.ItemTypeId] ?? 'document'} active={selected?.ItemId === item.ItemId} />
                 <span className="node-label">{item.Name}</span>
                 <span className="node-type-badge">{TYPE_LABEL[item.ItemTypeId] ?? item.ItemTypeId}</span>
               </div>

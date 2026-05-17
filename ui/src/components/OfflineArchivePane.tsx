@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CafObject, DbexportObject, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { api } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
@@ -6,6 +6,7 @@ import { parseArchiveFile } from '../archiveParser';
 import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
 import ObjectPropertiesTable from './ObjectPropertiesTable';
 import { HAS_API_HOST } from '../connection';
+import TreeGlyph from './TreeGlyph';
 
 type LoadedArchive = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
 type AnyObject = CafObject | DbexportObject;
@@ -269,9 +270,18 @@ function TreeRow({
   query: string;
 }) {
   const isSelected = selectedKey === node.key;
-  const isOpen = expanded.has(node.key) || depth < 1 || (query && treeMatches(node, query));
+  const isOpen = expanded.has(node.key) || (query ? treeMatches(node, query) : false);
   const visibleChildren = query ? node.children.filter(child => treeMatches(child, query)) : node.children;
   const hasChildren = visibleChildren.length > 0;
+  const busLabel = /(?:field\s*bus|n2|bacnet\s*trunk|lon\s*trunk)/i.test(`${node.label} ${node.className}`);
+  const iconKind =
+    node.object && node.kind === 'group'
+      ? 'engine'
+      : busLabel
+        ? 'bus'
+        : node.kind === 'group'
+          ? 'folder'
+          : 'point';
   return (
     <div>
       <div
@@ -288,10 +298,11 @@ function TreeRow({
           onSelect(node);
           if (node.children.length) onToggle(node.key);
         }}
-      >
+        >
         <span style={{ width: 12, fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>
           {node.children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
+        <TreeGlyph kind={iconKind} active={isSelected} />
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.label}
         </span>
@@ -492,6 +503,7 @@ export default function OfflineArchivePane() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const seededArchiveRef = useRef<string | null>(null);
   const storeKey = 'oct:offline-archive';
 
   useEffect(() => {
@@ -605,6 +617,13 @@ export default function OfflineArchivePane() {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (!archive) return;
+    if (seededArchiveRef.current === archive.name) return;
+    seededArchiveRef.current = archive.name;
+    setExpanded(new Set(tree.map(node => node.key)));
+  }, [archive, tree]);
 
   const refreshArchiveMaps = useCallback(async () => {
     setRefreshingMaps(true);

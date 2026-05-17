@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
@@ -165,7 +165,7 @@ function CafTreeNode({ obj, childMap, depth, selected, onSelect, expanded, onTog
   const isSelected = selected === obj.ref;
   const isMatch = cafNodeMatches(obj, query);
   const hasDescendantMatch = query ? children.some(child => cafNodeHasMatch(child, query, childMap)) : false;
-  const isOpen = expanded.has(obj.ref) || (query ? (isMatch || hasDescendantMatch) : depth < 2);
+  const isOpen = expanded.has(obj.ref) || (query ? (isMatch || hasDescendantMatch) : false);
   return (
     <div>
       <div
@@ -221,7 +221,7 @@ function NavTreeNode({ node, depth, selected, onSelect, expanded, onToggle, quer
   const isMatch = navNodeMatches(node, query);
   const visibleChildren = query ? node.children.filter(child => navNodeHasMatch(child, query)) : node.children;
   const hasDescendantMatch = query ? node.children.some(child => navNodeHasMatch(child, query)) : false;
-  const isOpen = expanded.has(node.reference) || (query ? (isMatch || hasDescendantMatch) : depth < 2);
+  const isOpen = expanded.has(node.reference) || (query ? (isMatch || hasDescendantMatch) : false);
   return (
     <div>
       <div
@@ -864,6 +864,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const [dragging, setDragging] = useState(false);
   const [treeSearch, setTreeSearch] = useState('');
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
+  const seededArchiveRef = useRef<string | null>(null);
   const currentFile = previewFile ?? file;
   const storeKey = mode === 'offline' ? 'oct:file-viewer:offline' : 'oct:file-viewer:online';
   const loadArchive = useCallback(async (f: File): Promise<LoadedFile> => {
@@ -919,6 +920,17 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     }
     return { objMap, childMap, cafRoots: childMap.get(null) ?? [] };
   }, [currentFile]);
+
+  useEffect(() => {
+    if (!currentFile) return;
+    if (seededArchiveRef.current === currentFile.name) return;
+    seededArchiveRef.current = currentFile.name;
+    if (currentFile.type === 'caf') {
+      setTreeExpanded(new Set(cafRoots.map(r => r.ref)));
+    } else if (currentFile.data.site) {
+      setTreeExpanded(new Set([currentFile.data.site.reference]));
+    }
+  }, [currentFile, cafRoots]);
 
   const treeQuery = useMemo(() => normalizeTreeQuery(treeSearch), [treeSearch]);
 

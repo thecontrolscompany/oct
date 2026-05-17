@@ -50,6 +50,25 @@ function navNodeHasMatch(node: NavNode, query: string): boolean {
   return node.children.some(child => navNodeHasMatch(child, query));
 }
 
+function findNavNode(root: NavNode | null, ref: string): NavNode | null {
+  if (!root) return null;
+  if (root.reference === ref) return root;
+  for (const child of root.children) {
+    const found = findNavNode(child, ref);
+    if (found) return found;
+  }
+  return null;
+}
+
+interface TreeChildRow {
+  ref: string;
+  label: string;
+  classid: number;
+  className: string;
+  units: string | null;
+  incomingCount: number;
+}
+
 // ─── Drop zone ─────────────────────────────────────────────────────────────
 
 function DropZone({ onFile, label }: { onFile: (f: File) => void; label?: string }) {
@@ -204,12 +223,17 @@ function NavTreeNode({ node, depth, selected, onSelect, expanded, onToggle, quer
 function ObjectDetail({
   obj,
   incoming,
+  children,
   onSelectReference,
+  onSelectChild,
 }: {
   obj: AnyObject;
   incoming: ReferenceHit[];
+  children: TreeChildRow[];
   onSelectReference?: (ref: string) => void;
+  onSelectChild?: (ref: string) => void;
 }) {
+  const [childSearch, setChildSearch] = useState('');
   const rows: [string, string][] = [];
   if (obj.tag) rows.push(['Tag', obj.tag]);
   if (obj.description) rows.push(['Description', obj.description]);
@@ -219,6 +243,15 @@ function ObjectDetail({
   if (obj.defaultValue !== null) rows.push(['Default', String(obj.defaultValue)]);
   rows.push(['Class', `${obj.className} (${obj.classid})`]);
   rows.push(['Ref', obj.ref]);
+  const filteredChildren = useMemo(() => {
+    const q = childSearch.trim().toLowerCase();
+    if (!q) return children;
+    return children.filter(child =>
+      child.ref.toLowerCase().includes(q) ||
+      child.label.toLowerCase().includes(q) ||
+      child.className.toLowerCase().includes(q)
+    );
+  }, [children, childSearch]);
   return (
     <div style={{ padding: 12 }}>
       <div style={{ fontWeight: 600, marginBottom: 8 }}>{displayName(obj)}</div>
@@ -232,6 +265,63 @@ function ObjectDetail({
           ))}
         </tbody>
       </table>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
+          CONTENTS
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            {children.length.toLocaleString()} immediate child{children.length === 1 ? '' : 'ren'}
+          </span>
+          <input
+            type="text"
+            placeholder="Filter children…"
+            value={childSearch}
+            onChange={e => setChildSearch(e.target.value)}
+            style={{ minWidth: 220 }}
+          />
+          {childSearch && (
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setChildSearch('')}>
+              Clear
+            </button>
+          )}
+        </div>
+        {filteredChildren.length === 0 ? (
+          <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No children match the current filter.</div>
+        ) : (
+          <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Child</th>
+                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Class</th>
+                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Units</th>
+                <th style={{ textAlign: 'right', padding: '4px 8px' }}>Refs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredChildren.map(child => (
+                <tr
+                  key={child.ref}
+                  style={{ borderBottom: '1px solid var(--border)', cursor: onSelectChild ? 'pointer' : 'default' }}
+                  onClick={() => onSelectChild?.(child.ref)}
+                  onMouseEnter={e => { if (onSelectChild) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+                  onMouseLeave={e => { if (onSelectChild) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all' }}>
+                    <div style={{ fontWeight: 500 }}>{child.label}</div>
+                    <div style={{ color: 'var(--text-dim)', fontFamily: 'Consolas,monospace', fontSize: 10 }}>{child.ref}</div>
+                  </td>
+                  <td style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>{child.className}</td>
+                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{child.units ?? '—'}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'Consolas,monospace', color: 'var(--accent)' }}>
+                    {child.incomingCount.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
       <div style={{ marginTop: 14 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
           REFERENCED BY
@@ -653,6 +743,38 @@ export default function FileViewerPane() {
     ? (currentFile.type === 'caf' ? objMap.get(selected) : currentFile.data.objects.find(o => o.ref === selected)) ?? null
     : null;
 
+  const selectedNavNode = useMemo(() => {
+    if (!currentFile || currentFile.type !== 'dbexport' || !currentFile.data.site || !selected) return null;
+    return findNavNode(currentFile.data.site, selected);
+  }, [currentFile, selected]);
+
+  const treeChildren = useMemo<TreeChildRow[]>(() => {
+    if (!currentFile || !selected) return [];
+    if (currentFile.type === 'caf') {
+      return (childMap.get(selected) ?? []).map((child: CafObject) => ({
+        ref: child.ref,
+        label: displayName(child),
+        classid: child.classid,
+        className: child.className,
+        units: child.units,
+        incomingCount: incomingCounts.get(child.ref) ?? 0,
+      }));
+    }
+    const node = selectedNavNode;
+    if (!node) return [];
+    return node.children.map((child: NavNode) => {
+      const childObj = currentFile.data.objects.find(o => o.ref === child.reference);
+      return {
+        ref: child.reference,
+        label: child.label || child.reference.split(/[/\\]/).pop() || child.reference,
+        classid: childObj?.classid ?? child.classid,
+        className: childObj?.className ?? child.className,
+        units: childObj?.units ?? null,
+        incomingCount: incomingCounts.get(child.reference) ?? 0,
+      };
+    });
+  }, [currentFile, selected, childMap, incomingCounts, selectedNavNode]);
+
   const handleFile = useCallback(async (f: File) => {
     setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTreeSearch(''); setTreeExpanded(new Set()); setTab('tree');
     try {
@@ -702,6 +824,7 @@ export default function FileViewerPane() {
 
   const allObjects = getObjects(currentFile);
   const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['refs', 'References'], ['audit', 'Audit'], ['diff', 'Diff'], ['export', 'Export']];
+  const selectedDetailObj = selectedObj ?? (selectedNavNode ? currentFile.data.objects.find(o => o.ref === selectedNavNode.reference) ?? null : null);
   const treeStats = useMemo(() => {
     if (!currentFile) return { total: 0, visible: 0 };
     if (currentFile.type === 'caf') {
@@ -850,8 +973,14 @@ export default function FileViewerPane() {
               }
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              {selectedObj
-                ? <ObjectDetail obj={selectedObj} incoming={referenceMap.get(selectedObj.ref) ?? []} onSelectReference={setSelected} />
+              {selectedDetailObj
+                ? <ObjectDetail
+                    obj={selectedDetailObj}
+                    incoming={referenceMap.get(selectedDetailObj.ref) ?? []}
+                    children={treeChildren}
+                    onSelectReference={setSelected}
+                    onSelectChild={setSelected}
+                  />
                 : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
               }
             </div>

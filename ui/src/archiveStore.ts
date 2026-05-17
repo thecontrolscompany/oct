@@ -2,6 +2,11 @@ import type { LoadedArchive } from './archiveParser';
 
 const DB_NAME = 'oct-archive-store';
 const STORE_NAME = 'archives';
+const CACHE_VERSION = 2;
+
+function cacheKey(key: string): string {
+  return `v${CACHE_VERSION}:${key}`;
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -26,7 +31,7 @@ export async function saveStoredArchive(key: string, archive: LoadedArchive): Pr
   const db = await openDb();
   try {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(archive, key);
+    tx.objectStore(STORE_NAME).put(archive, cacheKey(key));
     await txDone(tx);
   } finally {
     db.close();
@@ -37,7 +42,7 @@ export async function loadStoredArchive(key: string): Promise<LoadedArchive | nu
   const db = await openDb();
   try {
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const request = tx.objectStore(STORE_NAME).get(key);
+    const request = tx.objectStore(STORE_NAME).get(cacheKey(key));
     const value = await new Promise<LoadedArchive | null>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result ?? null);
       request.onerror = () => reject(request.error ?? new Error('Unable to read archive store'));
@@ -53,7 +58,7 @@ export async function clearStoredArchive(key: string): Promise<void> {
   const db = await openDb();
   try {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).delete(key);
+    tx.objectStore(STORE_NAME).delete(cacheKey(key));
     await txDone(tx);
   } finally {
     db.close();

@@ -2,7 +2,7 @@ import type { LoadedArchive } from './archiveParser';
 
 const DB_NAME = 'oct-archive-store';
 const STORE_NAME = 'archives';
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 function cacheKey(key: string): string {
   return `v${CACHE_VERSION}:${key}`;

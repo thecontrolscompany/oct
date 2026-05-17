@@ -1,6 +1,9 @@
 "use strict";
 
-const { PropertyIdentifier = {} } = require('bacstack/lib/enum');
+const bacnetEnum = require('bacstack/lib/enum');
+const PropertyIdentifier = bacnetEnum.PropertyIdentifier
+  || bacnetEnum.default?.PropertyIdentifier
+  || bacnetEnum;
 
 const GENERIC_PROPERTY_RE = /^property\s*\d+$/i;
 const PROPERTY_NAMES = buildPropertyNameMap();

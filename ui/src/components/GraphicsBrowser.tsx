@@ -50,7 +50,7 @@ function getSvgDimensions(svgContent: string): { width: number; height: number }
 
 // ─── Graphic viewer ───────────────────────────────────────────────────────────
 
-function GraphicViewer({
+export function GraphicViewer({
   graphic,
   bindings,
   graphicResolver,

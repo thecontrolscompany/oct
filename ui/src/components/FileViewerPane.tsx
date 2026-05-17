@@ -7,7 +7,7 @@ import type { GraphicResolver } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import { buildArchiveAudit } from './archiveAudit';
 import CafWorkspacePane from './CafWorkspacePane';
-import GraphicsBrowser, { buildGraphicTagMap, GRAPHIC_CLASS_IDS } from './GraphicsBrowser';
+import GraphicsBrowser, { buildGraphicTagMap, GRAPHIC_CLASS_IDS, GraphicViewer } from './GraphicsBrowser';
 import ObjectBrowser from './ObjectBrowser';
 import ObjectPropertiesTable from './ObjectPropertiesTable';
 import TreeGlyph from './TreeGlyph';
@@ -248,6 +248,7 @@ function categorizeDbexportSegment(seg: string): { label: string; kind: string }
   if (seg === 'System Programs') return { label: 'System Programs', kind: 'sysprograms' };
   if (seg === 'Schedule') return { label: 'Schedules', kind: 'schedules' };
   if (seg === 'Graphics') return { label: 'Graphics', kind: 'graphics' };
+  if (seg.startsWith('$FacilityGraphics')) return { label: 'Facility Graphics', kind: 'graphics' };
   if (seg.startsWith('$site')) return { label: 'Site Configuration', kind: 'site' };
   if (seg.startsWith('$Generic')) return { label: 'Generic Archive', kind: 'generic' };
   return { label: seg, kind: 'category' };
@@ -283,9 +284,13 @@ function buildDbexportHierarchy(objects: AnyObject[]): Map<string, HierNode> {
     let count = n.obj ? 1 : 0;
     for (const child of n.children.values()) count += computeCounts(child);
     n.totalCount = count;
-    if (n.obj && !n._labelFromDescription && /^\d+([_\-.]\d+)?$/.test(n.label)) {
-      const desc = n.obj.description || n.obj.tag;
-      if (desc) { n.label = desc; n._labelFromDescription = true; }
+    if (n.obj && !n._labelFromDescription) {
+      const isOpaque = /^\d+([_\-.]\d+)?$/.test(n.label) ||         // pure numeric index like 00001
+                       /^\d{8}-\d{6}-[\w]+$/.test(n.label);          // timestamp-hash like 20191212-191901-5wkojwyy
+      if (isOpaque) {
+        const desc = n.obj.tag || n.obj.description;
+        if (desc) { n.label = desc; n._labelFromDescription = true; }
+      }
     }
     return count;
   };
@@ -397,19 +402,40 @@ function DbexportDetailPane({
   node,
   obj,
   incoming,
+  outgoing,
   children,
   onSelectChild,
   onSelectReference,
   graphicTagMap,
+  graphicResolver,
+  objectMap,
 }: {
   node: DbexportTreeNode | null;
   obj: AnyObject | null;
   incoming: ReferenceHit[];
+  outgoing: ReferenceHit[];
   children: DbexportTreeNode[];
   onSelectChild: (node: DbexportTreeNode) => void;
   onSelectReference: (ref: string) => void;
   graphicTagMap?: Map<string, string>;
+  graphicResolver?: GraphicResolver;
+  objectMap: Map<string, AnyObject>;
 }) {
+  const isGraphic = obj !== null && (obj.classid === 844 || obj.classid === 717);
+
+  // Graphic objects get an inline SVG viewer — bypass workspace tabs entirely
+  if (isGraphic) {
+    return (
+      <GraphicViewer
+        graphic={obj}
+        bindings={outgoing}
+        graphicResolver={graphicResolver}
+        objectMap={objectMap}
+        onSelectObject={onSelectReference}
+      />
+    );
+  }
+
   const workspaceKind = inferWorkspaceKind(node, obj);
   const tabs = workspaceKind === 'device' ? DEVICE_TABS : GROUP_TABS;
   const [tab, setTab] = useState<WorkspaceTabId>(tabs[0].id);
@@ -1341,6 +1367,12 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   }, [currentFile]);
 
   const referenceMap = referenceIndex.byTarget;
+
+  // Object map for dbexport — used by GraphicViewer to resolve binding targets
+  const dbexportObjectMap = useMemo(() => {
+    if (!currentFile || currentFile.type !== 'dbexport') return new Map<string, AnyObject>();
+    return new Map(currentFile.data.objects.map(o => [o.ref, o]));
+  }, [currentFile]);
   const incomingCounts = referenceIndex.counts;
 
   const selectedObj = selected && currentFile
@@ -1623,10 +1655,13 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
                     node={selectedDbexportNode}
                     obj={selectedDetailObj}
                     incoming={selectedDetailObj ? (referenceMap.get(selectedDetailObj.ref) ?? []) : []}
+                    outgoing={selectedDetailObj ? currentFile.data.references.filter(r => r.referringItem === selectedDetailObj.ref) : []}
                     children={selectedDbexportNode?.children ?? []}
                     onSelectChild={node => { setSelected(node.ref ?? node.key); setSelectedDbexportNode(node); if (node.children.length) toggleTreeNode(node.key); }}
                     onSelectReference={ref => { setSelected(ref); setSelectedDbexportNode(null); }}
                     graphicTagMap={graphicTagMap}
+                    graphicResolver={currentFile.type === 'dbexport' ? currentFile.graphicResolver : undefined}
+                    objectMap={dbexportObjectMap}
                   />
                 : selectedDetailObj
                   ? <ObjectDetail

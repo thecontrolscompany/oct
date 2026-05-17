@@ -314,6 +314,10 @@ function isLegacyGraphicDocument(raw: string): boolean {
   return raw.trimStart().startsWith('<GMFDocument');
 }
 
+function isLegacyGraphicZip(raw: string): boolean {
+  return raw.trimStart().startsWith('<Base64Zip');
+}
+
 function stripBom(text: string): string {
   return text.replace(/^\uFEFF/, '');
 }
@@ -343,7 +347,17 @@ async function inflateGzipBase64ToText(text: string): Promise<string | null> {
 }
 
 async function parseLegacyGraphicModel(raw: string): Promise<LegacyGraphicModel | null> {
-  const doc = new DOMParser().parseFromString(stripBom(raw), 'text/xml');
+  let source = stripBom(raw);
+  if (isLegacyGraphicZip(source)) {
+    const zipDoc = new DOMParser().parseFromString(source, 'text/xml');
+    const base64Zip = zipDoc.querySelector('Base64Zip')?.textContent?.trim();
+    if (!base64Zip) return null;
+    const inflated = await inflateGzipBase64ToText(base64Zip);
+    if (!inflated) return null;
+    source = inflated;
+  }
+
+  const doc = new DOMParser().parseFromString(source, 'text/xml');
   if (doc.documentElement?.tagName !== 'GMFDocument') return null;
   const bgEl = doc.querySelector('backgroundImageData');
   if (!bgEl?.textContent) return null;
@@ -778,7 +792,7 @@ export function GraphicViewer({
       .then(async content => {
         if (cancelled) return;
         if (!content) { setLoadError('Graphic file not found in archive.'); return; }
-        if (isLegacyGraphicDocument(content)) {
+        if (isLegacyGraphicDocument(content) || isLegacyGraphicZip(content)) {
           const model = await parseLegacyGraphicModel(content);
           if (cancelled) return;
           if (!model) {

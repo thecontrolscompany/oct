@@ -145,7 +145,17 @@ function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
     return 'output-control';
   }
 
-  // Control Activities, State Selection, Boolean/Mux primitives → state-generation
+  // Named Control Activities: keyword-route to the right column
+  // Unnamed ones fall through to state-generation as the safe default
+  if (obj.classid === 536 && hasFriendlyLabel(obj)) {
+    const hay = buildSearchText(obj);
+    if (/setpoint|limit|lockout|unocc|occupancy|availability|ramp|proportional|\bsp\b|offset|trim/.test(hay))
+      return 'setpoint-misc';
+    if (isOutputControlLike(obj)) return 'output-control';
+    return 'state-generation';
+  }
+
+  // Control Activities (unnamed), State Selection, Boolean/Mux primitives → state-generation
   if (STATE_GEN_CLASSES.has(obj.classid)) return 'state-generation';
 
   // Constants and Last Value → setpoint-misc

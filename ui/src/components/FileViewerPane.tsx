@@ -10,6 +10,13 @@ import CafWorkspacePane from './CafWorkspacePane';
 import GraphicsBrowser, { buildGraphicTagMap, GRAPHIC_CLASS_IDS } from './GraphicsBrowser';
 import ObjectBrowser from './ObjectBrowser';
 import ObjectPropertiesTable from './ObjectPropertiesTable';
+import TreeGlyph from './TreeGlyph';
+import {
+  DEVICE_TABS, GROUP_TABS,
+  type WorkspaceTabId,
+  WorkspacePropertiesCard, WorkspaceSection, WorkspaceTabs,
+  filterWorkspaceProperties, normalizeArchiveProperties,
+} from './ObjectWorkspace';
 import { loadStoredArchive, saveStoredArchive, saveStoredArchiveBytes, loadStoredArchiveBytes } from '../archiveStore';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
@@ -312,6 +319,15 @@ function dbexportTreeNodeMatches(node: DbexportTreeNode, query: string): boolean
   return node.children.some(child => dbexportTreeNodeMatches(child, query));
 }
 
+function dbexportGlyphKind(node: DbexportTreeNode): 'engine' | 'bus' | 'folder' | 'equipment' | 'point' {
+  if (node.children.length > 0 && node.ref) return 'engine';
+  const isBus = /field\s*bus|n2trunk|bacnettrunk|lontrunk|fieldbus/i.test(node.className + node.label);
+  if (isBus) return 'bus';
+  if (node.children.length > 0) return 'folder';
+  if (node.ref) return 'point';
+  return 'equipment';
+}
+
 function DbexportTreeRow({ node, depth, selectedKey, expanded, onSelect, onToggle, query }: {
   node: DbexportTreeNode;
   depth: number;
@@ -328,30 +344,26 @@ function DbexportTreeRow({ node, depth, selectedKey, expanded, onSelect, onToggl
     <div>
       <div
         style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: `4px 10px 4px ${8 + depth * 14}px`,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: `5px 10px 5px ${12 + depth * 14}px`,
           cursor: 'pointer',
-          background: isSelected ? 'var(--accent)' : 'transparent',
-          color: isSelected ? '#fff' : 'var(--text)',
+          background: isSelected ? 'rgba(67,120,181,0.14)' : 'transparent',
           borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+          borderBottom: '1px solid rgba(175,199,226,0.3)',
         }}
         onClick={() => { onSelect(node); if (node.children.length) onToggle(node.key); }}
         onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
         onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
-        <span style={{ width: 14, fontSize: 10, flexShrink: 0, color: isSelected ? '#fff' : 'var(--text-dim)' }}>
+        <span style={{ width: 12, fontSize: 10, flexShrink: 0, textAlign: 'center', color: 'var(--text-dim)' }}>
           {node.children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
-        {node.classid > 0 && (
-          <span style={{ fontSize: 10, padding: '1px 4px', borderRadius: 3, flexShrink: 0, fontFamily: 'Consolas,monospace', color: isSelected ? '#fff' : 'var(--accent)', background: isSelected ? 'rgba(255,255,255,0.15)' : 'var(--bg)', border: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border)'}` }}>
-            {node.className}
-          </span>
-        )}
-        <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <TreeGlyph kind={dbexportGlyphKind(node)} active={isSelected} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.label}
         </span>
         {visibleChildren.length > 0 && (
-          <span style={{ fontSize: 11, color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-dim)', flexShrink: 0 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0, background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(175,199,226,0.65)', borderRadius: 999, padding: '1px 6px' }}>
             {visibleChildren.length}
           </span>
         )}
@@ -368,6 +380,227 @@ function DbexportTreeRow({ node, depth, selectedKey, expanded, onSelect, onToggl
           query={query}
         />
       ))}
+    </div>
+  );
+}
+
+// ─── Dbexport detail pane (tabbed workspace, matches OfflineArchivePane) ─────
+
+function inferWorkspaceKind(node: DbexportTreeNode | null, obj: AnyObject | null): 'device' | 'group' {
+  if (!node || !obj) return 'group';
+  const text = `${node.label} ${node.className}`.toLowerCase();
+  if (/folder|tree|engine|view|category|program|graphics|site configuration|generic archive/.test(text)) return 'group';
+  return 'device';
+}
+
+function DbexportDetailPane({
+  node,
+  obj,
+  incoming,
+  children,
+  onSelectChild,
+  onSelectReference,
+  graphicTagMap,
+}: {
+  node: DbexportTreeNode | null;
+  obj: AnyObject | null;
+  incoming: ReferenceHit[];
+  children: DbexportTreeNode[];
+  onSelectChild: (node: DbexportTreeNode) => void;
+  onSelectReference: (ref: string) => void;
+  graphicTagMap?: Map<string, string>;
+}) {
+  const workspaceKind = inferWorkspaceKind(node, obj);
+  const tabs = workspaceKind === 'device' ? DEVICE_TABS : GROUP_TABS;
+  const [tab, setTab] = useState<WorkspaceTabId>(tabs[0].id);
+
+  useEffect(() => { setTab(tabs[0].id); }, [node?.key, tabs]);
+
+  const normalizedProps = useMemo(() => normalizeArchiveProperties(obj?.properties ?? []), [obj]);
+  const currentTab = tabs.find(t => t.id === tab) ?? tabs[0];
+  const currentProps = useMemo(
+    () => filterWorkspaceProperties(normalizedProps, currentTab?.keywords),
+    [normalizedProps, currentTab],
+  );
+
+  if (!node) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-dim)', fontSize: 13, padding: 24, textAlign: 'center' }}>
+        Select a node in the tree to inspect its details.
+      </div>
+    );
+  }
+
+  const lines: Array<[string, string]> = [['Class', node.className]];
+  if (obj) {
+    if (obj.tag) lines.push(['Tag', obj.tag]);
+    if (obj.description) lines.push(['Description', obj.description]);
+    if (obj.units) lines.push(['Units', obj.units]);
+    if (obj.defaultValue !== null) lines.push(['Default', String(obj.defaultValue)]);
+    if (obj.createdAt) lines.push(['Created', obj.createdAt]);
+    if (obj.modifiedAt) lines.push(['Modified', obj.modifiedAt]);
+    lines.push(['Ref', obj.ref]);
+  } else if (node.ref) {
+    lines.push(['Ref', node.ref]);
+  }
+
+  const graphicHits = graphicTagMap ? incoming.filter(h => graphicTagMap.has(h.referringItem)) : [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <WorkspaceTabs tabs={tabs} activeTab={tab} onChange={setTab} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {/* Device tabs */}
+        {workspaceKind === 'device' && (tab === 'configuration' || tab === 'device') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <WorkspaceSection title="Details">
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent)', marginBottom: 8 }}>{node.label}</div>
+              <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+                <tbody>
+                  {lines.map(([k, v]) => (
+                    <tr key={k} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '3px 8px 3px 0', color: 'var(--text-dim)', width: 110, whiteSpace: 'nowrap' }}>{k}</td>
+                      <td style={{ padding: '3px 0', wordBreak: 'break-all', fontFamily: k === 'Ref' ? 'Consolas,monospace' : undefined, fontSize: k === 'Ref' ? 10 : 12 }}>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </WorkspaceSection>
+            {children.length > 0 && (
+              <WorkspaceSection title="Contents">
+                <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+                  <thead><tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Child</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Class</th>
+                  </tr></thead>
+                  <tbody>
+                    {children.map(child => (
+                      <tr key={child.key} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                        onClick={() => onSelectChild(child)}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                        <td style={{ padding: '4px 8px 4px 0', fontWeight: 500 }}>{child.label}</td>
+                        <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{child.className}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </WorkspaceSection>
+            )}
+            {graphicHits.length > 0 && (
+              <WorkspaceSection title="Bound to Graphics">
+                <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+                  <thead><tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Graphic</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Binding type</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>SVG element</th>
+                  </tr></thead>
+                  <tbody>
+                    {graphicHits.slice(0, 20).map((hit, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                        onClick={() => onSelectReference(hit.referringItem)}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                        <td style={{ padding: '4px 8px 4px 0', fontWeight: 500 }}>{graphicTagMap!.get(hit.referringItem) ?? hit.referringItem}</td>
+                        <td style={{ padding: '4px 8px', color: 'var(--text-dim)', fontSize: 11 }}>{hit.referringAttr}</td>
+                        <td style={{ padding: '4px 8px', fontFamily: 'Consolas,monospace', fontSize: 10, color: 'var(--text-dim)' }}>{hit.referringPath?.split('/').pop() ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </WorkspaceSection>
+            )}
+            <WorkspaceSection title="Referenced By">
+              {incoming.length === 0 ? (
+                <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No incoming references found in the archive.</div>
+              ) : (
+                <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+                  <thead><tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Referring item</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Attribute</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source</th>
+                  </tr></thead>
+                  <tbody>
+                    {incoming.slice(0, 20).map(hit => (
+                      <tr key={`${hit.target}|${hit.referringItem}|${hit.referringAttr}`}
+                        style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                        onClick={() => onSelectReference(hit.referringItem)}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                        <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all', fontWeight: 500 }}>{hit.referringItem}</td>
+                        <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
+                        <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.source}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </WorkspaceSection>
+            <WorkspacePropertiesCard title="Properties" subtitle={`${currentProps.length} matching`} properties={currentProps} emptyMessage="No matching properties for this item." />
+          </div>
+        )}
+        {workspaceKind === 'device' && !['configuration', 'device', 'all-properties'].includes(tab) && (
+          <WorkspacePropertiesCard title={currentTab?.label ?? tab} subtitle={`${currentProps.length} matching`} properties={currentProps} emptyMessage={`No ${currentTab?.label ?? tab} properties matched.`} />
+        )}
+        {workspaceKind === 'device' && tab === 'all-properties' && (
+          <WorkspacePropertiesCard title="All Properties" subtitle={`${normalizedProps.length} total`} properties={normalizedProps} emptyMessage="No properties stored for this item." />
+        )}
+
+        {/* Group tabs */}
+        {workspaceKind === 'group' && tab === 'overview' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <WorkspaceSection title="Details">
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent)', marginBottom: 8 }}>{node.label}</div>
+              <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+                <tbody>
+                  {lines.map(([k, v]) => (
+                    <tr key={k} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '3px 8px 3px 0', color: 'var(--text-dim)', width: 110 }}>{k}</td>
+                      <td style={{ padding: '3px 0', wordBreak: 'break-all', fontFamily: k === 'Ref' ? 'Consolas,monospace' : undefined, fontSize: k === 'Ref' ? 10 : 12 }}>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </WorkspaceSection>
+            <WorkspaceSection title="Summary">
+              <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}><td style={{ padding: '3px 8px 3px 0', color: 'var(--text-dim)', width: 110 }}>Children</td><td style={{ padding: '3px 0' }}>{children.length.toLocaleString()}</td></tr>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}><td style={{ padding: '3px 8px 3px 0', color: 'var(--text-dim)' }}>References</td><td style={{ padding: '3px 0' }}>{incoming.length.toLocaleString()}</td></tr>
+                </tbody>
+              </table>
+            </WorkspaceSection>
+          </div>
+        )}
+        {workspaceKind === 'group' && tab === 'contents' && (
+          <WorkspaceSection title="Contents">
+            {children.length === 0 ? (
+              <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No child nodes.</div>
+            ) : (
+              <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+                <thead><tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Child</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Class</th>
+                </tr></thead>
+                <tbody>
+                  {children.map(child => (
+                    <tr key={child.key} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                      onClick={() => onSelectChild(child)}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                      <td style={{ padding: '4px 8px 4px 0', fontWeight: 500 }}>{child.label}</td>
+                      <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{child.className}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </WorkspaceSection>
+        )}
+        {workspaceKind === 'group' && tab === 'all-properties' && (
+          <WorkspacePropertiesCard title="All Properties" subtitle={`${normalizedProps.length} total`} properties={normalizedProps} emptyMessage="No properties stored for this item." />
+        )}
+      </div>
     </div>
   );
 }
@@ -1016,6 +1249,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ViewTab>('tree');
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedDbexportNode, setSelectedDbexportNode] = useState<DbexportTreeNode | null>(null);
   const [dragging, setDragging] = useState(false);
   const [treeSearch, setTreeSearch] = useState('');
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
@@ -1065,6 +1299,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
         setFile(loaded);
         setPreviewFile(null);
         setSelected(null);
+        setSelectedDbexportNode(null);
         setTab('tree');
       })
       .catch(() => {})
@@ -1173,7 +1408,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   }, []);
 
   const handleFile = useCallback(async (f: File) => {
-    setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTreeSearch(''); setTreeExpanded(new Set()); setTab('tree');
+    setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setSelectedDbexportNode(null); setTreeSearch(''); setTreeExpanded(new Set()); setTab('tree');
     try {
       const loaded = await loadArchive(f);
       setFile(loaded);
@@ -1374,7 +1609,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
                         depth={0}
                         selectedKey={selected}
                         expanded={treeExpanded}
-                        onSelect={node => setSelected(node.ref ?? node.key)}
+                        onSelect={node => { setSelected(node.ref ?? node.key); setSelectedDbexportNode(node); }}
                         onToggle={toggleTreeNode}
                         query={treeQuery}
                       />
@@ -1382,17 +1617,27 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
                   })()
               }
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {selectedDetailObj
-                ? <ObjectDetail
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              {currentFile.type === 'dbexport'
+                ? <DbexportDetailPane
+                    node={selectedDbexportNode}
                     obj={selectedDetailObj}
-                    incoming={referenceMap.get(selectedDetailObj.ref) ?? []}
-                    children={treeChildren}
-                    onSelectReference={setSelected}
-                    onSelectChild={setSelected}
+                    incoming={selectedDetailObj ? (referenceMap.get(selectedDetailObj.ref) ?? []) : []}
+                    children={selectedDbexportNode?.children ?? []}
+                    onSelectChild={node => { setSelected(node.ref ?? node.key); setSelectedDbexportNode(node); if (node.children.length) toggleTreeNode(node.key); }}
+                    onSelectReference={ref => { setSelected(ref); setSelectedDbexportNode(null); }}
                     graphicTagMap={graphicTagMap}
                   />
-                : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
+                : selectedDetailObj
+                  ? <ObjectDetail
+                      obj={selectedDetailObj}
+                      incoming={referenceMap.get(selectedDetailObj.ref) ?? []}
+                      children={treeChildren}
+                      onSelectReference={setSelected}
+                      onSelectChild={setSelected}
+                      graphicTagMap={graphicTagMap}
+                    />
+                  : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
               }
             </div>
           </div>

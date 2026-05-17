@@ -14,17 +14,24 @@ function normalizeCandidate(raw: string): string | null {
   return trimmed;
 }
 
-export function collectReferenceHits(xml: string, referringItem: string, referringAttr: string, source: string): ReferenceHit[] {
+export function collectReferenceHits(
+  xml: string,
+  referringItem: string,
+  referringAttr: string,
+  source: string,
+  sourcePath = source,
+  referringPath = referringItem,
+): ReferenceHit[] {
   const hits: ReferenceHit[] = [];
   const seen = new Set<string>();
 
   const push = (candidate: string) => {
     const target = normalizeCandidate(candidate);
     if (!target) return;
-    const key = `${target}|${referringItem}|${referringAttr}|${source}`;
+    const key = `${target}|${referringItem}|${referringAttr}|${source}|${sourcePath}|${referringPath}`;
     if (seen.has(key)) return;
     seen.add(key);
-    hits.push({ target, referringItem, referringAttr, source });
+    hits.push({ target, referringItem, referringAttr, source, sourcePath, referringPath });
   };
 
   let match: RegExpExecArray | null;

@@ -93,7 +93,7 @@ function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: s
       const propXml = serializeNode(prop);
       if (propXml) {
         const attrName = `Property ${pid}`;
-        references.push(...collectReferenceHits(propXml, ref, attrName, sourceName));
+        references.push(...collectReferenceHits(propXml, ref, attrName, sourceName, sourceName, ref));
       }
     }
 

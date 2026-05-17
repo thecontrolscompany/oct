@@ -3,6 +3,8 @@ export interface ReferenceHit {
   referringItem: string;
   referringAttr: string;
   source: string;
+  sourcePath?: string;
+  referringPath?: string;
 }
 
 export interface ArchiveObjectBase {
@@ -68,6 +70,12 @@ export interface ParsedDbexport {
   stats: Array<{ className: string; classid: number; count: number }>;
 }
 
+export interface ReferenceIndex {
+  byTarget: Map<string, ReferenceHit[]>;
+  counts: Map<string, number>;
+  totalHits: number;
+}
+
 export interface EnumSetSummary {
   EnumSetId: number;
   Name: string;
@@ -83,3 +91,7 @@ export interface EnumSetDetail {
 export declare function buildReferenceMap(
   references: ReferenceHit[]
 ): Map<string, ReferenceHit[]>;
+
+export declare function buildReferenceIndex(
+  references: ReferenceHit[]
+): ReferenceIndex;

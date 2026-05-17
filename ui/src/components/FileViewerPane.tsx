@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
-import { buildReferenceMap } from '@oct/shared';
+import { buildReferenceIndex } from '@oct/shared';
 import ObjectBrowser from './ObjectBrowser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
@@ -182,12 +182,14 @@ function ObjectDetail({
                 <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Referring item</th>
                 <th style={{ textAlign: 'left', padding: '4px 8px' }}>Attribute</th>
                 <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source</th>
+                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source path</th>
+                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Ref path</th>
               </tr>
             </thead>
             <tbody>
               {incoming.slice(0, 12).map(hit => (
                 <tr
-                  key={`${hit.referringItem}|${hit.referringAttr}|${hit.source}`}
+                  key={`${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.sourcePath ?? hit.source}|${hit.referringPath ?? hit.referringItem}`}
                   style={{ borderBottom: '1px solid var(--border)', cursor: onSelectReference ? 'pointer' : 'default' }}
                   onClick={() => onSelectReference?.(hit.referringItem)}
                   onMouseEnter={e => { if (onSelectReference) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
@@ -196,6 +198,8 @@ function ObjectDetail({
                   <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all' }}>{hit.referringItem}</td>
                   <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
                   <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.source}</td>
+                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.sourcePath ?? hit.source}</td>
+                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.referringPath ?? hit.referringItem}</td>
                 </tr>
               ))}
             </tbody>
@@ -411,45 +415,47 @@ function ExportTab({ file }: { file: LoadedFile }) {
 
 function ReferencesTab({
   file,
-  referenceMap,
+  referenceIndex,
   selectedTarget,
   onSelectTarget,
 }: {
   file: LoadedFile;
-  referenceMap: Map<string, ReferenceHit[]>;
+  referenceIndex: { byTarget: Map<string, ReferenceHit[]>; counts: Map<string, number>; totalHits: number };
   selectedTarget: string | null;
   onSelectTarget: (target: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const targets = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return [...referenceMap.entries()]
+    return [...referenceIndex.byTarget.entries()]
       .filter(([target, hits]) => {
         if (!q) return true;
         return target.toLowerCase().includes(q) || hits.some(hit =>
           hit.referringItem.toLowerCase().includes(q) ||
           hit.referringAttr.toLowerCase().includes(q) ||
-          hit.source.toLowerCase().includes(q)
+          hit.source.toLowerCase().includes(q) ||
+          (hit.sourcePath ?? '').toLowerCase().includes(q) ||
+          (hit.referringPath ?? '').toLowerCase().includes(q)
         );
       })
       .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
-  }, [referenceMap, search]);
+  }, [referenceIndex.byTarget, search]);
 
-  const activeTarget = selectedTarget && referenceMap.has(selectedTarget)
+  const activeTarget = selectedTarget && referenceIndex.byTarget.has(selectedTarget)
     ? selectedTarget
     : targets[0]?.[0] ?? null;
-  const activeHits = activeTarget ? referenceMap.get(activeTarget) ?? [] : [];
+  const activeHits = activeTarget ? referenceIndex.byTarget.get(activeTarget) ?? [] : [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div style={{ padding: 12, borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>REFERENCE INDEX</div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{file.name}</div>
-        </div>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>REFERENCE INDEX</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{file.name}</div>
+          </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>
-            {referenceMap.size.toLocaleString()} targets · {file.data.references.length.toLocaleString()} hits
+            {referenceIndex.byTarget.size.toLocaleString()} targets · {referenceIndex.totalHits.toLocaleString()} hits
           </span>
           <input
             type="text"
@@ -520,14 +526,18 @@ function ReferencesTab({
                     <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Referring item</th>
                     <th style={{ textAlign: 'left', padding: '4px 8px' }}>Attribute</th>
                     <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source path</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Ref path</th>
                   </tr>
                 </thead>
                 <tbody>
                   {activeHits.map(hit => (
-                    <tr key={`${hit.referringItem}|${hit.referringAttr}|${hit.source}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <tr key={`${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.sourcePath ?? hit.source}|${hit.referringPath ?? hit.referringItem}`} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all' }}>{hit.referringItem}</td>
                       <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
                       <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.source}</td>
+                      <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.sourcePath ?? hit.source}</td>
+                      <td style={{ padding: '4px 8px', color: 'var(--text-dim)', wordBreak: 'break-all' }}>{hit.referringPath ?? hit.referringItem}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -562,16 +572,13 @@ export default function FileViewerPane() {
     return { objMap, childMap, cafRoots: childMap.get(null) ?? [] };
   }, [file]);
 
-  const referenceMap = useMemo(() => {
-    if (!file) return new Map<string, ReferenceHit[]>();
-    return buildReferenceMap(file.data.references);
+  const referenceIndex = useMemo(() => {
+    if (!file) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
+    return buildReferenceIndex(file.data.references);
   }, [file]);
 
-  const incomingCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const [target, hits] of referenceMap.entries()) counts.set(target, hits.length);
-    return counts;
-  }, [referenceMap]);
+  const referenceMap = referenceIndex.byTarget;
+  const incomingCounts = referenceIndex.counts;
 
   const selectedObj = selected && file
     ? (file.type === 'caf' ? objMap.get(selected) : file.data.objects.find(o => o.ref === selected)) ?? null
@@ -664,7 +671,7 @@ export default function FileViewerPane() {
       {tab === 'refs' && (
         <ReferencesTab
           file={file}
-          referenceMap={referenceMap}
+          referenceIndex={referenceIndex}
           selectedTarget={selected}
           onSelectTarget={setSelected}
         />

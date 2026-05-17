@@ -311,5 +311,6 @@ The sprint is complete when OCT can:
 
 - Phase 1: shared archive contracts are live.
 - Phase 2: file viewer parity is live.
-- Phase 3: shared reference-index helper is live and deep payload scanning is in progress.
-- Next practical slice: thread nested payload hits through audit views and expand cleanup workflows on top of the index.
+- Phase 3: shared reference-index helper is live, nested payload scanning is live, and the first audit view is live.
+- The current audit pass covers unbound refs, duplicate descriptions/tags, missing tags/descriptions, orphaned CAF objects, hotspots, unreferenced objects, suppressed-alarm candidates, and I/O points missing units.
+- Next practical slice: add rewrite execution controls on top of the cleanup plan.

@@ -2,13 +2,14 @@ import { useState, useCallback, useMemo } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
+import ArchiveAuditTab from './ArchiveAuditTab';
 import ObjectBrowser from './ObjectBrowser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
 type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
 type AnyObject = CafObject | DbexportObject;
-type ViewTab = 'tree' | 'objects' | 'io' | 'refs' | 'diff' | 'export';
+type ViewTab = 'tree' | 'objects' | 'io' | 'refs' | 'audit' | 'diff' | 'export';
 
 const HW_IO_CLASSES = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
@@ -632,7 +633,7 @@ export default function FileViewerPane() {
   if (!file) return null;
 
   const allObjects = getObjects(file);
-  const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['refs', 'References'], ['diff', 'Diff'], ['export', 'Export']];
+  const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['refs', 'References'], ['audit', 'Audit'], ['diff', 'Diff'], ['export', 'Export']];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -674,6 +675,13 @@ export default function FileViewerPane() {
           referenceIndex={referenceIndex}
           selectedTarget={selected}
           onSelectTarget={setSelected}
+        />
+      )}
+      {tab === 'audit' && (
+        <ArchiveAuditTab
+          file={file}
+          referenceIndex={referenceIndex}
+          onSelectObject={setSelected}
         />
       )}
       {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={file} /></div>}

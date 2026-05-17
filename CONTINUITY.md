@@ -430,11 +430,12 @@ export async function createResolverFromBytes(bytes: ArrayBuffer): Promise<Graph
 
 ### Archive format discoveries
 
-#### Two graphic class types in Metasys dbexport
+#### Three graphic class types in Metasys dbexport
 | Class | ID | Folder in ref | File format | Renderable |
 |-------|----|--------------|-------------|-----------|
 | Facility Graphic | 844 | `$FacilityGraphics` | Hash-named `.json` that is SVG content | ✅ Yes |
-| Graphic (legacy) | 717 | `Graphics` | `.xaml` Silverlight file | ❌ No |
+| Graphic | 717 | `Graphics` | `.xaml` Silverlight file | ❌ No |
+| Legacy Graphic | 344 | `Graphics` | `GMFDocument` XML with gzipped SVG background + overlay stencils | ⚠️ Partial |
 | Graphic Binding | 357 | (child of 844) | Hash-named `-bindings.json` | — |
 
 #### Binding key format (`-bindings.json`)
@@ -496,7 +497,7 @@ The `00001` intermediate segment groups all graphics under one engine. It is not
 
 - `categorizeDbexportSegment` now maps `$FacilityGraphics` → **"Facility Graphics"** and `Graphics` → **"Graphics"**
 - `computeCounts` label-rename extended to cover timestamp-hash filenames (`\d{8}-\d{6}-[\w]+`): the node label is replaced with `obj.tag || obj.description`, so the tree shows **"Deland B1 Exh Fans"** instead of the raw hash
-- When a class-844 or class-717 node is selected in the Tree tab, `DbexportDetailPane` bypasses workspace tabs and renders **`GraphicViewer` inline** (same zoom/pan/binding-overlay viewer as the Graphics tab)
+- When a class-844, class-717, or class-344 node is selected in the Tree tab, `DbexportDetailPane` bypasses workspace tabs and renders **`GraphicViewer` inline** (same zoom/pan/binding-overlay viewer as the Graphics tab)
 - `GraphicViewer` is now exported from `GraphicsBrowser.tsx` for reuse
 - `outgoing` references (refs FROM the selected object) are computed in `FileViewerPane` and passed to `DbexportDetailPane` so binding data appears in the viewer panel
 - `dbexportObjectMap` (Map<ref, AnyObject>) built in `FileViewerPane` and passed through so `GraphicViewer` can resolve binding targets
@@ -509,7 +510,8 @@ The `00001` intermediate segment groups all graphics under one engine. It is not
 | Full dbexport — Tree tab, click graphic | ✅ | SVG viewer opens inline |
 | Full dbexport — Tree tab, filter/search | ✅ | Searches tag names |
 | Graphics-only export (no archive.xml) — Facility Graphics tab | ✅ | Synthesized from hash files; names are hash strings (no tag available) |
-| Full dbexport — legacy "Graphics" folder (class 717, .xaml) | ⚠️ | Shows "Legacy Silverlight" message; cannot render |
+| Full dbexport — Silverlight "Graphics" folder (class 717, .xaml) | ⚠️ | Shows "Legacy Silverlight" message; cannot render |
+| Full dbexport — Legacy "Graphics" folder (class 344, GMFDocument XML) | 🟡 | Background SVGZ decoded; overlay stencils being mapped for offline rendering |
 | Page refresh — offline, graphics still visible | ✅ | Raw bytes stored in IndexedDB, resolver rebuilt via `createResolverFromBytes` |
 | Online mode — graphic rendering | ✅ | `api.dbexport.graphic(filename)` → server reads from `lastArchiveBuffer` |
 | Online mode — graphic rendering after server restart | ❌ | `lastArchiveBuffer` lost; user must re-upload |

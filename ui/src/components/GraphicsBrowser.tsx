@@ -453,10 +453,6 @@ function legacyUiMatches(uiName: string, patterns: RegExp[]): boolean {
   return patterns.some(pattern => pattern.test(uiName));
 }
 
-function legacyClassKey(node: Element): string {
-  return `${legacyUiName(node)} ${legacyAttr(node, 'typeStr') ?? ''}`.trim().toLowerCase();
-}
-
 function normalizeSvgExportText(svgText: string): string {
   return svgText.replace(/\bxlink:href\s*=/gi, 'href=');
 }
@@ -511,7 +507,9 @@ function legacyRenderNode(
   onSelectObject?: (ref: string) => void,
   onSelectGraphic?: (ref: string) => void,
 ) {
-  const classKey = legacyClassKey(node);
+  const uiName = legacyUiName(node);
+  const uiNameLower = uiName.toLowerCase();
+  const typeStr = (legacyAttr(node, 'typeStr') ?? '').toLowerCase();
   const geometry = node.querySelector('geometry');
   const x = legacyNumber(geometry ?? node, 'x', legacyNumber(node, 'Canvas.Left', 0));
   const y = legacyNumber(geometry ?? node, 'y', legacyNumber(node, 'Canvas.Top', 0));
@@ -527,15 +525,16 @@ function legacyRenderNode(
   const textColor = legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000');
   const graphicTarget = legacyNodeGraphicTarget(node, graphicRefs);
   const isTextBox =
-    legacyUiMatches(classKey, [
+    legacyUiMatches(uiName, [
       /jcvaluedisplaynodeui$/i,
       /jctextnodeui$/i,
-      /\bvalue\b/i,
-      /\bdisplay\b/i,
-      /\breadout\b/i,
-      /\btextnode\b/i,
     ]) ||
-    (classKey.includes('label') && classKey.includes('value'));
+    typeStr === 'textnode' ||
+    uiNameLower.includes('valuedisplay') ||
+    uiNameLower.includes('textnode') ||
+    uiNameLower.includes('readout') ||
+    uiNameLower.includes('display') ||
+    (uiNameLower.includes('label') && uiNameLower.includes('value'));
 
   const commonProps = {
     key,
@@ -565,7 +564,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/jcjbuttonnodeui$/i, /\bbuttonnode\b/i, /\bbutton\b/i])) {
+  if (legacyUiMatches(uiName, [/jcjbuttonnodeui$/i]) || typeStr === 'buttonnode' || uiNameLower.includes('button')) {
     return (
       <g {...commonProps}>
         <rect
@@ -584,7 +583,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/jccirclenodeui$/i, /\bcirclenode\b/i, /\bcircle\b/i, /\blamp\b/i, /\bindicator\b/i, /\blight\b/i])) {
+  if (legacyUiMatches(uiName, [/jccirclenodeui$/i]) || typeStr === 'shapenode' || uiNameLower.includes('circle') || uiNameLower.includes('lamp') || uiNameLower.includes('indicator') || uiNameLower.includes('light')) {
     const r = Math.min(width, height) / 2;
     return (
       <g {...commonProps}>
@@ -594,7 +593,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/jcanimatedfanbladesnodeui$/i, /\bfan\b/i])) {
+  if (legacyUiMatches(uiName, [/jcanimatedfanbladesnodeui$/i]) || typeStr === 'dynamic2dnode' || uiNameLower.includes('fan')) {
     const cx = width / 2;
     const cy = height / 2;
     const r = Math.min(width, height) / 2;
@@ -614,7 +613,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/jcdialgaugecomponentnodeui$/i, /\bdialgaugenode\b/i, /\bgauge\b/i, /\bmeter\b/i, /\bdial\b/i])) {
+  if (legacyUiMatches(uiName, [/jcdialgaugecomponentnodeui$/i]) || typeStr === 'dialgaugenode' || uiNameLower.includes('gauge') || uiNameLower.includes('meter') || uiNameLower.includes('dial')) {
     const cx = width / 2;
     const cy = height / 2;
     const r = Math.min(width, height) / 2;
@@ -641,7 +640,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/jcslidergaugecomponentnodeui$/i, /\bsliderbarnode\b/i, /\bswitch\b/i, /\btoggle\b/i])) {
+  if (legacyUiMatches(uiName, [/jcslidergaugecomponentnodeui$/i]) || typeStr === 'sliderbarnode' || uiNameLower.includes('switch') || uiNameLower.includes('toggle')) {
     const knobOffset = legacyAttr(node.querySelector('ui'), 'isOn') === 'True' ? width * 0.55 : width * 0.08;
     const sliderColor = legacyColor(legacyAttr(node.querySelector('ui'), 'sliderColor') ?? fill, fill);
     return (
@@ -652,7 +651,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/switch/i, /toggle/i])) {
+  if (uiNameLower.includes('switch') || uiNameLower.includes('toggle')) {
     const knobOffset = legacyAttr(node.querySelector('ui'), 'isOn') === 'True' ? width * 0.55 : width * 0.08;
     return (
       <g {...commonProps}>
@@ -662,7 +661,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/jctrianglenodeui$/i, /\btriangle\b/i, /\barrow\b/i])) {
+  if (legacyUiMatches(uiName, [/jctrianglenodeui$/i]) || typeStr === 'shapeNode'.toLowerCase() || uiNameLower.includes('triangle') || uiNameLower.includes('arrow')) {
     return (
       <g {...commonProps}>
         <polygon
@@ -675,7 +674,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/jcsquarenodeui$/i, /\brectangle\b/i, /\bsquare\b/i, /\bborder\b/i, /\bpanel\b/i, /\bframe\b/i])) {
+  if (legacyUiMatches(uiName, [/jcsquarenodeui$/i]) || typeStr === 'shapenode' || uiNameLower.includes('rectangle') || uiNameLower.includes('square') || uiNameLower.includes('border') || uiNameLower.includes('panel') || uiNameLower.includes('frame')) {
     return (
       <g {...commonProps}>
         <rect x={0} y={0} width={width} height={height} rx={legacyNumber(node.querySelector('ui'), 'radiusX', 0)} ry={legacyNumber(node.querySelector('ui'), 'radiusY', 0)} fill={fill} stroke={border} strokeWidth={1} />
@@ -684,7 +683,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(classKey, [/tsesvgimagenodeui$/i, /\bdynamichvacnode\b/i])) {
+  if (legacyUiMatches(uiName, [/tsesvgimagenodeui$/i]) || typeStr === 'dynamichvacnode') {
     const label = legacyAttr(node, 'nodeDisplayText') ?? legacyAttr(node, 'text') ?? text;
     const state = label?.split('$#$')[legacyAttr(node, 'currentValue') === '1' ? 1 : 0] ?? label ?? text;
     return (

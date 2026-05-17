@@ -6,6 +6,7 @@ import LivePane from './components/LivePane';
 import MstpSerialPane from './components/MstpSerialPane';
 import PackagesPane from './components/PackagesPane';
 import FileViewerPane from './components/FileViewerPane';
+import OfflineArchivePane from './components/OfflineArchivePane';
 import CommissioningPreviewPane from './components/CommissioningPreviewPane';
 import DictionaryPane from './components/DictionaryPane';
 import EnumsPane from './components/EnumsPane';
@@ -128,7 +129,7 @@ function AppShell() {
             {renderModeToggle()}
             {renderTopbarStatus()}
           </header>
-          <FileViewerPane mode="offline" />
+          <OfflineArchivePane />
         </div>
       </div>
     );

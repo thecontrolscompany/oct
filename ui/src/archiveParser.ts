@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
-import { CLASS_NAMES } from './data/jciDictionary';
+import { CLASS_NAMES, UNIT_LABELS } from './data/jciDictionary';
 
 export type LoadedArchive =
   | { type: 'caf'; data: ParsedCaf; name: string }
@@ -28,6 +28,11 @@ function getParentRef(ref: string): string | null {
 
 function makeClassName(classid: number): string {
   return CLASS_NAMES[classid] ?? `Class${classid}`;
+}
+
+function makeUnitLabel(unitId: number | null): string | null {
+  if (unitId === null) return null;
+  return UNIT_LABELS[unitId] ?? `unit${unitId}`;
 }
 
 function buildReferenceHits(xml: string, referringItem: string, referringAttr: string, source: string, sourcePath = source, referringPath = referringItem): ReferenceHit[] {
@@ -138,7 +143,7 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
       objectid,
       tag,
       description,
-      units: unitsId !== null ? `unit${unitsId}` : null,
+      units: makeUnitLabel(unitsId),
       unitsId,
       defaultValue,
       bacoidType,
@@ -190,9 +195,153 @@ async function loadZip(file: File): Promise<JSZip> {
   return zip.loadAsync(buffer);
 }
 
+async function loadText(file: File): Promise<string> {
+  return file.text();
+}
+
+function isZipBuffer(buffer: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(buffer);
+  return bytes.length >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07) &&
+    (bytes[3] === 0x04 || bytes[3] === 0x06 || bytes[3] === 0x08);
+}
+
+function parseXmlDocument(xml: string): Document {
+  const doc = new DOMParser().parseFromString(stripBom(xml), 'text/xml');
+  if (doc.getElementsByTagName('parsererror').length > 0) {
+    throw new Error('Invalid XML document');
+  }
+  return doc;
+}
+
 export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
   const name = file.name;
   const lower = name.toLowerCase();
+  const buffer = await file.arrayBuffer();
+
+  if (!isZipBuffer(buffer)) {
+    const text = await loadText(file);
+    if (!text.trim()) throw new Error('File is empty.');
+    if (!lower.endsWith('.caf')) {
+      throw new Error('Offline .dbexport loading expects a zipped archive.');
+    }
+    const doc = parseXmlDocument(text);
+    const objectEls = Array.from(doc.getElementsByTagName('object'));
+    if (objectEls.length === 0) {
+      throw new Error('No archive objects found inside CAF XML.');
+    }
+
+    const objects: CafObject[] = [];
+    const references: ReferenceHit[] = [];
+    const classCounts = new Map<number, number>();
+    let controller: ParsedCaf['controller'] | null = null;
+
+    for (const el of objectEls) {
+      const ref = el.getAttribute('ref') ?? '';
+      const classid = parseInt(el.getAttribute('classid') ?? '0', 10) || 0;
+      const objectid = parseInt(el.getAttribute('objectid') ?? '0', 10) || 0;
+
+      let tag = '';
+      let description = '';
+      let shortTag = '';
+      let unitsId: number | null = null;
+      let defaultValue: number | null = null;
+      let bacoidType: number | null = null;
+      let bacoidInstance: number | null = null;
+      let modelName = '';
+      let appVersion = '';
+      let ip: string | null = null;
+
+      const propEls = Array.from(el.getElementsByTagName('property'));
+      for (const prop of propEls) {
+        if (prop.parentNode !== el) continue;
+        const pid = parseInt(prop.getAttribute('id') ?? '0', 10);
+        const dataEl = prop.getElementsByTagName('data')[0] ?? null;
+        if (!dataEl) continue;
+
+        switch (pid) {
+          case 28: description = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null); break;
+          case 31: shortTag = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null); break;
+          case 70: modelName = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null); break;
+          case 12: appVersion = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null); break;
+          case 117: {
+            const e = dataEl.getElementsByTagName('enum')[0];
+            if (e) unitsId = parseInt(e.textContent ?? '0', 10);
+            break;
+          }
+          case 2390: tag = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null); break;
+          case 3113: {
+            const f = dataEl.getElementsByTagName('float')[0];
+            if (f) defaultValue = parseFloat(f.textContent ?? '0');
+            break;
+          }
+          case 75: {
+            const b = dataEl.getElementsByTagName('BACoid')[0];
+            if (b) {
+              bacoidType = parseInt(b.getAttribute('id') ?? '0', 10);
+              bacoidInstance = parseInt(b.textContent ?? '0', 10);
+            }
+            break;
+          }
+          case 1135: {
+            const bytes = Array.from(dataEl.getElementsByTagName('unsignedByte'));
+            if (bytes.length === 4) {
+              ip = bytes.map(b => parseInt(b.textContent ?? '0', 10)).join('.');
+            }
+            break;
+          }
+        }
+
+        const attrName = `Property ${pid}`;
+        references.push(...collectHitsFromNode(prop, {
+          referringItem: ref,
+          referringAttr: attrName,
+          source: name,
+          sourcePath: name,
+          referringPath: `${ref}/${attrName}`,
+        }));
+      }
+
+      classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
+      objects.push({
+        ref,
+        parentRef: getParentRef(ref),
+        classid,
+        className: makeClassName(classid),
+        objectid,
+        tag,
+        description,
+        shortTag,
+        units: makeUnitLabel(unitsId),
+        unitsId,
+        defaultValue,
+        bacoidType,
+        bacoidInstance,
+      });
+
+      if (classid === 862 && !controller) {
+        controller = { ref, modelName, appVersion, description, tag, objectId: objectid, ip };
+      }
+    }
+
+    const stats = [...classCounts.entries()]
+      .map(([classid, count]) => ({ classid, className: makeClassName(classid), count }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      type: 'caf',
+      name,
+      data: {
+        controller: controller ?? { ref: '?', modelName: '?', appVersion: '?', description: '?', tag: '?', objectId: 0, ip: null },
+        objects,
+        references,
+        stats,
+      },
+    };
+  }
+
   const zip = await loadZip(file);
   const entries = Object.values(zip.files);
 
@@ -285,7 +434,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
         tag,
         description,
         shortTag,
-        units: unitsId !== null ? `unit${unitsId}` : null,
+        units: makeUnitLabel(unitsId),
         unitsId,
         defaultValue,
         bacoidType,

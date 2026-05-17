@@ -387,8 +387,8 @@ export async function createResolverFromBytes(bytes: ArrayBuffer): Promise<Graph
 ```
 - In offline mode: resolver is a JSZip closure over the live archive in memory — not serializable
 - `archiveStore.ts` gained a second IndexedDB object store (`archiveBytes`, DB version 2) to persist the raw `ArrayBuffer` alongside the parsed archive
-- On page refresh: `FileViewerPane` reads both stores, calls `createResolverFromBytes(bytes)` to rebuild the resolver from stored bytes so graphics work after reload
 - In online mode: resolver calls `api.dbexport.graphic(filename)` → server's `GET /dbexport/graphic?filename=...`; server caches the last uploaded archive buffer in `lastArchiveBuffer`
+- The file viewer no longer restores the last opened archive on refresh; it now starts empty and waits for the user to load a file again
 
 #### Online/offline UI unification (`App.tsx`, `FileViewerPane.tsx`)
 - Removed the separate `OfflineArchivePane` early-return path from `App.tsx`
@@ -501,6 +501,7 @@ The `00001` intermediate segment groups all graphics under one engine. It is not
 - `GraphicViewer` is now exported from `GraphicsBrowser.tsx` for reuse
 - `outgoing` references (refs FROM the selected object) are computed in `FileViewerPane` and passed to `DbexportDetailPane` so binding data appears in the viewer panel
 - `dbexportObjectMap` (Map<ref, AnyObject>) built in `FileViewerPane` and passed through so `GraphicViewer` can resolve binding targets
+- The previous IndexedDB-backed last-open-file restore path was removed from `FileViewerPane`; the viewer now opens without a persisted archive session
 
 ### Current state of the graphics feature
 

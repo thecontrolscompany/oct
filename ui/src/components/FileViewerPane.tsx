@@ -682,6 +682,7 @@ export default function FileViewerPane() {
           file={file}
           referenceIndex={referenceIndex}
           onSelectObject={setSelected}
+          onOpenReferences={(target) => { setSelected(target); setTab('refs'); }}
         />
       )}
       {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={file} /></div>}

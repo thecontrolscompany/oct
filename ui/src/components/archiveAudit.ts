@@ -12,12 +12,15 @@ export type AuditKind =
   | 'unbound-reference'
   | 'duplicate-description'
   | 'duplicate-tag'
+  | 'duplicate-ref'
   | 'missing-description'
   | 'missing-tag'
   | 'orphaned-object'
   | 'reference-hotspot'
+  | 'self-reference'
   | 'unreferenced-object'
   | 'suppressed-alarm'
+  | 'placeholder-name'
   | 'io-missing-units';
 
 export interface CleanupSuggestion {
@@ -58,20 +61,34 @@ export interface AuditReport {
     unbound: number;
     duplicateDescriptions: number;
     duplicateTags: number;
+    duplicateRefs: number;
     missingDescriptions: number;
     missingTags: number;
     orphans: number;
     hotspots: number;
+    selfReferences: number;
     unreferenced: number;
     suppressedAlarms: number;
+    placeholderNames: number;
     ioMissingUnits: number;
   };
+}
+
+export interface CleanupManifestEntry {
+  target: string;
+  replacement: string;
+  reason: string;
+  score: number;
+  findingId: string;
+  findingTitle: string;
+  source?: string;
 }
 
 const IO_CLASS_IDS = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
 const ALARMISH_RE = /(alarm|alarms|fault|warning|event)/i;
 const SUPPRESS_RE = /(suppress|suppressed|disable|disabled|inhibit|bypass|silence|mute|hold ?off)/i;
+const PLACEHOLDER_RE = /^(tbd|todo|temp|test|new|unnamed|unknown|object|value|point|sensor|actuator|device)(\s+.*)?$/i;
 
 function getObjects(file: LoadedArchive): AnyObject[] {
   return file.type === 'caf' ? file.data.objects : file.data.objects;
@@ -109,12 +126,15 @@ function severityCounts(findings: AuditFinding[]): AuditReport['summary'] {
     unbound: 0,
     duplicateDescriptions: 0,
     duplicateTags: 0,
+    duplicateRefs: 0,
     missingDescriptions: 0,
     missingTags: 0,
     orphans: 0,
     hotspots: 0,
+    selfReferences: 0,
     unreferenced: 0,
     suppressedAlarms: 0,
+    placeholderNames: 0,
     ioMissingUnits: 0,
   };
 
@@ -124,12 +144,15 @@ function severityCounts(findings: AuditFinding[]): AuditReport['summary'] {
       case 'unbound-reference': summary.unbound += 1; break;
       case 'duplicate-description': summary.duplicateDescriptions += 1; break;
       case 'duplicate-tag': summary.duplicateTags += 1; break;
+      case 'duplicate-ref': summary.duplicateRefs += 1; break;
       case 'missing-description': summary.missingDescriptions += 1; break;
       case 'missing-tag': summary.missingTags += 1; break;
       case 'orphaned-object': summary.orphans += 1; break;
       case 'reference-hotspot': summary.hotspots += 1; break;
+      case 'self-reference': summary.selfReferences += 1; break;
       case 'unreferenced-object': summary.unreferenced += 1; break;
       case 'suppressed-alarm': summary.suppressedAlarms += 1; break;
+      case 'placeholder-name': summary.placeholderNames += 1; break;
       case 'io-missing-units': summary.ioMissingUnits += 1; break;
     }
   }
@@ -211,6 +234,35 @@ export function buildArchiveAudit(file: LoadedArchive, referenceIndex: Reference
     outgoing.set(hit.referringItem, (outgoing.get(hit.referringItem) ?? 0) + 1);
   }
 
+  const duplicateRefs = groupBy(objects, o => o.ref);
+  for (const [, group] of duplicateRefs) {
+    if (group.length < 2) continue;
+    findings.push(makeFinding(
+      'duplicate-ref',
+      'high',
+      'Duplicate object ref',
+      `${group.length.toLocaleString()} objects share the same archive reference.`,
+      group.map(o => o.ref),
+      { details: summarizeRefs(group.map(o => `${o.className} · ${displayName(o)}`)) },
+    ));
+  }
+
+  const selfRefs = file.data.references.filter(hit => hit.target === hit.referringItem || hit.target === hit.source);
+  const selfRefGroups = groupBy(selfRefs, hit => hit.referringItem);
+  for (const [, group] of selfRefGroups) {
+    findings.push(makeFinding(
+      'self-reference',
+      'medium',
+      'Self-reference',
+      `${group.length.toLocaleString()} reference(s) point back to the same object or source context.`,
+      [group[0].referringItem],
+      {
+        source: group[0].source,
+        details: summarizeRefs(group.map(hit => `${hit.referringAttr} → ${hit.target}`)),
+      },
+    ));
+  }
+
   for (const [target, hits] of referenceIndex.byTarget.entries()) {
     if (objectMap.has(target)) continue;
     const suggestions = topSuggestions(target, objects);
@@ -267,6 +319,18 @@ export function buildArchiveAudit(file: LoadedArchive, referenceIndex: Reference
       `${group.length.toLocaleString()} objects in class ${group[0].className} share tag "${group[0].tag}".`,
       group.map(o => o.ref),
       { details: summarizeRefs(group.map(o => o.ref)) },
+    ));
+  }
+
+  const placeholderNames = objects.filter(o => PLACEHOLDER_RE.test(normalizeText(o.tag)) || PLACEHOLDER_RE.test(normalizeText(o.description)));
+  for (const obj of placeholderNames.slice(0, 100)) {
+    findings.push(makeFinding(
+      'placeholder-name',
+      'low',
+      'Placeholder name',
+      'The tag or description looks like a placeholder and may need a real label.',
+      [obj.ref],
+      { details: `${obj.className} · ${displayName(obj)}` },
     ));
   }
 
@@ -408,6 +472,13 @@ export function exportCleanupCsv(plan: AuditReport['cleanupPlan']): string {
     `"${item.reason.replace(/"/g, '""')}"`,
   ].join(','));
   return header + rows.join('\n');
+}
+
+export function exportCleanupManifestJson(entries: CleanupManifestEntry[]): string {
+  return JSON.stringify({
+    createdAt: new Date().toISOString(),
+    entries,
+  }, null, 2);
 }
 
 export function suggestRepointCandidates(target: string, objects: AnyObject[]): CleanupSuggestion[] {

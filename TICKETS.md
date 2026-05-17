@@ -92,6 +92,7 @@ Acceptance criteria:
 - Repoint suggestions are confidence-scored.
 - Rename-based bulk fixes are previewed before execution.
 - Destructive changes require explicit confirmation.
+- The user can accept cleanup candidates into a manifest and export it for review.
 
 Depends on:
 - Ticket 005

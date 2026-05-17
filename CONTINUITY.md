@@ -396,6 +396,68 @@ These features exist in CCT and are achievable with direct BACnet — no DLL wor
 | **Multi-controller bulk operations** | Multi-select devices, apply attribute changes to all |
 | **Database ↔ controller compare** | Diff live BACnet values against `tblValue1` stored values |
 
+## SCT / DaytonaState Findings
+
+The imported SCT archive on this machine is the best new source for the remaining archive-name gaps.
+
+### What was found
+- SCTPro web UI is installed locally at `https://localhost/SCTPro`
+- The installed web app exposes authenticated API routes such as:
+  - `api/Authentication/LogIn`
+  - `api/Authentication/AcceptTerms`
+  - `api/Authentication/ChangePassword`
+  - `api/Authentication/LogOut`
+  - `Login/GetTermsAndConditions`
+- The archive import created a populated `DaytonaState` database with archive-native metadata, not just a shell.
+- Useful tables include:
+  - `Item`
+  - `Value`
+  - `Property`
+  - `ViewProperty`
+  - `Attribute`
+  - `ItemDefinition`
+  - `ItemDef_Attrib`
+- `DaytonaState` also exposes a large proc surface:
+  - `spu_*` query procs
+  - `spws_*` web-service procs
+  - `fnu_*` utility functions
+
+### What it resolved
+- The archive DB resolves the property IDs that were still showing as `Unknown Property` or `Property N` in the offline viewer.
+- Examples from the imported archive:
+  - `755` -> `IEIEJ Function A List`
+  - `902` -> `File Name`
+  - `32532` -> `Completion Domains`
+  - `32537` -> `SMTP Server Host`
+  - `32542` -> `Failed Delivery Email Address`
+  - `64010` -> `Process Id List`
+  - `64745` -> `Syslog Reporting Enabled`
+
+### Current naming pipeline
+- BACnet standard names still resolve first for canonical IDs.
+- FDB-derived names remain the next layer for standard controller definitions.
+- Archive-native names from `DaytonaState` now sit alongside those maps for vendor-specific archive properties.
+- Unknown values now fall back to a numeric label like `Property 755` instead of a blank generic string.
+
+### Next useful directions
+- Add a server-facing archive inspector for `DaytonaState` proc/table metadata.
+- Expose a one-click refresh for the generated archive name maps.
+- Keep the SCT findings in the repo notes so the archive lookup path stays reproducible.
+
+### Implemented follow-through
+- Added `GET /api/sct-archive/summary` and `POST /api/sct-archive/refresh-name-maps` on the server.
+- Centralized the SCT archive SQL helpers in `server/src/sctArchive.ts`.
+- Wired the offline archive browser to show the imported SCT database summary and a refresh button for the generated name maps.
+- Verified the archive summary against the imported database:
+  - `Item`: `90,480`
+  - `Value`: `1,053,141`
+  - `Property`: `216,729`
+  - `ViewProperty`: `199,794`
+  - `ItemDefinition`: `4,197`
+  - `ItemDef_Attrib`: `113,918`
+  - proc/function groups: `spu` `212`, `spws` `40`, `fnu` `42`
+- Re-verified the attribute-map refresh script still writes the generated JSON files under `shared/`.
+
 ## Feature Gap vs CCT (Requires DLLs — Phase 4)
 
 | Feature | DLL function |

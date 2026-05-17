@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CafObject, DbexportObject, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
+import { api } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
 import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
 import ObjectPropertiesTable from './ObjectPropertiesTable';
+import { HAS_API_HOST } from '../connection';
 
 type LoadedArchive = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
 type AnyObject = CafObject | DbexportObject;
@@ -484,6 +486,9 @@ export default function OfflineArchivePane() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [archiveDbSummary, setArchiveDbSummary] = useState<Awaited<ReturnType<typeof api.sctArchive.summary>> | null>(null);
+  const [archiveDbError, setArchiveDbError] = useState<string | null>(null);
+  const [refreshingMaps, setRefreshingMaps] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -513,6 +518,24 @@ export default function OfflineArchivePane() {
     if (!archive) return;
     saveStoredArchive(storeKey, archive).catch(() => {});
   }, [archive, storeKey]);
+
+  const loadArchiveDbSummary = useCallback(async () => {
+    if (!HAS_API_HOST) return;
+    const summary = await api.sctArchive.summary();
+    setArchiveDbSummary(summary);
+    setArchiveDbError(null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (HAS_API_HOST) {
+      loadArchiveDbSummary()
+        .catch(err => {
+          if (!cancelled) setArchiveDbError(String(err));
+        });
+    }
+    return () => { cancelled = true; };
+  }, [loadArchiveDbSummary]);
 
   const tree = useMemo(() => {
     if (!archive) return [] as TreeNode[];
@@ -583,6 +606,20 @@ export default function OfflineArchivePane() {
     });
   }, []);
 
+  const refreshArchiveMaps = useCallback(async () => {
+    setRefreshingMaps(true);
+    setArchiveDbError(null);
+    try {
+      const result = await api.sctArchive.refreshNameMaps();
+      await loadArchiveDbSummary();
+      setArchiveDbError(`Refreshed ${result.classMapCount} class maps and ${result.globalNameCount} global names.`);
+    } catch (err) {
+      setArchiveDbError(String(err));
+    } finally {
+      setRefreshingMaps(false);
+    }
+  }, [loadArchiveDbSummary]);
+
   useEffect(() => {
     if (!archive) return;
     if (selectedKey && flatNodes.has(selectedKey)) return;
@@ -598,6 +635,11 @@ export default function OfflineArchivePane() {
     );
   }
 
+  const itemCount = archiveDbSummary?.tables.find(t => t.name === 'Item')?.rowCount ?? null;
+  const valueCount = archiveDbSummary?.tables.find(t => t.name === 'Value')?.rowCount ?? null;
+  const propertyCount = archiveDbSummary?.tables.find(t => t.name === 'Property')?.rowCount ?? null;
+  const procCount = archiveDbSummary?.procedureCounts.reduce((sum, row) => sum + row.count, 0) ?? null;
+
   if (!archive) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 24, gap: 14, overflow: 'hidden' }}>
@@ -609,6 +651,47 @@ export default function OfflineArchivePane() {
           <div style={{ marginLeft: 'auto', color: 'var(--text-dim)', fontSize: 12 }}>
             dbexport-style tree browsing for `.caf` and `.dbexport`
           </div>
+        </div>
+        <div style={{
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: 12,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: 12,
+          background: 'var(--panel-bg)',
+        }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>SCT ARCHIVE DB</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{archiveDbSummary?.database ?? 'DaytonaState'}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+              {archiveDbSummary ? `${archiveDbSummary.tables.length} tables · ${archiveDbSummary.procedures.length} procedures` : 'Waiting for SQL summary'}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>ITEMS</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{itemCount !== null ? itemCount.toLocaleString() : '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>VALUES / PROPS</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>
+              {valueCount !== null ? valueCount.toLocaleString() : '—'}
+              <span style={{ fontSize: 12, color: 'var(--text-dim)', marginLeft: 6 }}>
+                / {propertyCount !== null ? propertyCount.toLocaleString() : '—'}
+              </span>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>PROC GROUPS</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{procCount !== null ? procCount.toLocaleString() : '—'}</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="btn btn-ghost" disabled={!HAS_API_HOST || refreshingMaps} onClick={refreshArchiveMaps}>
+            {refreshingMaps ? 'Refreshing name maps…' : 'Refresh name maps'}
+          </button>
+          {archiveDbError && <div style={{ color: archiveDbError.startsWith('Refreshed ') ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{archiveDbError}</div>}
+          {!archiveDbError && !HAS_API_HOST && <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>Connect the backend to inspect the imported SCT database.</div>}
         </div>
         <FileDropZone onFile={handleLoad} />
         {loading && <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>Parsing archive…</div>}
@@ -640,11 +723,47 @@ export default function OfflineArchivePane() {
               Clear
             </button>
           )}
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} disabled={!HAS_API_HOST || refreshingMaps} onClick={refreshArchiveMaps}>
+            {refreshingMaps ? 'Refreshing…' : 'Refresh name maps'}
+          </button>
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setArchive(null)}>
             Close
           </button>
         </div>
       </div>
+
+      {(archiveDbSummary || archiveDbError) && (
+        <div style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          gap: 14,
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          background: 'rgba(100,160,255,0.04)',
+        }}>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+            SCT DB {archiveDbSummary?.database ?? 'DaytonaState'}
+          </span>
+          <span style={{ fontSize: 11 }}>
+            {itemCount !== null ? `${itemCount.toLocaleString()} items` : 'items: —'}
+          </span>
+          <span style={{ fontSize: 11 }}>
+            {valueCount !== null ? `${valueCount.toLocaleString()} values` : 'values: —'}
+          </span>
+          <span style={{ fontSize: 11 }}>
+            {propertyCount !== null ? `${propertyCount.toLocaleString()} properties` : 'properties: —'}
+          </span>
+          <span style={{ fontSize: 11 }}>
+            {procCount !== null ? `${procCount.toLocaleString()} proc group entries` : 'proc groups: —'}
+          </span>
+          {archiveDbError && (
+            <span style={{ fontSize: 11, color: archiveDbError.startsWith('Refreshed ') ? 'var(--success)' : 'var(--danger)' }}>
+              {archiveDbError}
+            </span>
+          )}
+        </div>
+      )}
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
         <aside style={{ width: 360, flexShrink: 0, overflowY: 'auto', borderRight: '1px solid var(--border)', background: 'var(--sidebar-bg)' }}>

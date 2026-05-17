@@ -17,6 +17,7 @@ import mstpSerialRouter from './routes/mstpSerial';
 import packagesRouter from './routes/packages';
 import cafRouter from './routes/caf';
 import dbexportRouter from './routes/dbexport';
+import sctArchiveRouter from './routes/sctArchive';
 import perspectivesRouter from './routes/perspectives';
 import metasysApiRouter from './routes/metasysApi';
 import { isConnected, getDevices, readMultiple, PROP, OBJECT_TYPE_NAME } from './bacnetService';
@@ -51,6 +52,7 @@ app.use('/api/mstp-serial', mstpSerialRouter);
 app.use('/api/packages', packagesRouter);
 app.use('/api/caf', cafRouter);
 app.use('/api/dbexport', dbexportRouter);
+app.use('/api/sct-archive', sctArchiveRouter);
 app.use('/api/perspectives', perspectivesRouter);
 app.use('/api/metasys', metasysApiRouter);
 

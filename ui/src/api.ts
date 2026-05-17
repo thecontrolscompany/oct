@@ -196,6 +196,31 @@ export interface BacnetStatus {
   deviceCount: number;
 }
 
+export interface ArchiveTableCount {
+  name: string;
+  rowCount: number;
+}
+
+export interface ArchiveProcedureInfo {
+  name: string;
+  prefix: 'spu' | 'spws' | 'fnu' | 'other';
+}
+
+export interface ArchiveSummary {
+  database: string;
+  tables: ArchiveTableCount[];
+  procedureCounts: Array<{ prefix: string; count: number }>;
+  procedures: ArchiveProcedureInfo[];
+}
+
+export interface ArchiveNameMapRefreshResult {
+  database: string;
+  classMapCount: number;
+  globalNameCount: number;
+  byClassPath: string;
+  globalPath: string;
+}
+
 import { API_BASE } from './connection';
 const BASE = API_BASE;
 
@@ -325,6 +350,11 @@ export const api = {
       return res.json();
     },
     parsePath: (path: string) => get<ParsedDbexport>(`/dbexport/parse?path=${encodeURIComponent(path)}`),
+  },
+
+  sctArchive: {
+    summary: () => get<ArchiveSummary>('/sct-archive/summary'),
+    refreshNameMaps: () => post<ArchiveNameMapRefreshResult>('/sct-archive/refresh-name-maps'),
   },
 
   perspectives: {

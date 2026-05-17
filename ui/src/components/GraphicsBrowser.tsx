@@ -372,6 +372,12 @@ function legacyLocalName(el: Element): string {
   return (el.localName || el.tagName || '').split(':').pop() || el.tagName || '';
 }
 
+function legacyUiName(node: Element): string {
+  return node.querySelector('ui > name')?.textContent?.trim()
+    ?? legacyAttr(node.querySelector('ui'), 'name')
+    ?? '';
+}
+
 function legacyAttr(el: Element | null, name: string): string | null {
   if (!el) return null;
   const value = el.getAttribute(name);
@@ -423,6 +429,10 @@ function legacyNodeTarget(node: Element, objectMap: Map<string, AnyObject>): str
   return null;
 }
 
+function legacyUiMatches(uiName: string, patterns: RegExp[]): boolean {
+  return patterns.some(pattern => pattern.test(uiName));
+}
+
 function legacyRenderText(
   el: Element,
   key: string,
@@ -471,7 +481,8 @@ function legacyRenderNode(
   objectMap: Map<string, AnyObject>,
   onSelectObject?: (ref: string) => void,
 ) {
-  const uiName = legacyAttr(node.querySelector('ui > name'), 'textContent') ?? node.querySelector('ui > name')?.textContent?.trim() ?? '';
+  const uiName = legacyUiName(node);
+  const uiNameLower = uiName.toLowerCase();
   const geometry = node.querySelector('geometry');
   const x = legacyNumber(geometry ?? node, 'x', legacyNumber(node, 'Canvas.Left', 0));
   const y = legacyNumber(geometry ?? node, 'y', legacyNumber(node, 'Canvas.Top', 0));
@@ -497,7 +508,10 @@ function legacyRenderNode(
     'data-oct-target': target ?? undefined,
   } as const;
 
-  if (/JCValueDisplayNodeUI$/.test(uiName)) {
+  if (
+    legacyUiMatches(uiName, [/JCValueDisplayNodeUI$/i, /value/i, /display/i, /readout/i]) ||
+    (uiNameLower.includes('label') && uiNameLower.includes('value'))
+  ) {
     return (
       <g {...commonProps}>
         <rect x={0} y={0} width={width} height={height} rx={1} ry={1} fill={fill} stroke={border} strokeWidth={1} />
@@ -506,7 +520,7 @@ function legacyRenderNode(
     );
   }
 
-  if (/JCJButtonNodeUI$/.test(uiName)) {
+  if (legacyUiMatches(uiName, [/JCJButtonNodeUI$/i, /button/i])) {
     const drawBorder = legacyAttr(node.querySelector('ui'), 'drawBorder') !== 'false';
     return (
       <g {...commonProps}>
@@ -526,7 +540,7 @@ function legacyRenderNode(
     );
   }
 
-  if (/JCCircleNodeUI$/.test(uiName)) {
+  if (legacyUiMatches(uiName, [/JCCircleNodeUI$/i, /circle/i, /lamp/i, /indicator/i, /light/i])) {
     const r = Math.min(width, height) / 2;
     return (
       <g {...commonProps}>
@@ -536,7 +550,7 @@ function legacyRenderNode(
     );
   }
 
-  if (/JCAnimatedFanBladesNodeUI$/.test(uiName)) {
+  if (legacyUiMatches(uiName, [/JCAnimatedFanBladesNodeUI$/i, /fan/i])) {
     const cx = width / 2;
     const cy = height / 2;
     const r = Math.min(width, height) / 2;
@@ -552,6 +566,65 @@ function legacyRenderNode(
           const y2 = cy + Math.sin(angle) * (r * 0.92);
           return <line key={`${key}-blade-${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={bladeFill} strokeWidth={Math.max(1, r * 0.12)} strokeLinecap="round" />;
         })}
+      </g>
+    );
+  }
+
+  if (legacyUiMatches(uiName, [/gauge/i, /meter/i, /dial/i])) {
+    const cx = width / 2;
+    const cy = height / 2;
+    const r = Math.min(width, height) / 2;
+    const needleAngle = -Math.PI / 4;
+    return (
+      <g {...commonProps}>
+        <path
+          d={`M ${cx - r * 0.75} ${cy + r * 0.2} A ${r * 0.75} ${r * 0.75} 0 0 1 ${cx + r * 0.75} ${cy + r * 0.2}`}
+          fill="none"
+          stroke={border}
+          strokeWidth={1.5}
+        />
+        <circle cx={cx} cy={cy} r={Math.max(1, r * 0.12)} fill={border} />
+        <line
+          x1={cx}
+          y1={cy}
+          x2={cx + Math.cos(needleAngle) * (r * 0.72)}
+          y2={cy + Math.sin(needleAngle) * (r * 0.72)}
+          stroke={legacyColor(legacyAttr(node.querySelector('ui'), 'needleColor') ?? border, border)}
+          strokeWidth={Math.max(1.5, r * 0.08)}
+          strokeLinecap="round"
+        />
+      </g>
+    );
+  }
+
+  if (legacyUiMatches(uiName, [/switch/i, /toggle/i])) {
+    const knobOffset = legacyAttr(node.querySelector('ui'), 'isOn') === 'True' ? width * 0.55 : width * 0.08;
+    return (
+      <g {...commonProps}>
+        <rect x={0} y={height * 0.25} width={width} height={height * 0.5} rx={height * 0.25} ry={height * 0.25} fill={fill} stroke={border} strokeWidth={1} />
+        <circle cx={knobOffset + height * 0.25} cy={height * 0.5} r={height * 0.22} fill="#fff" stroke={border} strokeWidth={1} />
+      </g>
+    );
+  }
+
+  if (legacyUiMatches(uiName, [/triangle/i, /arrow/i])) {
+    return (
+      <g {...commonProps}>
+        <polygon
+          points={`0,${height} ${width / 2},0 ${width},${height}`}
+          fill={legacyColor(legacyAttr(node.querySelector('ui'), 'fillColor') ?? fill, fill)}
+          stroke={border}
+          strokeWidth={1}
+        />
+      </g>
+    );
+  }
+
+  if (legacyUiMatches(uiName, [/rectangle/i, /square/i, /border/i, /panel/i, /frame/i])) {
+    return (
+      <g {...commonProps}>
+        <rect x={0} y={0} width={width} height={height} rx={legacyNumber(node.querySelector('ui'), 'radiusX', 0)} ry={legacyNumber(node.querySelector('ui'), 'radiusY', 0)} fill={fill} stroke={border} strokeWidth={1} />
+        {text && legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000') })}
       </g>
     );
   }
@@ -595,6 +668,34 @@ function legacyRenderPrimitive(
         y1={legacyNumber(el, 'Y1', 0)}
         x2={legacyNumber(el, 'X2', 0)}
         y2={legacyNumber(el, 'Y2', 0)}
+        stroke={legacyColor(legacyAttr(el, 'Stroke'), '#000')}
+        strokeWidth={legacyNumber(el, 'StrokeThickness', 1)}
+      />,
+    ];
+  }
+
+  if (local === 'Path') {
+    const d = legacyAttr(el, 'Data') ?? legacyAttr(el, 'd') ?? '';
+    return [
+      <path
+        key={key}
+        d={d}
+        fill={legacyColor(legacyAttr(el, 'Fill'), 'none')}
+        stroke={legacyColor(legacyAttr(el, 'Stroke'), '#000')}
+        strokeWidth={legacyNumber(el, 'StrokeThickness', 1)}
+      />,
+    ];
+  }
+
+  if (local === 'EllipseGeometry') {
+    return [
+      <ellipse
+        key={key}
+        cx={legacyNumber(el, 'CenterX', 0)}
+        cy={legacyNumber(el, 'CenterY', 0)}
+        rx={legacyNumber(el, 'RadiusX', 0)}
+        ry={legacyNumber(el, 'RadiusY', 0)}
+        fill={legacyColor(legacyAttr(el, 'Fill'), 'none')}
         stroke={legacyColor(legacyAttr(el, 'Stroke'), '#000')}
         strokeWidth={legacyNumber(el, 'StrokeThickness', 1)}
       />,
@@ -714,10 +815,12 @@ function LegacyGraphicStage({
   return (
     <div style={{ position: 'relative', width: model.width, height: model.height }}>
       <div
+        className="oct-legacy-background"
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
         dangerouslySetInnerHTML={{ __html: model.backgroundSvg }}
       />
       <svg
+        className="oct-legacy-overlay"
         width={model.width}
         height={model.height}
         viewBox={`0 0 ${model.width} ${model.height}`}
@@ -946,6 +1049,42 @@ export function GraphicViewer({
     );
   }, [bindings, bindingSearch]);
 
+  const handleExportGraphic = () => {
+    if (!graphicText) return;
+
+    const baseName = (svgFilename ?? displayName(graphic)).replace(/\.[^.]+$/, '');
+    let exportText = graphicText;
+
+    if (graphicKind === 'legacy' && legacyModel) {
+      const parser = new DOMParser();
+      const backgroundDoc = parser.parseFromString(legacyModel.backgroundSvg, 'image/svg+xml');
+      const backgroundRoot = backgroundDoc.documentElement;
+      const overlaySvg = svgContainerRef.current?.querySelector('svg.oct-legacy-overlay');
+      if (backgroundRoot && overlaySvg) {
+        const importedNodes = Array.from(overlaySvg.childNodes).map(node => backgroundDoc.importNode(node, true));
+        for (const node of importedNodes) backgroundRoot.appendChild(node);
+        exportText = new XMLSerializer().serializeToString(backgroundDoc);
+      } else {
+        exportText = legacyModel.backgroundSvg;
+      }
+    } else {
+      const svgEl = svgContainerRef.current?.querySelector('svg');
+      if (svgEl) {
+        exportText = new XMLSerializer().serializeToString(svgEl);
+      }
+    }
+
+    const blob = new Blob([exportText], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${baseName}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   // ─── Fallback states ──────────────────────────────────────────────────────
 
   if (!svgFilename) {
@@ -1030,6 +1169,9 @@ export function GraphicViewer({
           {svgFilename}
         </span>
         <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }}>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 7px' }} onClick={handleExportGraphic}>
+            Export SVG
+          </button>
           <button
             className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 7px' }}
             onClick={() => { const f = getFitState(); setZoom(f.zoom); setPan(f.pan); }}

@@ -17,10 +17,14 @@ import {
   WorkspacePropertiesCard, WorkspaceSection, WorkspaceTabs,
   filterWorkspaceProperties, normalizeArchiveProperties,
 } from './ObjectWorkspace';
+import WinproViewer from './WinproViewer';
+import { parseWinproFile } from '../winproParser';
+import type { LoadedWinpro } from '../winproParser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
-type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string; graphicResolver?: GraphicResolver };
+type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string; graphicResolver?: GraphicResolver } | LoadedWinpro;
+type LoadedArchive = Exclude<LoadedFile, LoadedWinpro>;
 type ViewMode = 'online' | 'offline';
 type AnyObject = CafObject | DbexportObject;
 type ViewTab = 'tree' | 'workspace' | 'objects' | 'io' | 'graphics' | 'refs' | 'audit' | 'diff' | 'export';
@@ -38,8 +42,8 @@ interface ArchiveSummary {
 const HW_IO_CLASSES = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
 
-function getObjects(f: LoadedFile): AnyObject[] {
-  return f.type === 'caf' ? f.data.objects : f.data.objects;
+function getObjects(f: LoadedArchive): AnyObject[] {
+  return f.data.objects;
 }
 
 function displayName(o: AnyObject): string {
@@ -56,7 +60,7 @@ function isDbexportSection(ref: string, needle: string): boolean {
   return new RegExp(`(?:^|[/.])${needle}(?:[/.]|$)`, 'i').test(ref);
 }
 
-function summarizeArchive(file: LoadedFile): ArchiveSummary {
+function summarizeArchive(file: LoadedArchive): ArchiveSummary {
   const objects = getObjects(file);
   const classCount = new Set(objects.map(o => o.classid)).size;
   const engineCount = file.type === 'dbexport' ? file.data.engines.length : 0;
@@ -128,7 +132,7 @@ function DropZone({ onFile, label }: { onFile: (f: File) => void; label?: string
       onDrop={onDrop}
       onClick={() => {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = '.caf,.dbexport';
+        input.type = 'file'; input.accept = '.caf,.dbexport,.cfg,.prn,.asc';
         input.onchange = () => { if (input.files?.[0]) onFile(input.files[0]); };
         input.click();
       }}
@@ -140,7 +144,7 @@ function DropZone({ onFile, label }: { onFile: (f: File) => void; label?: string
       }}
     >
       <div style={{ fontSize: 28, marginBottom: 6 }}>📂</div>
-      <div style={{ fontWeight: 600, marginBottom: 3 }}>{label ?? 'Drop a .caf or .dbexport file'}</div>
+      <div style={{ fontWeight: 600, marginBottom: 3 }}>{label ?? 'Drop a .caf, .dbexport, .cfg, .prn, or .asc file'}</div>
       <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>or click to browse</div>
     </div>
   );
@@ -874,13 +878,13 @@ function DiffTab({
   fileB,
   loadArchive,
 }: {
-  fileA: LoadedFile | null;
-  fileB: LoadedFile | null;
-  loadArchive: (file: File) => Promise<LoadedFile>;
+  fileA: LoadedArchive | null;
+  fileB: LoadedArchive | null;
+  loadArchive: (file: File) => Promise<LoadedArchive>;
 }) {
   const [loading, setLoading] = useState(false);
-  const [fileAState, setFileAState] = useState<LoadedFile | null>(fileA);
-  const [fileBState, setFileBState] = useState<LoadedFile | null>(fileB);
+  const [fileAState, setFileAState] = useState<LoadedArchive | null>(fileA);
+  const [fileBState, setFileBState] = useState<LoadedArchive | null>(fileB);
 
   const diff = useMemo<DiffRow[]>(() => {
     if (!fileAState || !fileBState) return [];
@@ -1013,7 +1017,7 @@ function DiffTab({
 
 // ─── Export tab ──────────────────────────────────────────────────────────────
 
-function ExportTab({ file, referenceIndex }: { file: LoadedFile; referenceIndex: { byTarget: Map<string, ReferenceHit[]>; counts: Map<string, number>; totalHits: number } }) {
+function ExportTab({ file, referenceIndex }: { file: LoadedArchive; referenceIndex: { byTarget: Map<string, ReferenceHit[]>; counts: Map<string, number>; totalHits: number } }) {
   const objects = getObjects(file);
   const summary = useMemo(() => summarizeArchive(file), [file]);
   const audit = useMemo(() => buildArchiveAudit(file, referenceIndex), [file, referenceIndex]);
@@ -1044,7 +1048,7 @@ function ExportTab({ file, referenceIndex }: { file: LoadedFile; referenceIndex:
     a.download = `${file.name.replace(/\.[^.]+$/, '')}.json`; a.click();
   };
 
-  const stats = file.type === 'caf' ? file.data.stats : file.data.stats;
+  const stats = file.data.stats;
   const validationRows: Array<[string, string, string]> = [
     ['Objects', summary.objectCount.toLocaleString(), 'Parsed objects available for export'],
     ['References', summary.referenceCount.toLocaleString(), 'Reference graph available for audit'],
@@ -1281,8 +1285,11 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const currentFile = previewFile ?? file;
   const loadArchive = useCallback(async (f: File): Promise<LoadedFile> => {
     const lower = f.name.toLowerCase();
-    if (!lower.endsWith('.caf') && !lower.endsWith('.dbexport')) {
-      throw new Error('Unsupported file type. Drop a .caf or .dbexport file.');
+    if (!lower.endsWith('.caf') && !lower.endsWith('.dbexport') && !lower.endsWith('.cfg') && !lower.endsWith('.prn') && !lower.endsWith('.asc')) {
+      throw new Error('Unsupported file type. Drop a .caf, .dbexport, .cfg, .prn, or .asc file.');
+    }
+    if (lower.endsWith('.cfg') || lower.endsWith('.prn') || lower.endsWith('.asc')) {
+      return parseWinproFile(f);
     }
     if (mode === 'offline') {
       return parseArchiveFile(f);
@@ -1323,33 +1330,34 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   }, [currentFile, cafRoots]);
 
   const treeQuery = useMemo(() => normalizeTreeQuery(treeSearch), [treeSearch]);
+  const archiveFile = currentFile && currentFile.type !== 'winpro' ? currentFile : null;
 
   const referenceIndex = useMemo(() => {
-    if (!currentFile) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
-    return buildReferenceIndex(currentFile.data.references);
-  }, [currentFile]);
+    if (!archiveFile) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
+    return buildReferenceIndex(archiveFile.data.references);
+  }, [archiveFile]);
 
   const referenceMap = referenceIndex.byTarget;
 
   // Object map for dbexport — used by GraphicViewer to resolve binding targets
   const dbexportObjectMap = useMemo(() => {
-    if (!currentFile || currentFile.type !== 'dbexport') return new Map<string, AnyObject>();
-    return new Map(currentFile.data.objects.map(o => [o.ref, o]));
-  }, [currentFile]);
+    if (!archiveFile || archiveFile.type !== 'dbexport') return new Map<string, AnyObject>();
+    return new Map(archiveFile.data.objects.map(o => [o.ref, o]));
+  }, [archiveFile]);
   const incomingCounts = referenceIndex.counts;
 
   const selectedObj = selected && currentFile
-    ? (currentFile.type === 'caf' ? objMap.get(selected) : currentFile.data.objects.find(o => o.ref === selected)) ?? null
+    ? (archiveFile?.type === 'caf' ? objMap.get(selected) : archiveFile?.data.objects.find(o => o.ref === selected)) ?? null
     : null;
 
   const selectedNavNode = useMemo(() => {
-    if (!currentFile || currentFile.type !== 'dbexport' || !currentFile.data.site || !selected) return null;
-    return findNavNode(currentFile.data.site, selected);
-  }, [currentFile, selected]);
+    if (!archiveFile || archiveFile.type !== 'dbexport' || !archiveFile.data.site || !selected) return null;
+    return findNavNode(archiveFile.data.site, selected);
+  }, [archiveFile, selected]);
 
   const treeChildren = useMemo<TreeChildRow[]>(() => {
-    if (!currentFile || !selected) return [];
-    if (currentFile.type === 'caf') {
+    if (!archiveFile || !selected) return [];
+    if (archiveFile.type === 'caf') {
       return (childMap.get(selected) ?? []).map((child: CafObject) => ({
         ref: child.ref,
         label: displayName(child),
@@ -1362,7 +1370,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     const node = selectedNavNode;
     if (!node) return [];
     return node.children.map((child: NavNode) => {
-      const childObj = currentFile.data.objects.find(o => o.ref === child.reference);
+      const childObj = archiveFile.data.objects.find(o => o.ref === child.reference);
       return {
         ref: child.reference,
         label: child.label || child.reference.split(/[/\\]/).pop() || child.reference,
@@ -1372,27 +1380,27 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
         incomingCount: incomingCounts.get(child.reference) ?? 0,
       };
     });
-  }, [currentFile, selected, childMap, incomingCounts, selectedNavNode]);
+  }, [archiveFile, selected, childMap, incomingCounts, selectedNavNode]);
 
   const graphicTagMap = useMemo(
-    () => (currentFile ? buildGraphicTagMap(getObjects(currentFile)) : new Map<string, string>()),
-    [currentFile],
+    () => (archiveFile ? buildGraphicTagMap(getObjects(archiveFile)) : new Map<string, string>()),
+    [archiveFile],
   );
 
   const dbexportRoots = useMemo(() => {
-    if (!currentFile || currentFile.type !== 'dbexport') return [] as DbexportTreeNode[];
-    return buildDbexportTreeRoots(getObjects(currentFile));
-  }, [currentFile]);
+    if (!archiveFile || archiveFile.type !== 'dbexport') return [] as DbexportTreeNode[];
+    return buildDbexportTreeRoots(getObjects(archiveFile));
+  }, [archiveFile]);
 
   const treeStats = useMemo(() => {
-    if (!currentFile) return { total: 0, visible: 0 };
-    if (currentFile.type === 'caf') {
+    if (!archiveFile) return { total: 0, visible: 0 };
+    if (archiveFile.type === 'caf') {
       const visible = treeQuery ? cafRoots.filter(root => cafNodeHasMatch(root, treeQuery, childMap)).length : cafRoots.length;
-      return { total: currentFile.data.objects.length, visible };
+      return { total: archiveFile.data.objects.length, visible };
     }
     const visible = treeQuery ? dbexportRoots.filter(r => dbexportTreeNodeMatches(r, treeQuery)).length : dbexportRoots.length;
-    return { total: currentFile.data.objects.length, visible };
-  }, [currentFile, cafRoots, childMap, treeQuery, dbexportRoots]);
+    return { total: archiveFile.data.objects.length, visible };
+  }, [archiveFile, cafRoots, childMap, treeQuery, dbexportRoots]);
 
   const toggleTreeNode = useCallback((ref: string) => {
     setTreeExpanded(prev => {
@@ -1421,7 +1429,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
           onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
           onClick={() => {
             const input = document.createElement('input');
-            input.type = 'file'; input.accept = '.caf,.dbexport';
+            input.type = 'file'; input.accept = '.caf,.dbexport,.cfg,.prn,.asc';
             input.onchange = () => { if (input.files?.[0]) handleFile(input.files[0]); };
             input.click();
           }}
@@ -1431,9 +1439,9 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
           }}
         >
           <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop a .caf or .dbexport file here</div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop a .caf, .dbexport, .cfg, .prn, or .asc file here</div>
           <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>or click to browse</div>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>.caf — CCT controller program · .dbexport — Metasys SCT archive</div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>.caf — CCT controller program · .dbexport — Metasys SCT archive · .cfg/.prn/.asc — legacy WinPro files</div>
         </div>
         {error && <div style={{ color: 'var(--error, #e55)', fontSize: 13 }}>{error}</div>}
       </div>
@@ -1442,6 +1450,9 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
 
   if (loading) return <div style={{ padding: 24, color: 'var(--text-dim)', textAlign: 'center' }}>Parsing file…</div>;
   if (!currentFile) return null;
+  if (currentFile.type === 'winpro') {
+    return <WinproViewer file={currentFile} onClose={() => { setFile(null); setPreviewFile(null); setSelected(null); }} />;
+  }
 
   const allObjects = getObjects(currentFile);
   const hasGraphics = allObjects.some(o => GRAPHIC_CLASS_IDS.has(o.classid));
@@ -1528,7 +1539,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
       )}
       {tab === 'audit' && (
         <ArchiveAuditTab
-          file={currentFile}
+          file={currentFile as LoadedArchive}
           referenceIndex={referenceIndex}
           onSelectObject={setSelected}
           onOpenReferences={(target) => { setSelected(target); setTab('refs'); }}
@@ -1536,8 +1547,8 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
           onResetRewrite={() => { setPreviewFile(null); setSelected(null); }}
         />
       )}
-      {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={currentFile} referenceIndex={referenceIndex} /></div>}
-      {tab === 'diff' && <DiffTab fileA={previewFile ?? file} fileB={previewFile ? file : null} loadArchive={loadArchive} />}
+      {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={currentFile as LoadedArchive} referenceIndex={referenceIndex} /></div>}
+      {tab === 'diff' && <DiffTab fileA={(previewFile ?? file) as LoadedArchive | null} fileB={previewFile ? (file as LoadedArchive | null) : null} loadArchive={loadArchive as (file: File) => Promise<LoadedArchive>} />}
 
       {tab === 'tree' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

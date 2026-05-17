@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import type { LoadedWinpro, WinproRecord, WinproSymbolBlock } from '../winproParser';
 import { WorkspacePropertiesCard, WorkspaceSection } from './ObjectWorkspace';
 
-type WinproTab = 'overview' | 'sections' | 'symbols' | 'records' | 'raw';
+type WinproTab = 'overview' | 'io' | 'sections' | 'symbols' | 'records' | 'raw';
 
 function badgeStyle(color: string): CSSProperties {
   return {
@@ -32,6 +32,15 @@ function recordLabel(record: WinproRecord): string {
   if (record.shortName && record.shortName !== record.label) bits.push(record.shortName);
   if (record.longName && record.longName !== record.label) bits.push(record.longName);
   return bits.filter(Boolean).join(' · ');
+}
+
+function ioPrefixForSection(title: string): string | null {
+  const upper = title.toUpperCase();
+  if (upper.startsWith('ANALOG INPUTS')) return 'AI';
+  if (upper.startsWith('BINARY INPUTS')) return 'BI';
+  if (upper.startsWith('ANALOG OUTPUTS')) return 'AO';
+  if (upper.startsWith('BINARY OUTPUTS')) return 'BO';
+  return null;
 }
 
 function renderKeyValueTable(entries: Array<[string, string]>) {
@@ -137,6 +146,27 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
     records: relation.recordIds.map(id => file.data.records.find(record => record.id === id)).filter((record): record is WinproRecord => Boolean(record)),
   })), [file.data.records, file.data.relations]);
 
+  const applicationSection = file.data.sections.find(section => section.title.startsWith('APPLICATION :')) ?? null;
+  const sideloopSection = file.data.sections.find(section => section.title.toUpperCase().startsWith('SIDELOOPS')) ?? null;
+
+  const ioGroups = useMemo(() => {
+    const groups = ['ANALOG INPUTS', 'BINARY INPUTS', 'ANALOG OUTPUTS', 'BINARY OUTPUTS']
+      .map(sectionPrefix => {
+        const prefix = ioPrefixForSection(sectionPrefix);
+        if (!prefix) return null;
+        const records = file.data.records.filter(record => record.sectionTitle.toUpperCase().startsWith(sectionPrefix));
+        const section = file.data.sections.find(s => s.title.toUpperCase().startsWith(sectionPrefix)) ?? null;
+        return {
+          title: sectionPrefix.replace('ANALOG ', 'Analog ').replace('BINARY ', 'Binary '),
+          prefix,
+          records,
+          section,
+        };
+      })
+      .filter((group): group is { title: string; prefix: string; records: WinproRecord[]; section: typeof applicationSection } => Boolean(group));
+    return groups;
+  }, [file.data.records, file.data.sections, applicationSection]);
+
   const applicationLines: Array<[string, string]> = file.data.application
     ? [
         ['Application', file.data.application.name],
@@ -164,7 +194,7 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
               Close
             </button>
           )}
-          {(['overview', 'sections', 'symbols', 'records', 'raw'] as WinproTab[]).map(id => (
+          {(['overview', 'io', 'sections', 'symbols', 'records', 'raw'] as WinproTab[]).map(id => (
             <button
               key={id}
               className={`tab${tab === id ? ' active' : ''}`}
@@ -237,6 +267,20 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                     emptyMessage="No application information."
                   />
                 )}
+                {applicationSection && (
+                  <WorkspaceSection title="Question and Answer Session" meta={`${applicationSection.lines.length} lines`}>
+                    <pre style={{ margin: 0, padding: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {applicationSection.lines.join('\n')}
+                    </pre>
+                  </WorkspaceSection>
+                )}
+                {sideloopSection && (
+                  <WorkspaceSection title="Sideloops" meta={sideloopSection.lines.length ? `${sideloopSection.lines.length} lines` : 'present'}>
+                    <pre style={{ margin: 0, padding: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {sideloopSection.lines.join('\n')}
+                    </pre>
+                  </WorkspaceSection>
+                )}
                 <WorkspaceSection title="Companions" meta={`${file.data.companionNames.length} inferred`}>
                   <div style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--text)' }}>
                     {file.data.companionNames.length === 0
@@ -270,6 +314,44 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                     </div>
                   </WorkspaceSection>
                 )}
+              </div>
+            )}
+
+            {tab === 'io' && (
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {ioGroups.map(group => (
+                  <WorkspaceSection key={group.prefix} title={group.title} meta={`${group.records.length} points`}>
+                    {group.section ? (
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8 }}>
+                        {group.section.title}
+                      </div>
+                    ) : null}
+                    {group.records.length === 0 ? (
+                      <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No {group.prefix} points found in this file.</div>
+                    ) : (
+                      <table className="sct-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 120 }}>Point</th>
+                            <th>Label</th>
+                            <th style={{ width: 180 }}>Short Name</th>
+                            <th>Long Name</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.records.map((record, index) => (
+                            <tr key={record.id}>
+                              <td style={{ fontFamily: 'Consolas, monospace', fontWeight: 700 }}>{group.prefix}-{index + 1}</td>
+                              <td style={{ fontWeight: 600 }}>{record.label}</td>
+                              <td>{record.shortName ?? '—'}</td>
+                              <td>{record.longName ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </WorkspaceSection>
+                ))}
               </div>
             )}
 

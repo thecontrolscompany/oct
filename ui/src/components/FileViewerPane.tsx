@@ -24,6 +24,32 @@ function displayName(o: AnyObject): string {
 
 function getRef(o: AnyObject): string { return o.ref; }
 
+function normalizeTreeQuery(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function cafNodeMatches(obj: CafObject, query: string): boolean {
+  if (!query) return true;
+  return [obj.className, obj.tag, obj.description, obj.ref, obj.units ?? '']
+    .some(value => value.toLowerCase().includes(query));
+}
+
+function navNodeMatches(node: NavNode, query: string): boolean {
+  if (!query) return true;
+  return [node.label, node.reference, node.className]
+    .some(value => value.toLowerCase().includes(query));
+}
+
+function cafNodeHasMatch(obj: CafObject, query: string, childMap: Map<string | null, CafObject[]>): boolean {
+  if (!query || cafNodeMatches(obj, query)) return true;
+  return (childMap.get(obj.ref) ?? []).some(child => cafNodeHasMatch(child, query, childMap));
+}
+
+function navNodeHasMatch(node: NavNode, query: string): boolean {
+  if (!query || navNodeMatches(node, query)) return true;
+  return node.children.some(child => navNodeHasMatch(child, query));
+}
+
 // ─── Drop zone ─────────────────────────────────────────────────────────────
 
 function DropZone({ onFile, label }: { onFile: (f: File) => void; label?: string }) {
@@ -60,39 +86,57 @@ function DropZone({ onFile, label }: { onFile: (f: File) => void; label?: string
 
 // ─── CAF tree (ref-path hierarchy) ────────────────────────────────────────
 
-function CafTreeNode({ obj, childMap, depth, selected, onSelect }: {
-  obj: CafObject; childMap: Map<string | null, CafObject[]>;
-  depth: number; selected: string | null; onSelect: (r: string) => void;
+function CafTreeNode({ obj, childMap, depth, selected, onSelect, expanded, onToggle, query }: {
+  obj: CafObject;
+  childMap: Map<string | null, CafObject[]>;
+  depth: number;
+  selected: string | null;
+  onSelect: (r: string) => void;
+  expanded: Set<string>;
+  onToggle: (r: string) => void;
+  query: string;
 }) {
-  const [open, setOpen] = useState(depth < 2);
   const children = childMap.get(obj.ref) ?? [];
+  const visibleChildren = query ? children.filter(child => cafNodeHasMatch(child, query, childMap)) : children;
   const isSelected = selected === obj.ref;
+  const isMatch = cafNodeMatches(obj, query);
+  const hasDescendantMatch = query ? children.some(child => cafNodeHasMatch(child, query, childMap)) : false;
+  const isOpen = expanded.has(obj.ref) || (query ? (isMatch || hasDescendantMatch) : depth < 2);
   return (
     <div>
       <div
         style={{
-          display: 'flex', alignItems: 'center', paddingLeft: 8 + depth * 14,
-          padding: `2px 8px 2px ${8 + depth * 14}px`, cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: `4px 10px 4px ${8 + depth * 14}px`,
+          cursor: 'pointer',
           background: isSelected ? 'var(--accent)' : 'transparent',
           color: isSelected ? '#fff' : 'var(--text)',
+          borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
         }}
-        onClick={() => { onSelect(obj.ref); if (children.length) setOpen(o => !o); }}
+        onClick={() => { onSelect(obj.ref); if (children.length) onToggle(obj.ref); }}
         onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
         onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
-        <span style={{ width: 14, fontSize: 10, color: isSelected ? '#fff' : 'var(--text-dim)' }}>
-          {children.length ? (open ? '▾' : '▸') : ''}
+        <span style={{ width: 14, fontSize: 10, color: isSelected ? '#fff' : 'var(--text-dim)', flexShrink: 0 }}>
+          {children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
-        <span style={{ fontSize: 10, padding: '0 4px', borderRadius: 3, marginRight: 5, flexShrink: 0, fontFamily: 'Consolas,monospace', color: isSelected ? '#fff' : 'var(--accent)', background: isSelected ? 'rgba(255,255,255,0.15)' : 'var(--bg)', border: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border)'}` }}>
+        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, flexShrink: 0, fontFamily: 'Consolas,monospace', color: isSelected ? '#fff' : 'var(--accent)', background: isSelected ? 'rgba(255,255,255,0.15)' : 'var(--bg)', border: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border)'}` }}>
           {obj.className}
         </span>
-        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isMatch ? 1 : 0.92 }}>
           {displayName(obj)}
         </span>
-        {obj.units && <span style={{ marginLeft: 6, fontSize: 10, color: isSelected ? 'rgba(255,255,255,0.7)' : 'var(--text-dim)', flexShrink: 0 }}>[{obj.units}]</span>}
+        {obj.units && <span style={{ fontSize: 10, color: isSelected ? 'rgba(255,255,255,0.7)' : 'var(--text-dim)', flexShrink: 0 }}>[{obj.units}]</span>}
+        {children.length > 0 && (
+          <span style={{ marginLeft: 4, fontSize: 11, color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-dim)', flexShrink: 0 }}>
+            {visibleChildren.length}
+          </span>
+        )}
       </div>
-      {open && children.map(c => (
-        <CafTreeNode key={c.ref} obj={c} childMap={childMap} depth={depth + 1} selected={selected} onSelect={onSelect} />
+      {isOpen && visibleChildren.map(c => (
+        <CafTreeNode key={c.ref} obj={c} childMap={childMap} depth={depth + 1} selected={selected} onSelect={onSelect} expanded={expanded} onToggle={onToggle} query={query} />
       ))}
     </div>
   );
@@ -100,38 +144,56 @@ function CafTreeNode({ obj, childMap, depth, selected, onSelect }: {
 
 // ─── NavNode tree (dbexport hierarchy) ─────────────────────────────────────
 
-function NavTreeNode({ node, depth, selected, onSelect }: {
-  node: NavNode; depth: number; selected: string | null; onSelect: (r: string) => void;
+function NavTreeNode({ node, depth, selected, onSelect, expanded, onToggle, query }: {
+  node: NavNode;
+  depth: number;
+  selected: string | null;
+  onSelect: (r: string) => void;
+  expanded: Set<string>;
+  onToggle: (r: string) => void;
+  query: string;
 }) {
-  const [open, setOpen] = useState(depth < 2);
   const isSelected = selected === node.reference;
+  const isMatch = navNodeMatches(node, query);
+  const visibleChildren = query ? node.children.filter(child => navNodeHasMatch(child, query)) : node.children;
+  const hasDescendantMatch = query ? node.children.some(child => navNodeHasMatch(child, query)) : false;
+  const isOpen = expanded.has(node.reference) || (query ? (isMatch || hasDescendantMatch) : depth < 2);
   return (
     <div>
       <div
         style={{
-          display: 'flex', alignItems: 'center',
-          padding: `2px 8px 2px ${8 + depth * 14}px`, cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: `4px 10px 4px ${8 + depth * 14}px`,
+          cursor: 'pointer',
           background: isSelected ? 'var(--accent)' : 'transparent',
           color: isSelected ? '#fff' : 'var(--text)',
+          borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
         }}
-        onClick={() => { onSelect(node.reference); if (node.children.length) setOpen(o => !o); }}
+        onClick={() => { onSelect(node.reference); if (node.children.length) onToggle(node.reference); }}
         onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
         onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
-        <span style={{ width: 14, fontSize: 10, color: isSelected ? '#fff' : 'var(--text-dim)' }}>
-          {node.children.length ? (open ? '▾' : '▸') : ''}
+        <span style={{ width: 14, fontSize: 10, color: isSelected ? '#fff' : 'var(--text-dim)', flexShrink: 0 }}>
+          {node.children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
         {node.className !== `Class${node.classid}` && node.className !== 'Class0' && (
-          <span style={{ fontSize: 10, padding: '0 4px', borderRadius: 3, marginRight: 5, flexShrink: 0, fontFamily: 'Consolas,monospace', color: isSelected ? '#fff' : 'var(--accent)', background: isSelected ? 'rgba(255,255,255,0.15)' : 'var(--bg)', border: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border)'}` }}>
+          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, flexShrink: 0, fontFamily: 'Consolas,monospace', color: isSelected ? '#fff' : 'var(--accent)', background: isSelected ? 'rgba(255,255,255,0.15)' : 'var(--bg)', border: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border)'}` }}>
             {node.className}
           </span>
         )}
-        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isMatch ? 1 : 0.92 }}>
           {node.label || node.reference.split(/[/\\]/).pop()}
         </span>
+        {node.children.length > 0 && (
+          <span style={{ marginLeft: 4, fontSize: 11, color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-dim)', flexShrink: 0 }}>
+            {visibleChildren.length}
+          </span>
+        )}
       </div>
-      {open && node.children.map((c, i) => (
-        <NavTreeNode key={i} node={c} depth={depth + 1} selected={selected} onSelect={onSelect} />
+      {isOpen && visibleChildren.map((c, i) => (
+        <NavTreeNode key={i} node={c} depth={depth + 1} selected={selected} onSelect={onSelect} expanded={expanded} onToggle={onToggle} query={query} />
       ))}
     </div>
   );
@@ -561,6 +623,8 @@ export default function FileViewerPane() {
   const [tab, setTab] = useState<ViewTab>('tree');
   const [selected, setSelected] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [treeSearch, setTreeSearch] = useState('');
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
   const currentFile = previewFile ?? file;
 
   // Build maps for CAF tree
@@ -575,6 +639,8 @@ export default function FileViewerPane() {
     return { objMap, childMap, cafRoots: childMap.get(null) ?? [] };
   }, [currentFile]);
 
+  const treeQuery = useMemo(() => normalizeTreeQuery(treeSearch), [treeSearch]);
+
   const referenceIndex = useMemo(() => {
     if (!currentFile) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
     return buildReferenceIndex(currentFile.data.references);
@@ -588,7 +654,7 @@ export default function FileViewerPane() {
     : null;
 
   const handleFile = useCallback(async (f: File) => {
-    setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTab('tree');
+    setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTreeSearch(''); setTreeExpanded(new Set()); setTab('tree');
     try {
       const name = f.name;
       if (f.name.toLowerCase().endsWith('.caf')) {
@@ -636,6 +702,28 @@ export default function FileViewerPane() {
 
   const allObjects = getObjects(currentFile);
   const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['refs', 'References'], ['audit', 'Audit'], ['diff', 'Diff'], ['export', 'Export']];
+  const treeStats = useMemo(() => {
+    if (!currentFile) return { total: 0, visible: 0 };
+    if (currentFile.type === 'caf') {
+      const roots = cafRoots;
+      const visible = treeQuery ? roots.filter(root => cafNodeHasMatch(root, treeQuery, childMap)).length : roots.length;
+      return { total: currentFile.data.objects.length, visible };
+    }
+    const site = currentFile.data.site;
+    if (!site) return { total: 0, visible: 0 };
+    return {
+      total: currentFile.data.objects.length,
+      visible: treeQuery ? (navNodeHasMatch(site, treeQuery) ? 1 : 0) : 1,
+    };
+  }, [currentFile, cafRoots, childMap, treeQuery]);
+
+  const toggleTreeNode = useCallback((ref: string) => {
+    setTreeExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(ref)) next.delete(ref); else next.add(ref);
+      return next;
+    });
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -704,20 +792,69 @@ export default function FileViewerPane() {
       {tab === 'diff' && <DiffTab fileA={previewFile ?? file} fileB={previewFile ? file : null} />}
 
       {tab === 'tree' && (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <div style={{ width: 420, borderRight: '1px solid var(--border)', overflowY: 'auto', flexShrink: 0 }}>
-            {currentFile.type === 'caf'
-              ? cafRoots.map(r => <CafTreeNode key={r.ref} obj={r} childMap={childMap} depth={0} selected={selected} onSelect={setSelected} />)
-              : currentFile.data.site
-                ? <NavTreeNode node={currentFile.data.site} depth={0} selected={selected} onSelect={setSelected} />
-                : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No navtree found — showing object list</div>
-            }
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>NAVIGATION</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{currentFile.name}</div>
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                {treeStats.visible.toLocaleString()} visible · {treeStats.total.toLocaleString()} objects
+              </span>
+              <input
+                type="text"
+                placeholder="Filter tree…"
+                value={treeSearch}
+                onChange={e => setTreeSearch(e.target.value)}
+                style={{ minWidth: 240 }}
+              />
+              {treeSearch && (
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setTreeSearch('')}>
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {selectedObj
-              ? <ObjectDetail obj={selectedObj} incoming={referenceMap.get(selectedObj.ref) ?? []} onSelectReference={setSelected} />
-              : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
-            }
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ width: 420, borderRight: '1px solid var(--border)', overflowY: 'auto', flexShrink: 0, background: 'var(--sidebar-bg)' }}>
+              {currentFile.type === 'caf'
+                ? cafRoots.filter(r => !treeQuery || cafNodeHasMatch(r, treeQuery, childMap)).length > 0
+                  ? cafRoots.filter(r => !treeQuery || cafNodeHasMatch(r, treeQuery, childMap)).map(r => (
+                      <CafTreeNode
+                        key={r.ref}
+                        obj={r}
+                        childMap={childMap}
+                        depth={0}
+                        selected={selected}
+                        onSelect={setSelected}
+                        expanded={treeExpanded}
+                        onToggle={toggleTreeNode}
+                        query={treeQuery}
+                      />
+                    ))
+                  : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No CAF objects match the current filter.</div>
+                : currentFile.data.site
+                  ? navNodeHasMatch(currentFile.data.site, treeQuery)
+                    ? <NavTreeNode
+                        node={currentFile.data.site}
+                        depth={0}
+                        selected={selected}
+                        onSelect={setSelected}
+                        expanded={treeExpanded}
+                        onToggle={toggleTreeNode}
+                        query={treeQuery}
+                      />
+                    : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No navtree matches the current filter.</div>
+                  : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No navtree found — showing object list</div>
+              }
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {selectedObj
+                ? <ObjectDetail obj={selectedObj} incoming={referenceMap.get(selectedObj.ref) ?? []} onSelectReference={setSelected} />
+                : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
+              }
+            </div>
           </div>
         </div>
       )}

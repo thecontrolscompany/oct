@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
-import { parseArchiveFile, createResolverFromBytes } from '../archiveParser';
+import { parseArchiveFile } from '../archiveParser';
 import type { GraphicResolver } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import { buildArchiveAudit } from './archiveAudit';
@@ -17,7 +17,6 @@ import {
   WorkspacePropertiesCard, WorkspaceSection, WorkspaceTabs,
   filterWorkspaceProperties, normalizeArchiveProperties,
 } from './ObjectWorkspace';
-import { loadStoredArchive, saveStoredArchive, saveStoredArchiveBytes, loadStoredArchiveBytes } from '../archiveStore';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -1271,7 +1270,6 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const [file, setFile] = useState<LoadedFile | null>(null);
   const [previewFile, setPreviewFile] = useState<LoadedFile | null>(null);
   const [loading, setLoading] = useState(false);
-  const [restoring, setRestoring] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ViewTab>('tree');
   const [selected, setSelected] = useState<string | null>(null);
@@ -1281,7 +1279,6 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
   const seededArchiveRef = useRef<string | null>(null);
   const currentFile = previewFile ?? file;
-  const storeKey = mode === 'offline' ? 'oct:file-viewer:offline' : 'oct:file-viewer:online';
   const loadArchive = useCallback(async (f: File): Promise<LoadedFile> => {
     const lower = f.name.toLowerCase();
     if (!lower.endsWith('.caf') && !lower.endsWith('.dbexport')) {
@@ -1304,41 +1301,6 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     };
     return { type: 'dbexport', data, name, graphicResolver };
   }, [mode]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRestoring(true);
-    Promise.all([loadStoredArchive(storeKey), loadStoredArchiveBytes(storeKey)])
-      .then(async ([saved, bytes]) => {
-        if (cancelled) return;
-        if (!saved) return;
-        let loaded: LoadedFile = saved;
-        // Rebuild graphicResolver from stored bytes so graphics work after page refresh
-        if (saved.type === 'dbexport' && bytes) {
-          try {
-            const resolver = await createResolverFromBytes(bytes);
-            loaded = { ...saved, graphicResolver: resolver };
-          } catch {
-            // Bytes exist but couldn't be parsed — fall through without resolver
-          }
-        }
-        setFile(loaded);
-        setPreviewFile(null);
-        setSelected(null);
-        setSelectedDbexportNode(null);
-        setTab('tree');
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setRestoring(false);
-      });
-    return () => { cancelled = true; };
-  }, [storeKey]);
-
-  useEffect(() => {
-    if (!currentFile) return;
-    saveStoredArchive(storeKey, currentFile).catch(() => {});
-  }, [currentFile, storeKey]);
 
   // Build maps for CAF tree
   const { objMap, childMap, cafRoots } = useMemo(() => {
@@ -1444,18 +1406,10 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     try {
       const loaded = await loadArchive(f);
       setFile(loaded);
-      // Persist raw bytes so the graphicResolver can be rebuilt after page refresh
-      if (loaded.type === 'dbexport') {
-        f.arrayBuffer().then(buf => saveStoredArchiveBytes(storeKey, buf)).catch(() => {});
-      }
     } catch (e) {
       setError(String(e));
     } finally { setLoading(false); }
-  }, [loadArchive, storeKey]);
-
-  if (restoring) {
-    return <div style={{ padding: 24, color: 'var(--text-dim)', textAlign: 'center' }}>Restoring last archive…</div>;
-  }
+  }, [loadArchive]);
 
   if (!currentFile && !loading) {
     return (

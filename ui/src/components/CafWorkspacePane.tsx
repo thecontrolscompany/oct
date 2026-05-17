@@ -28,8 +28,8 @@ const NETWORK_OUTPUT_CLASSES = new Set([527, 529, 531]);
 // 536=Control Activity, 538=Last Value, 539=Reliability Check, 540=State Selection
 // 543=Command Hierarchy, 551=Float Constant, 556=Sensor Primitive, 559=Boolean Primitive
 // 560=Comparison Primitive, 561=Math Primitive, 562=Mux Primitive, 568=Enum Constant
-const SETPOINT_CLASSES    = new Set([536, 538, 551, 568]);
-const STATE_GEN_CLASSES   = new Set([540, 559, 562]);
+const SETPOINT_CLASSES    = new Set([538, 551, 568]);       // Constants + Last Value
+const STATE_GEN_CLASSES   = new Set([536, 540, 559, 562]);  // Control Activity + state primitives
 const OUTPUT_CTRL_CLASSES = new Set([543]);
 const SENSOR_CLASSES      = new Set([556, 539]); // Sensor Primitive, Reliability Check → Inputs
 
@@ -102,18 +102,21 @@ function isRenderableWorkspaceObject(obj: CafObject, _mode: WorkspaceMode, ctrl5
   if (HW_INPUT_CLASSES.has(obj.classid) || HW_OUTPUT_CLASSES.has(obj.classid)) return true;
   // Signal blocks: only those with a readable label are interface points; rest are internal wires
   if (NETWORK_INPUT_CLASSES.has(obj.classid) || NETWORK_OUTPUT_CLASSES.has(obj.classid)) return hasFriendlyLabel(obj);
-  // Sensor Primitives always have names
-  if (obj.classid === 556) return true;
-  // Application-level structure blocks — always show
-  if (obj.classid === 575 || obj.classid === 540 || obj.classid === 585) return true;
-  // Control Activities (536) — show all, even unnamed; they ARE the logic groups
+  // Application-level structure and sensor blocks — always show
+  if (obj.classid === 575 || obj.classid === 585) return true;
+  if (SENSOR_CLASSES.has(obj.classid)) return true;
+  // Control Activities (536) — show all; they ARE the logic program blocks
+  // Command Hierarchies (543) — show only when a direct child of a 536
   if (obj.classid === 536) return true;
+  if (obj.classid === 543) return ctrl536Refs ? (obj.parentRef !== null && ctrl536Refs.has(obj.parentRef)) : true;
   // Control Points (555) — always show
   if (obj.classid === 555) return true;
-  // Command Hierarchies (543) — show only if direct child of a Control Activity (536)
-  if (obj.classid === 543) return ctrl536Refs ? (obj.parentRef !== null && ctrl536Refs.has(obj.parentRef)) : true;
-  // Deep internal primitives hidden by CCT: Mux/Math/Comparison/Boolean/Constants/LastValue/Reliability
-  // (560, 561, 562, 559, 551, 568, 538, 539) → do NOT render
+  // Math (561), Comparison (560), State Selection (540) — always show
+  if (obj.classid === 560 || obj.classid === 561 || obj.classid === 540) return true;
+  // Constants, Last Value, Boolean/Mux primitives (538, 551, 559, 562, 568) — only if named
+  if (SETPOINT_CLASSES.has(obj.classid) || obj.classid === 559 || obj.classid === 562) return hasFriendlyLabel(obj);
+  // Fallback: any other named object that looks like logic/setpoint/output-control
+  if (hasFriendlyLabel(obj) && (isLogicLike(obj) || isSetpointLike(obj) || isOutputControlLike(obj))) return true;
   return false;
 }
 
@@ -142,7 +145,7 @@ function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
     return 'output-control';
   }
 
-  // State Selection Primitive, Boolean Primitive, Mux → state-generation
+  // Control Activities, State Selection, Boolean/Mux primitives → state-generation
   if (STATE_GEN_CLASSES.has(obj.classid)) return 'state-generation';
 
   // Constants and Last Value → setpoint-misc

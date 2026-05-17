@@ -8,6 +8,22 @@ export interface GraphicResolver {
   resolve(svgFilename: string): Promise<string | null>;
 }
 
+export async function createResolverFromBytes(bytes: ArrayBuffer): Promise<GraphicResolver> {
+  const zip = await new JSZip().loadAsync(bytes);
+  return {
+    async resolve(svgFilename: string): Promise<string | null> {
+      for (const entry of Object.values(zip.files)) {
+        if (entry.dir) continue;
+        const n = entry.name.replace(/\\/g, '/');
+        if (n === svgFilename || n.endsWith(`/${svgFilename}`)) {
+          return await entry.async('string');
+        }
+      }
+      return null;
+    },
+  };
+}
+
 export type LoadedArchive =
   | { type: 'caf'; data: ParsedCaf; name: string }
   | { type: 'dbexport'; data: ParsedDbexport; name: string; graphicResolver?: GraphicResolver };

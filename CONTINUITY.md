@@ -18,6 +18,10 @@ A full web-based replacement for the Johnson Controls **CCT (Controller Configur
 
 The original CCT is a Java/Swing desktop app. This project does **not** use the JCI DLLs yet (deferred to Phase 4) — it reads the SQL database directly and implements BACnet/IP independently via the `bacstack` npm package.
 
+### Product parity rule
+
+The online and offline experiences should match to the greatest extent possible. Reuse the same portal panes, shared components, and resources in both modes unless a backend dependency makes that impossible. When a difference is unavoidable, keep it limited to the data source or transport layer, not the layout or workflow.
+
 ---
 
 ## Environment

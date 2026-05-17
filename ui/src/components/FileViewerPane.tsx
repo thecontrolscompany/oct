@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
-import { parseArchiveFile } from '../archiveParser';
+import { parseArchiveFile, createResolverFromBytes } from '../archiveParser';
 import type { GraphicResolver } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import { buildArchiveAudit } from './archiveAudit';
@@ -10,7 +10,7 @@ import CafWorkspacePane from './CafWorkspacePane';
 import GraphicsBrowser, { buildGraphicTagMap, GRAPHIC_CLASS_IDS } from './GraphicsBrowser';
 import ObjectBrowser from './ObjectBrowser';
 import ObjectPropertiesTable from './ObjectPropertiesTable';
-import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
+import { loadStoredArchive, saveStoredArchive, saveStoredArchiveBytes, loadStoredArchiveBytes } from '../archiveStore';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -937,15 +937,24 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   useEffect(() => {
     let cancelled = false;
     setRestoring(true);
-    loadStoredArchive(storeKey)
-      .then(saved => {
+    Promise.all([loadStoredArchive(storeKey), loadStoredArchiveBytes(storeKey)])
+      .then(async ([saved, bytes]) => {
         if (cancelled) return;
-        if (saved) {
-          setFile(saved);
-          setPreviewFile(null);
-          setSelected(null);
-          setTab('tree');
+        if (!saved) return;
+        let loaded: LoadedFile = saved;
+        // Rebuild graphicResolver from stored bytes so graphics work after page refresh
+        if (saved.type === 'dbexport' && bytes) {
+          try {
+            const resolver = await createResolverFromBytes(bytes);
+            loaded = { ...saved, graphicResolver: resolver };
+          } catch {
+            // Bytes exist but couldn't be parsed — fall through without resolver
+          }
         }
+        setFile(loaded);
+        setPreviewFile(null);
+        setSelected(null);
+        setTab('tree');
       })
       .catch(() => {})
       .finally(() => {
@@ -1034,10 +1043,14 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     try {
       const loaded = await loadArchive(f);
       setFile(loaded);
+      // Persist raw bytes so the graphicResolver can be rebuilt after page refresh
+      if (loaded.type === 'dbexport') {
+        f.arrayBuffer().then(buf => saveStoredArchiveBytes(storeKey, buf)).catch(() => {});
+      }
     } catch (e) {
       setError(String(e));
     } finally { setLoading(false); }
-  }, [loadArchive]);
+  }, [loadArchive, storeKey]);
 
   if (restoring) {
     return <div style={{ padding: 24, color: 'var(--text-dim)', textAlign: 'center' }}>Restoring last archive…</div>;

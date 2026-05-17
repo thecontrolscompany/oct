@@ -14,6 +14,9 @@
 - Keep the live commissioning app as the shell, not a second app embedded inside it.
 - Reuse the existing `FileViewerPane`, `ObjectBrowser`, and server parsers as the foundation.
 - Treat reverse-lookup, audit, and export as reusable archive services.
+- The online and offline experiences should match to the greatest extent possible.
+- Reuse the same portal panes, shared components, and resources in both modes unless a backend dependency makes that impossible.
+- When online and offline must differ, keep the difference to data source and transport only, not layout or workflow.
 - Keep build green after each phase.
 - If a phase can be split into independent slices, complete the critical path first and defer polish to the end of the phase.
 

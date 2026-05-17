@@ -6,7 +6,7 @@ import LivePane from './components/LivePane';
 import MstpSerialPane from './components/MstpSerialPane';
 import PackagesPane from './components/PackagesPane';
 import FileViewerPane from './components/FileViewerPane';
-import OfflineArchivePane from './components/OfflineArchivePane';
+
 import CommissioningPreviewPane from './components/CommissioningPreviewPane';
 import DictionaryPane from './components/DictionaryPane';
 import EnumsPane from './components/EnumsPane';
@@ -41,10 +41,15 @@ function AppShell() {
   const [cidr, setCidr]             = useState(DEFAULTS.cidr);
   const [netNum, setNetNum]         = useState(DEFAULTS.networkNumber);
   const [connecting, setConnecting] = useState(false);
-  const [view, setView]             = useState<View>('library');
+  const [view, setView]             = useState<View>(HAS_API_HOST ? 'library' : 'caf');
   const [mode, setMode]             = useState<Mode>(HAS_API_HOST ? 'online' : 'offline');
   const qc = useQueryClient();
   const onlineMode = mode === 'online';
+
+  const handleSetMode = useCallback((m: Mode) => {
+    setMode(m);
+    if (m === 'offline') setView('caf');
+  }, []);
 
   const { data: health } = useQuery({
     queryKey: ['health'],
@@ -88,7 +93,7 @@ function AppShell() {
           color: onlineMode ? 'var(--shell-blue-ink)' : 'rgba(255,255,255,0.9)',
           borderColor: onlineMode ? '#fff' : 'rgba(255,255,255,0.2)',
         }}
-        onClick={() => setMode('online')}
+        onClick={() => handleSetMode('online')}
       >
         Online
       </button>
@@ -101,7 +106,7 @@ function AppShell() {
           color: !onlineMode ? 'var(--shell-blue-ink)' : 'rgba(255,255,255,0.9)',
           borderColor: !onlineMode ? '#fff' : 'rgba(255,255,255,0.2)',
         }}
-        onClick={() => setMode('offline')}
+        onClick={() => handleSetMode('offline')}
       >
         Offline
       </button>
@@ -121,30 +126,14 @@ function AppShell() {
     </div>
   );
 
-  if (!onlineMode) {
-    return (
-      <div className="layout">
-        <div className="main">
-          <header className="topbar">
-            <span className="logo">OCT</span>
-            <span className="topbar-title">Offline archive browser</span>
-            {renderModeToggle()}
-            {renderTopbarStatus()}
-          </header>
-          <div className="view-viewport">
-            <OfflineArchivePane />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="layout">
-      <aside className="sidebar">
-        <div className="sidebar-header">OCT — Controller Library</div>
-        <Sidebar onSelect={item => { setSelected(item); setView('library'); }} selected={selected} />
-      </aside>
+      {onlineMode && (
+        <aside className="sidebar">
+          <div className="sidebar-header">OCT — Controller Library</div>
+          <Sidebar onSelect={item => { setSelected(item); setView('library'); }} selected={selected} />
+        </aside>
+      )}
 
       <div className="main">
         <header className="topbar">
@@ -155,15 +144,17 @@ function AppShell() {
 
         <div className="shell-tabs">
           {([
-            ['library',  'Library',        null],
-            ['live',     'Live Devices',   health?.bacnet?.deviceCount ? String(health.bacnet.deviceCount) : null],
-            ['quick-trend', 'Quick Trend', null],
-            ['preview',  'Preview',        null],
-            ['serial',   'MS/TP Serial',   health?.mstpSerial?.connected ? '●' : null],
-            ['packages',    'Packages',       null],
-            ['caf',         'File Viewer',    null],
-            ['dictionary',  'Dictionary',     null],
-            ['enums',       'Enums',          null],
+            ...(onlineMode ? [
+              ['library',     'Library',      null],
+              ['live',        'Live Devices', health?.bacnet?.deviceCount ? String(health.bacnet.deviceCount) : null],
+              ['quick-trend', 'Quick Trend',  null],
+              ['preview',     'Preview',      null],
+              ['serial',      'MS/TP Serial', health?.mstpSerial?.connected ? '●' : null],
+              ['packages',    'Packages',     null],
+            ] as [View, string, string | null][] : []),
+            ['caf',        'File Viewer',  null],
+            ['dictionary', 'Dictionary',   null],
+            ['enums',      'Enums',        null],
           ] as [View, string, string | null][]).map(([id, label, badge]) => (
             <button
               key={id}
@@ -184,8 +175,8 @@ function AppShell() {
           ))}
         </div>
 
-        {/* Connection bar */}
-        <div className="connection-bar">
+        {/* Connection bar — only shown in online mode */}
+        {onlineMode && <div className="connection-bar">
           <label>BACnet Router:</label>
           <input
             type="text"
@@ -245,7 +236,7 @@ function AppShell() {
               UDP 47808 · Net {netNum}
             </span>
           )}
-        </div>
+        </div>}
 
         <div className="view-viewport">
           {view === 'library'  && <DetailPane item={selected} />}
@@ -254,7 +245,7 @@ function AppShell() {
           {view === 'preview'  && <CommissioningPreviewPane />}
           {view === 'serial'   && <MstpSerialPane />}
           {view === 'packages'    && <PackagesPane />}
-          {view === 'caf'         && <FileViewerPane mode="online" />}
+          {view === 'caf'         && <FileViewerPane mode={mode} />}
           {view === 'dictionary'  && <DictionaryPane />}
           {view === 'enums'       && <EnumsPane />}
         </div>

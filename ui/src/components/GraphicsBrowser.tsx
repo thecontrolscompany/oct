@@ -1061,7 +1061,8 @@ export function GraphicViewer({
 
     if (graphicKind === 'legacy' && legacyModel) {
       const parser = new DOMParser();
-      const backgroundDoc = parser.parseFromString(legacyModel.backgroundSvg, 'image/svg+xml');
+      const normalizedBackgroundSvg = normalizeSvgExportText(legacyModel.backgroundSvg);
+      const backgroundDoc = parser.parseFromString(normalizedBackgroundSvg, 'image/svg+xml');
       const backgroundRoot = backgroundDoc.documentElement;
       const overlaySvg = svgContainerRef.current?.querySelector('svg.oct-legacy-overlay');
       if (backgroundRoot && overlaySvg) {
@@ -1069,9 +1070,9 @@ export function GraphicViewer({
         for (const node of importedNodes) backgroundRoot.appendChild(node);
         exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(backgroundDoc));
       } else {
-        const fallbackDoc = parser.parseFromString(legacyModel.backgroundSvg, 'image/svg+xml');
+        const fallbackDoc = parser.parseFromString(normalizedBackgroundSvg, 'image/svg+xml');
         if (fallbackDoc.documentElement) exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(fallbackDoc));
-        else exportText = normalizeSvgExportText(legacyModel.backgroundSvg);
+        else exportText = normalizedBackgroundSvg;
       }
     } else {
       const svgEl = svgContainerRef.current?.querySelector('svg');

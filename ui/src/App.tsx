@@ -150,39 +150,39 @@ function AppShell() {
         <header className="topbar">
           <span className="logo">OCT</span>
           {renderModeToggle()}
-          <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
-            {([
-              ['library',  'Library',        null],
-              ['live',     'Live Devices',   health?.bacnet?.deviceCount ? String(health.bacnet.deviceCount) : null],
-              ['quick-trend', 'Quick Trend', null],
-              ['preview',  'Preview',        null],
-              ['serial',   'MS/TP Serial',   health?.mstpSerial?.connected ? '●' : null],
-              ['packages',    'Packages',       null],
-              ['caf',         'File Viewer',    null],
-              ['dictionary',  'Dictionary',     null],
-              ['enums',       'Enums',          null],
-            ] as [View, string, string | null][]).map(([id, label, badge]) => (
-              <button
-                key={id}
-                className={`tab${view === id ? ' active' : ''}`}
-                style={{ borderRadius: 4, marginBottom: 0, border: 'none' }}
-                onClick={() => setView(id)}
-              >
-                {label}
-                {badge && (
-                  <span style={{
-                    marginLeft: 6,
-                    background: id === 'serial' ? 'var(--success)' : 'var(--accent)',
-                    color: '#fff', borderRadius: 10, padding: '0 6px', fontSize: 11,
-                  }}>
-                    {badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
           {renderTopbarStatus()}
         </header>
+
+        <div className="shell-tabs">
+          {([
+            ['library',  'Library',        null],
+            ['live',     'Live Devices',   health?.bacnet?.deviceCount ? String(health.bacnet.deviceCount) : null],
+            ['quick-trend', 'Quick Trend', null],
+            ['preview',  'Preview',        null],
+            ['serial',   'MS/TP Serial',   health?.mstpSerial?.connected ? '●' : null],
+            ['packages',    'Packages',       null],
+            ['caf',         'File Viewer',    null],
+            ['dictionary',  'Dictionary',     null],
+            ['enums',       'Enums',          null],
+          ] as [View, string, string | null][]).map(([id, label, badge]) => (
+            <button
+              key={id}
+              className={`tab${view === id ? ' active' : ''}`}
+              onClick={() => setView(id)}
+            >
+              {label}
+              {badge && (
+                <span style={{
+                  marginLeft: 6,
+                  background: id === 'serial' ? 'var(--success)' : 'var(--accent)',
+                  color: '#fff', borderRadius: 10, padding: '0 6px', fontSize: 11,
+                }}>
+                  {badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
         {/* Connection bar */}
         <div className="connection-bar">

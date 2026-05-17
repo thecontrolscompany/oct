@@ -289,25 +289,35 @@ function TreeRow({
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: `4px 10px 4px ${10 + depth * 14}px`,
+          padding: `5px 10px 5px ${12 + depth * 14}px`,
           cursor: 'pointer',
-          background: isSelected ? 'rgba(100,160,255,0.18)' : 'transparent',
+          background: isSelected ? 'rgba(67,120,181,0.14)' : 'transparent',
           borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+          borderBottom: '1px solid rgba(175, 199, 226, 0.42)',
         }}
         onClick={() => {
           onSelect(node);
           if (node.children.length) onToggle(node.key);
         }}
         >
-        <span style={{ width: 12, fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>
+        <span style={{ width: 12, fontSize: 10, color: 'var(--text-dim)', flexShrink: 0, textAlign: 'center' }}>
           {node.children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
         <TreeGlyph kind={iconKind} active={isSelected} />
-        <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.label}
         </span>
         {hasChildren && (
-          <span style={{ marginLeft: 4, fontSize: 11, color: 'var(--text-dim)', flexShrink: 0 }}>
+          <span style={{
+            marginLeft: 4,
+            fontSize: 10,
+            color: 'var(--text-dim)',
+            flexShrink: 0,
+            background: 'rgba(255,255,255,0.6)',
+            border: '1px solid rgba(175, 199, 226, 0.65)',
+            borderRadius: 999,
+            padding: '1px 6px',
+          }}>
             {visibleChildren.length}
           </span>
         )}
@@ -347,8 +357,13 @@ function DetailPane({
 }) {
   if (!selectedNode) {
     return (
-      <div style={{ padding: 24, color: 'var(--text-dim)' }}>
-        Drop a `.caf` or `.dbexport` archive to browse its tree.
+      <div className="sct-empty-card" style={{ minHeight: 360 }}>
+        <div className="inner">
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--shell-blue-ink)' }}>No node selected</div>
+          <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>
+            Pick an archive item from the tree to inspect its metadata, properties, contents, and references.
+          </div>
+        </div>
       </div>
     );
   }
@@ -371,85 +386,105 @@ function DetailPane({
   }
 
   return (
-    <div style={{ padding: 16, overflowY: 'auto' }}>
-      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>DETAILS</div>
-      <div style={{ fontWeight: 600, marginBottom: 12 }}>{selectedNode.label}</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <tbody>
-          {lines.map(([k, v]) => (
-            <tr key={k} style={{ borderBottom: '1px solid var(--border)' }}>
-              <td style={{ width: 110, padding: '4px 8px 4px 0', color: 'var(--text-dim)' }}>{k}</td>
-              <td style={{ padding: '4px 0', wordBreak: 'break-all', fontFamily: k === 'Ref' ? 'Consolas, monospace' : undefined }}>{v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="sct-detail-stack sct-panel-scroll" style={{ padding: 0, overflowY: 'auto' }}>
+      <div className="sct-detail-section">
+        <div className="sct-detail-section-header">Details</div>
+        <div className="sct-detail-section-body">
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--shell-blue-ink)', marginBottom: 8 }}>{selectedNode.label}</div>
+          <table className="sct-table">
+            <tbody>
+              {lines.map(([k, v]) => (
+                <tr key={k}>
+                  <td style={{ width: 130, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{k}</td>
+                  <td style={{ wordBreak: 'break-word', fontFamily: k === 'Ref' ? 'Consolas, monospace' : undefined }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {selectedObject && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>PROPERTIES</div>
-          <ObjectPropertiesTable properties={selectedObject.properties ?? []} />
+        <div className="sct-detail-section">
+          <div className="sct-detail-section-header">Properties</div>
+          <div className="sct-detail-section-body">
+            <ObjectPropertiesTable properties={selectedObject.properties ?? []} />
+          </div>
         </div>
       )}
 
-      <div style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>CONTENTS</div>
-        {children.length === 0 ? (
-          <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No child nodes.</div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Child</th>
-                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Class</th>
-                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Units</th>
-              </tr>
-            </thead>
-            <tbody>
-              {children.map(child => (
-                <tr
-                  key={child.key}
-                  style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
-                  onClick={() => onSelectChild(child)}
-                >
-                  <td style={{ padding: '4px 8px 4px 0' }}>{child.label}</td>
-                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{child.className}</td>
-                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{child.object?.units ?? '—'}</td>
+      <div className="sct-detail-section">
+        <div className="sct-detail-section-header">Contents</div>
+        <div className="sct-detail-section-body">
+          {children.length === 0 ? (
+            <div className="sct-empty-card" style={{ minHeight: 120 }}>
+              <div className="inner" style={{ gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No child nodes.</div>
+                <div style={{ fontSize: 12 }}>This item does not expose a tree beneath it.</div>
+              </div>
+            </div>
+          ) : (
+            <table className="sct-table">
+              <thead>
+                <tr>
+                  <th>Child</th>
+                  <th>Class</th>
+                  <th>Units</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {children.map(child => (
+                  <tr
+                    key={child.key}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onSelectChild(child)}
+                  >
+                    <td style={{ fontWeight: 600 }}>{child.label}</td>
+                    <td style={{ color: 'var(--text-dim)' }}>{child.className}</td>
+                    <td style={{ color: 'var(--text-dim)' }}>{child.object?.units ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>REFERENCED BY</div>
-        {incoming.length === 0 ? (
-          <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No incoming references found.</div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Referring item</th>
-                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Attribute</th>
-                <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {incoming.slice(0, 20).map(hit => (
-                <tr
-                  key={`${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.sourcePath ?? hit.source}`}
-                  style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
-                  onClick={() => onSelectReference(hit.referringItem)}
-                >
-                  <td style={{ padding: '4px 8px 4px 0', wordBreak: 'break-all' }}>{hit.referringItem}</td>
-                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
-                  <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{hit.source}</td>
+      <div className="sct-detail-section">
+        <div className="sct-detail-section-header">Referenced By</div>
+        <div className="sct-detail-section-body">
+          {incoming.length === 0 ? (
+            <div className="sct-empty-card" style={{ minHeight: 96 }}>
+              <div className="inner" style={{ gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No incoming references found.</div>
+                <div style={{ fontSize: 12 }}>Nothing in the archive points back to this item.</div>
+              </div>
+            </div>
+          ) : (
+            <table className="sct-table">
+              <thead>
+                <tr>
+                  <th>Referring item</th>
+                  <th>Attribute</th>
+                  <th>Source</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {incoming.slice(0, 20).map(hit => (
+                  <tr
+                    key={`${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.sourcePath ?? hit.source}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onSelectReference(hit.referringItem)}
+                  >
+                    <td style={{ wordBreak: 'break-all', fontWeight: 600 }}>{hit.referringItem}</td>
+                    <td style={{ color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
+                    <td style={{ color: 'var(--text-dim)' }}>{hit.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -476,18 +511,20 @@ function FileDropZone({ onFile }: { onFile: (file: File) => void }) {
         };
         input.click();
       }}
+      className="sct-empty-card"
       style={{
-        border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
-        borderRadius: 8,
-        padding: '24px 32px',
-        textAlign: 'center',
         cursor: 'pointer',
-        background: dragging ? 'rgba(100,160,255,0.06)' : 'transparent',
+        border: `1px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
+        borderRadius: 10,
+        background: dragging ? 'rgba(67,120,181,0.06)' : 'linear-gradient(180deg, #fff, #f8fbfe)',
+        minHeight: 180,
       }}
     >
-      <div style={{ fontSize: 28, marginBottom: 6 }}>📂</div>
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop a `.caf`, `.dbexport`, or `.sql` file</div>
-      <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>or click to browse</div>
+      <div className="inner" style={{ justifyItems: 'center', textAlign: 'center' }}>
+        <div style={{ fontSize: 30 }}>▣</div>
+        <div style={{ fontWeight: 700, color: 'var(--shell-blue-ink)' }}>Drop a `.caf`, `.dbexport`, or `.sql` file</div>
+        <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>or click to browse</div>
+      </div>
     </div>
   );
 }
@@ -661,75 +698,81 @@ export default function OfflineArchivePane() {
 
   if (!archive) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 24, gap: 14, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Offline</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>Archive browser</div>
+      <div className="sct-shell">
+        <div className="sct-banner">
+          <div className="sct-banner-main">
+            <div className="sct-banner-title">Archive Browser</div>
+            <div className="sct-banner-subtitle">Browse `.caf` and `.dbexport` files using the imported DaytonaState archive database for naming support.</div>
           </div>
-          <div style={{ marginLeft: 'auto', color: 'var(--text-dim)', fontSize: 12 }}>
-            dbexport-style tree browsing for `.caf` and `.dbexport`
+          <div className="sct-banner-actions">
+            <button className="btn btn-ghost" disabled={!HAS_API_HOST || refreshingMaps} onClick={refreshArchiveMaps}>
+              {refreshingMaps ? 'Refreshing name maps…' : 'Refresh name maps'}
+            </button>
           </div>
         </div>
-        <div style={{
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: 12,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-          gap: 12,
-          background: 'var(--surface)',
-        }}>
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>SCT ARCHIVE DB</div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{archiveDbSummary?.database ?? 'DaytonaState'}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+
+        <div className="sct-summary-grid">
+          <div className="sct-stat">
+            <div className="sct-stat-label">SCT Archive DB</div>
+            <div className="sct-stat-value">{archiveDbSummary?.database ?? 'DaytonaState'}</div>
+            <div className="sct-stat-sub">
               {archiveDbSummary ? `${archiveDbSummary.tables.length} tables · ${archiveDbSummary.procedures.length} procedures` : 'Waiting for SQL summary'}
             </div>
           </div>
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>ITEMS</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{itemCount !== null ? itemCount.toLocaleString() : '—'}</div>
+          <div className="sct-stat">
+            <div className="sct-stat-label">Items</div>
+            <div className="sct-stat-value">{itemCount !== null ? itemCount.toLocaleString() : '—'}</div>
+            <div className="sct-stat-sub">Imported archive inventory</div>
           </div>
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>VALUES / PROPS</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>
-              {valueCount !== null ? valueCount.toLocaleString() : '—'}
-              <span style={{ fontSize: 12, color: 'var(--text-dim)', marginLeft: 6 }}>
-                / {propertyCount !== null ? propertyCount.toLocaleString() : '—'}
-              </span>
+          <div className="sct-stat">
+            <div className="sct-stat-label">Values / Props</div>
+            <div className="sct-stat-value">{valueCount !== null ? valueCount.toLocaleString() : '—'}</div>
+            <div className="sct-stat-sub">{propertyCount !== null ? `${propertyCount.toLocaleString()} properties` : 'Properties unavailable'}</div>
+          </div>
+          <div className="sct-stat">
+            <div className="sct-stat-label">Proc Groups</div>
+            <div className="sct-stat-value">{procCount !== null ? procCount.toLocaleString() : '—'}</div>
+            <div className="sct-stat-sub">Archive query surface</div>
+          </div>
+        </div>
+
+        {archiveDbError && (
+          <div className="sct-panel">
+            <div className="sct-panel-header">
+              <span>Status</span>
+              <span className="meta">{archiveDbError.startsWith('Refreshed ') ? 'Refresh complete' : 'SQL note'}</span>
+            </div>
+            <div className="sct-panel-body">
+              <div style={{ color: archiveDbError.startsWith('Refreshed ') ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{archiveDbError}</div>
             </div>
           </div>
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>PROC GROUPS</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{procCount !== null ? procCount.toLocaleString() : '—'}</div>
+        )}
+
+        <div className="sct-panel" style={{ flex: 1, minHeight: 0 }}>
+          <div className="sct-panel-header">
+            <span>Load Archive</span>
+            <span className="meta">{HAS_API_HOST ? 'Backend connected' : 'Backend disconnected'}</span>
+          </div>
+          <div className="sct-panel-body sct-panel-scroll" style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
+            <FileDropZone onFile={handleLoad} />
+            {loading && <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>Parsing archive…</div>}
+            {error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button className="btn btn-ghost" disabled={!HAS_API_HOST || refreshingMaps} onClick={refreshArchiveMaps}>
-            {refreshingMaps ? 'Refreshing name maps…' : 'Refresh name maps'}
-          </button>
-          {archiveDbError && <div style={{ color: archiveDbError.startsWith('Refreshed ') ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{archiveDbError}</div>}
-          {!archiveDbError && !HAS_API_HOST && <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>Connect the backend to inspect the imported SCT database.</div>}
-        </div>
-        <FileDropZone onFile={handleLoad} />
-        {loading && <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>Parsing archive…</div>}
-        {error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>}
       </div>
     );
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>NAVIGATION</div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{archive.name}</div>
+    <div className="sct-shell">
+      <div className="sct-banner">
+        <div className="sct-banner-main">
+          <div className="sct-banner-title">{archive.name}</div>
+          <div className="sct-banner-subtitle">
+            {archive.type.toUpperCase()} archive · {archive.data.objects.length.toLocaleString()} objects · {archive.data.references.length.toLocaleString()} references
+          </div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-            {archive.data.objects.length.toLocaleString()} objects · {archive.data.references.length.toLocaleString()} refs
-          </span>
+        <div className="sct-banner-actions">
           <input
             type="text"
             placeholder="Filter tree…"
@@ -752,71 +795,87 @@ export default function OfflineArchivePane() {
       </div>
 
       {(archiveDbSummary || archiveDbError) && (
-        <div style={{
-          padding: '8px 12px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          gap: 14,
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          background: 'rgba(100,160,255,0.04)',
-        }}>
-          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-            SCT DB {archiveDbSummary?.database ?? 'DaytonaState'}
-          </span>
-          <span style={{ fontSize: 11 }}>
-            {itemCount !== null ? `${itemCount.toLocaleString()} items` : 'items: —'}
-          </span>
-          <span style={{ fontSize: 11 }}>
-            {valueCount !== null ? `${valueCount.toLocaleString()} values` : 'values: —'}
-          </span>
-          <span style={{ fontSize: 11 }}>
-            {propertyCount !== null ? `${propertyCount.toLocaleString()} properties` : 'properties: —'}
-          </span>
-          <span style={{ fontSize: 11 }}>
-            {procCount !== null ? `${procCount.toLocaleString()} proc group entries` : 'proc groups: —'}
-          </span>
-          {archiveDbError && (
-            <span style={{ fontSize: 11, color: archiveDbError.startsWith('Refreshed ') ? 'var(--success)' : 'var(--danger)' }}>
-              {archiveDbError}
-            </span>
-          )}
+        <div className="sct-summary-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+          <div className="sct-stat">
+            <div className="sct-stat-label">SCT DB</div>
+            <div className="sct-stat-value">{archiveDbSummary?.database ?? 'DaytonaState'}</div>
+            <div className="sct-stat-sub">{archiveDbSummary ? `${archiveDbSummary.tables.length} tables` : 'Waiting for SQL summary'}</div>
+          </div>
+          <div className="sct-stat">
+            <div className="sct-stat-label">Items</div>
+            <div className="sct-stat-value">{itemCount !== null ? itemCount.toLocaleString() : '—'}</div>
+            <div className="sct-stat-sub">Imported archive inventory</div>
+          </div>
+          <div className="sct-stat">
+            <div className="sct-stat-label">Values / Props</div>
+            <div className="sct-stat-value">{valueCount !== null ? valueCount.toLocaleString() : '—'}</div>
+            <div className="sct-stat-sub">{propertyCount !== null ? `${propertyCount.toLocaleString()} properties` : 'Properties unavailable'}</div>
+          </div>
+          <div className="sct-stat">
+            <div className="sct-stat-label">Proc Groups</div>
+            <div className="sct-stat-value">{procCount !== null ? procCount.toLocaleString() : '—'}</div>
+            <div className="sct-stat-sub">{archiveDbError ? archiveDbError : 'Archive query surface'}</div>
+          </div>
         </div>
       )}
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-        <aside style={{ width: 360, flexShrink: 0, overflowY: 'auto', borderRight: '1px solid var(--border)', background: 'var(--sidebar-bg)' }}>
-          {filteredTree.length === 0 ? (
-            <div style={{ padding: 16, color: 'var(--text-dim)' }}>No tree nodes match the current filter.</div>
-          ) : (
-            filteredTree.map(node => (
-              <TreeRow
-                key={node.key}
-                node={node}
-                depth={0}
-                selectedKey={selectedKey}
-                expanded={expanded}
-                onSelect={handleSelect}
-                onToggle={toggleExpanded}
-                query={normalize(search)}
-              />
-            ))
-          )}
+      <div className="sct-workspace">
+        <aside className="sct-panel">
+          <div className="sct-panel-header">
+            <span>Archive Selector</span>
+            <span className="meta">{filteredTree.length.toLocaleString()} roots</span>
+          </div>
+          <div className="sct-panel-body sct-panel-scroll" style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+            <div className="sct-subbar">
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{archive.data.objects.length.toLocaleString()} objects</span>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{archive.data.references.length.toLocaleString()} refs</span>
+            </div>
+            {filteredTree.length === 0 ? (
+              <div className="sct-empty-card" style={{ minHeight: 220 }}>
+                <div className="inner" style={{ gap: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No tree nodes match the current filter.</div>
+                  <div style={{ fontSize: 12 }}>Clear the search box or try a broader label.</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ margin: '0 -12px' }}>
+                {filteredTree.map(node => (
+                  <TreeRow
+                    key={node.key}
+                    node={node}
+                    depth={0}
+                    selectedKey={selectedKey}
+                    expanded={expanded}
+                    onSelect={handleSelect}
+                    onToggle={toggleExpanded}
+                    query={normalize(search)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </aside>
-        <section style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          {loading && <div style={{ padding: 16, color: 'var(--text-dim)' }}>Parsing archive…</div>}
-          <DetailPane
-            archive={archive}
-            selectedNode={selectedNode}
-            selectedObject={selectedObject}
-            incoming={activeIncoming}
-            children={activeChildren}
-            onSelectChild={node => {
-              setSelectedKey(node.key);
-              setExpanded(prev => new Set(prev).add(node.key));
-            }}
-            onSelectReference={ref => setSelectedKey(ref)}
-          />
+
+        <section className="sct-panel" style={{ minWidth: 0 }}>
+          <div className="sct-panel-header">
+            <span>Archive Details</span>
+            <span className="meta">{selectedNode ? selectedNode.className : 'No selection'}</span>
+          </div>
+          <div className="sct-panel-body sct-panel-scroll" style={{ minHeight: 0 }}>
+            {loading && <div style={{ padding: 8, color: 'var(--text-dim)' }}>Parsing archive…</div>}
+            <DetailPane
+              archive={archive}
+              selectedNode={selectedNode}
+              selectedObject={selectedObject}
+              incoming={activeIncoming}
+              children={activeChildren}
+              onSelectChild={node => {
+                setSelectedKey(node.key);
+                setExpanded(prev => new Set(prev).add(node.key));
+              }}
+              onSelectReference={ref => setSelectedKey(ref)}
+            />
+          </div>
         </section>
       </div>
     </div>

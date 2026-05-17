@@ -16,8 +16,8 @@ export default function ObjectPropertiesTable({ properties = [] }: { properties?
   }, [properties, search]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="sct-detail-stack">
+      <div className="sct-subbar">
         <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
           {filtered.length.toLocaleString()} / {properties.length.toLocaleString()} properties
         </span>
@@ -26,7 +26,6 @@ export default function ObjectPropertiesTable({ properties = [] }: { properties?
           placeholder="Filter properties…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ minWidth: 240 }}
         />
         {search && (
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setSearch('')}>
@@ -36,24 +35,30 @@ export default function ObjectPropertiesTable({ properties = [] }: { properties?
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No properties match the current filter.</div>
+        <div className="sct-empty-card" style={{ minHeight: 120 }}>
+          <div className="inner" style={{ width: '100%', gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No properties match the current filter.</div>
+            <div style={{ fontSize: 12 }}>Try a property name, value fragment, type, or numeric id.</div>
+          </div>
+        </div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table className="sct-table">
           <thead>
-            <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
-              <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Property</th>
-              <th style={{ textAlign: 'left', padding: '4px 8px' }}>Value</th>
-              <th style={{ textAlign: 'left', padding: '4px 8px' }}>Type</th>
+            <tr>
+              <th>Property</th>
+              <th>Value</th>
+              <th>Type</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map(prop => (
-              <tr key={`${prop.id}:${prop.name}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '4px 8px 4px 0', whiteSpace: 'nowrap' }}>
-                  <div style={{ fontWeight: 500 }}>{prop.name}</div>
+              <tr key={`${prop.id}:${prop.name}`}>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <div style={{ fontWeight: 600 }}>{prop.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>Property {prop.id}</div>
                 </td>
-                <td style={{ padding: '4px 8px', wordBreak: 'break-all' }}>{prop.value || '—'}</td>
-                <td style={{ padding: '4px 8px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{prop.valueType}</td>
+                <td style={{ wordBreak: 'break-word' }}>{prop.value || '—'}</td>
+                <td style={{ color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{prop.valueType}</td>
               </tr>
             ))}
           </tbody>

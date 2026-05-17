@@ -383,6 +383,7 @@ export default function CafWorkspacePane({
   });
   const [weights, setWeights] = useState([1.2, 0.95, 1, 0.95, 1.2]);
   const [layoutHeight, setLayoutHeight] = useState(580);
+  const [midColHeights, setMidColHeights] = useState<Record<number, number>>({ 1: 320, 2: 320, 3: 320 });
   const [sectionWeights, setSectionWeights] = useState<Record<number, number[]>>({
     0: [1, 1, 1],
     4: [1, 1, 1],
@@ -391,6 +392,7 @@ export default function CafWorkspacePane({
     | { kind: 'col'; index: number; startX: number; startWeights: number[]; totalW: number }
     | { kind: 'sec'; col: number; sec: number; startY: number; startWeights: number[]; totalH: number }
     | { kind: 'h'; startY: number; startH: number }
+    | { kind: 'mid'; col: number; startY: number; startH: number }
     | null
   >(null);
   const layoutRef = useRef<HTMLDivElement | null>(null);
@@ -530,6 +532,14 @@ export default function CafWorkspacePane({
     event.currentTarget.setPointerCapture(event.pointerId);
   }, [layoutHeight]);
 
+  const handleMidColPointerDown = useCallback(
+    (col: number) => (event: ReactPointerEvent<HTMLDivElement>) => {
+      dragRef.current = { kind: 'mid', col, startY: event.clientY, startH: midColHeights[col] ?? 320 };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [midColHeights],
+  );
+
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
       const op = dragRef.current;
@@ -556,6 +566,11 @@ export default function CafWorkspacePane({
         setSectionWeights(prev => ({ ...prev, [col]: next.map(v => Math.max(min, v * scale)) }));
       } else if (op.kind === 'h') {
         setLayoutHeight(Math.max(240, op.startH + (event.clientY - op.startY)));
+      } else if (op.kind === 'mid') {
+        setMidColHeights(prev => ({
+          ...prev,
+          [op.col]: Math.max(80, op.startH + (event.clientY - op.startY)),
+        }));
       }
       event.preventDefault();
     };
@@ -661,8 +676,9 @@ export default function CafWorkspacePane({
             ref={layoutRef}
             style={{
               display: 'flex',
+              alignItems: 'flex-start',
               height: layoutHeight,
-              overflow: 'hidden',
+              overflow: 'visible',
               background: 'linear-gradient(180deg, #f1f5f9 0%, #dbe7f7 100%)',
               borderTop: '1px solid #a6b8d3',
             }}
@@ -674,6 +690,7 @@ export default function CafWorkspacePane({
                 columnSections={columnSections}
                 weights={weights}
                 sectionWeights={sectionWeights}
+                midColHeights={midColHeights}
                 collapsed={collapsed}
                 sections={sections}
                 activeObject={activeObject}
@@ -684,6 +701,7 @@ export default function CafWorkspacePane({
                 controllerRef={caf.controller.ref}
                 handlePointerDown={handlePointerDown}
                 handleSectionPointerDown={handleSectionPointerDown}
+                handleMidColPointerDown={handleMidColPointerDown}
               />
             ))}
           </div>
@@ -961,6 +979,7 @@ function FragmentColumn({
   columnSections,
   weights,
   sectionWeights,
+  midColHeights,
   collapsed,
   sections,
   activeObject,
@@ -971,11 +990,13 @@ function FragmentColumn({
   controllerRef,
   handlePointerDown,
   handleSectionPointerDown,
+  handleMidColPointerDown,
 }: {
   columnIndex: number;
   columnSections: Array<{ key: PanelKey; title: string }>;
   weights: number[];
   sectionWeights: Record<number, number[]>;
+  midColHeights: Record<number, number>;
   collapsed: Record<PanelKey, boolean>;
   sections: Record<PanelKey, CafObject[]>;
   activeObject: CafObject | null;
@@ -986,60 +1007,100 @@ function FragmentColumn({
   isFiltered: boolean;
   handlePointerDown: (index: number) => (event: ReactPointerEvent<HTMLDivElement>) => void;
   handleSectionPointerDown: (col: number, sec: number) => (event: ReactPointerEvent<HTMLDivElement>) => void;
+  handleMidColPointerDown: (col: number) => (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
+  const isSingleSection = columnSections.length === 1;
   const colWeights = sectionWeights[columnIndex];
+  const midHeight = midColHeights[columnIndex];
+
+  const sectionItems = columnSections.flatMap((section, sectionIndex) => [
+    <SectionCard
+      key={section.key}
+      title={section.title}
+      count={sections[section.key].length}
+      collapsed={collapsed[section.key]}
+      flex={isSingleSection ? 1 : (colWeights?.[sectionIndex] ?? 1)}
+      onToggle={() => onToggleSection(section.key)}
+    >
+      {sections[section.key].length === 0 ? (
+        <div style={{ padding: 12, color: '#6d7f96', fontSize: 12 }}>
+          {isFiltered ? 'No matches' : 'No mapped objects'}
+        </div>
+      ) : sections[section.key].map(object => (
+        <PanelItem
+          key={object.ref}
+          object={object}
+          selected={activeObject?.ref === object.ref}
+          onSelect={onSelect}
+          controllerRef={controllerRef}
+        />
+      ))}
+    </SectionCard>,
+    ...(sectionIndex < columnSections.length - 1 ? [
+      <div
+        key={`sec-drag-${sectionIndex}`}
+        role="separator"
+        aria-label="Resize section"
+        onPointerDown={handleSectionPointerDown(columnIndex, sectionIndex)}
+        style={{
+          height: 5,
+          cursor: 'row-resize',
+          flexShrink: 0,
+          background: 'linear-gradient(90deg, rgba(154,176,207,0.25), rgba(154,176,207,0.6), rgba(154,176,207,0.25))',
+          borderTop: '1px solid #8ea6c7',
+          borderBottom: '1px solid #8ea6c7',
+        }}
+      />,
+    ] : []),
+  ]);
+
+  const columnDiv = isSingleSection ? (
+    <div
+      style={{
+        flex: weights[columnIndex],
+        minWidth: 0,
+        alignSelf: 'flex-start',
+        display: 'flex',
+        flexDirection: 'column',
+        height: midHeight,
+        padding: 8,
+        paddingBottom: 0,
+      }}
+    >
+      {sectionItems}
+      <div
+        role="separator"
+        aria-label="Resize column height"
+        onPointerDown={handleMidColPointerDown(columnIndex)}
+        style={{
+          height: 6,
+          cursor: 'ns-resize',
+          flexShrink: 0,
+          marginTop: 4,
+          background: 'linear-gradient(90deg, rgba(154,176,207,0.25), rgba(154,176,207,0.6), rgba(154,176,207,0.25))',
+          borderTop: '1px solid #8ea6c7',
+          borderRadius: '0 0 3px 3px',
+        }}
+      />
+    </div>
+  ) : (
+    <div
+      style={{
+        flex: weights[columnIndex],
+        minWidth: 0,
+        alignSelf: 'stretch',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: 8,
+      }}
+    >
+      {sectionItems}
+    </div>
+  );
+
   return (
     <>
-      <div
-        style={{
-          flex: weights[columnIndex],
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: 8,
-        }}
-      >
-        {columnSections.flatMap((section, sectionIndex) => [
-          <SectionCard
-            key={section.key}
-            title={section.title}
-            count={sections[section.key].length}
-            collapsed={collapsed[section.key]}
-            flex={colWeights?.[sectionIndex] ?? 1}
-            onToggle={() => onToggleSection(section.key)}
-          >
-            {sections[section.key].length === 0 ? (
-              <div style={{ padding: 12, color: '#6d7f96', fontSize: 12 }}>
-                {isFiltered ? 'No matches' : 'No mapped objects'}
-              </div>
-            ) : sections[section.key].map(object => (
-              <PanelItem
-                key={object.ref}
-                object={object}
-                selected={activeObject?.ref === object.ref}
-                onSelect={onSelect}
-                controllerRef={controllerRef}
-              />
-            ))}
-          </SectionCard>,
-          ...(sectionIndex < columnSections.length - 1 ? [
-            <div
-              key={`sec-drag-${sectionIndex}`}
-              role="separator"
-              aria-label="Resize section"
-              onPointerDown={handleSectionPointerDown(columnIndex, sectionIndex)}
-              style={{
-                height: 5,
-                cursor: 'row-resize',
-                flexShrink: 0,
-                background: 'linear-gradient(90deg, rgba(154,176,207,0.25), rgba(154,176,207,0.6), rgba(154,176,207,0.25))',
-                borderTop: '1px solid #8ea6c7',
-                borderBottom: '1px solid #8ea6c7',
-              }}
-            />,
-          ] : []),
-        ])}
-      </div>
+      {columnDiv}
       {!isLast && (
         <div
           role="separator"

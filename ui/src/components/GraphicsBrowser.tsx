@@ -440,6 +440,15 @@ function ensureSvgNamespaces(root: Element): void {
   }
 }
 
+function normalizeSvgExportText(svgText: string): string {
+  const needsXlink = /xlink:href\s*=/i.test(svgText);
+  if (!needsXlink || /xmlns:xlink\s*=/i.test(svgText)) return svgText;
+  return svgText.replace(
+    /<svg\b([^>]*)>/i,
+    (_match, attrs: string) => `<svg${attrs} xmlns:xlink="http://www.w3.org/1999/xlink">`,
+  );
+}
+
 function legacyRenderText(
   el: Element,
   key: string,
@@ -1071,21 +1080,21 @@ export function GraphicViewer({
         ensureSvgNamespaces(backgroundRoot);
         const importedNodes = Array.from(overlaySvg.childNodes).map(node => backgroundDoc.importNode(node, true));
         for (const node of importedNodes) backgroundRoot.appendChild(node);
-        exportText = new XMLSerializer().serializeToString(backgroundDoc);
+        exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(backgroundDoc));
       } else {
         const fallbackDoc = parser.parseFromString(legacyModel.backgroundSvg, 'image/svg+xml');
         if (fallbackDoc.documentElement) {
           ensureSvgNamespaces(fallbackDoc.documentElement);
-          exportText = new XMLSerializer().serializeToString(fallbackDoc);
+          exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(fallbackDoc));
         } else {
-          exportText = legacyModel.backgroundSvg;
+          exportText = normalizeSvgExportText(legacyModel.backgroundSvg);
         }
       }
     } else {
       const svgEl = svgContainerRef.current?.querySelector('svg');
       if (svgEl) {
         ensureSvgNamespaces(svgEl);
-        exportText = new XMLSerializer().serializeToString(svgEl);
+        exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(svgEl));
       }
     }
 

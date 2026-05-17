@@ -37,6 +37,7 @@ Acceptance criteria:
 - Base64-wrapped or nested XML content is scanned for references.
 - The scan preserves enough context to jump back to the source item.
 - False positives are reduced by keeping token matching constrained.
+- Nested Base64Zip payloads are decoded and scanned for XML-bearing entries.
 
 Depends on:
 - Ticket 001
@@ -173,4 +174,3 @@ Acceptance criteria:
 
 Depends on:
 - Tickets 001 through 012
-

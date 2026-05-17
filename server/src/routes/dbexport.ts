@@ -5,7 +5,7 @@ import { DOMParser } from '@xmldom/xmldom';
 import fs from 'fs';
 import type { DbexportObject, EngineInfo, NavNode, ParsedDbexport, ReferenceHit } from '@oct/shared';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
-import { collectReferenceHits, serializeNode } from '../archiveAnalysis';
+import { collectReferenceHitsFromNode } from '../archiveAnalysis';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -90,11 +90,14 @@ function parseArchiveXml(xml: string, unitMap: Record<number, string>, engineRef
         }
       }
 
-      const propXml = serializeNode(prop);
-      if (propXml) {
-        const attrName = `Property ${pid}`;
-        references.push(...collectReferenceHits(propXml, ref, attrName, sourceName, sourceName, ref));
-      }
+      const attrName = `Property ${pid}`;
+      references.push(...collectReferenceHitsFromNode(prop, {
+        referringItem: ref,
+        referringAttr: attrName,
+        source: sourceName,
+        sourcePath: sourceName,
+        referringPath: `${ref}/${attrName}`,
+      }));
     }
 
     objects.push({

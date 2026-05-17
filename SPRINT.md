@@ -311,5 +311,5 @@ The sprint is complete when OCT can:
 
 - Phase 1: shared archive contracts are live.
 - Phase 2: file viewer parity is live.
-- Phase 3: shared reference-index helper is in progress.
-- Next practical slice: expand reverse-lookup coverage and thread the new metadata through audit views.
+- Phase 3: shared reference-index helper is live and deep payload scanning is in progress.
+- Next practical slice: thread nested payload hits through audit views and expand cleanup workflows on top of the index.

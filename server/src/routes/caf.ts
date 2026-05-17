@@ -5,7 +5,7 @@ import { DOMParser } from '@xmldom/xmldom';
 import fs from 'fs';
 import type { CafObject, ParsedCaf, ReferenceHit } from '@oct/shared';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
-import { collectReferenceHits, serializeNode } from '../archiveAnalysis';
+import { collectReferenceHitsFromNode } from '../archiveAnalysis';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -90,11 +90,14 @@ function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: s
         }
       }
 
-      const propXml = serializeNode(prop);
-      if (propXml) {
-        const attrName = `Property ${pid}`;
-        references.push(...collectReferenceHits(propXml, ref, attrName, sourceName, sourceName, ref));
-      }
+      const attrName = `Property ${pid}`;
+      references.push(...collectReferenceHitsFromNode(prop, {
+        referringItem: ref,
+        referringAttr: attrName,
+        source: sourceName,
+        sourcePath: sourceName,
+        referringPath: `${ref}/${attrName}`,
+      }));
     }
 
     classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);

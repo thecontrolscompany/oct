@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm --prefix ui install && npm --prefix ui run build",
+  "buildCommand": "npm install && npm run build --workspace=ui",
   "outputDirectory": "ui/dist",
   "framework": null
 }

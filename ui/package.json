@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@oct/shared": "*",
+    "@oct/shared": "file:../shared",
     "@tanstack/react-query": "^5.100.6",
     "jszip": "^3.10.1",
     "react": "^19.2.5",

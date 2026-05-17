@@ -19,6 +19,8 @@ export interface ArchiveObjectBase {
   defaultValue: number | null;
   bacoidType: number | null;
   bacoidInstance: number | null;
+  createdAt?: string | null;
+  modifiedAt?: string | null;
 }
 
 export interface CafObject extends ArchiveObjectBase {

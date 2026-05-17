@@ -4,6 +4,7 @@ import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, Ref
 import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
+import { buildArchiveAudit } from './archiveAudit';
 import ObjectBrowser from './ObjectBrowser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
@@ -12,6 +13,16 @@ type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbex
 type ViewMode = 'online' | 'offline';
 type AnyObject = CafObject | DbexportObject;
 type ViewTab = 'tree' | 'objects' | 'io' | 'refs' | 'audit' | 'diff' | 'export';
+
+interface ArchiveSummary {
+  objectCount: number;
+  referenceCount: number;
+  classCount: number;
+  engineCount: number;
+  scheduleCount: number;
+  graphicsCount: number;
+  programmingCount: number;
+}
 
 const HW_IO_CLASSES = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
@@ -25,6 +36,36 @@ function displayName(o: AnyObject): string {
 }
 
 function getRef(o: AnyObject): string { return o.ref; }
+
+function getPointLabel(o: AnyObject): string {
+  return o.tag || o.description || o.ref.split(/[/\\]/).pop() || o.ref;
+}
+
+function isDbexportSection(ref: string, needle: string): boolean {
+  return new RegExp(`(?:^|[/.])${needle}(?:[/.]|$)`, 'i').test(ref);
+}
+
+function summarizeArchive(file: LoadedFile): ArchiveSummary {
+  const objects = getObjects(file);
+  const classCount = new Set(objects.map(o => o.classid)).size;
+  const engineCount = file.type === 'dbexport' ? file.data.engines.length : 0;
+  const scheduleCount = objects.filter(o => isDbexportSection(o.ref, 'Schedule')).length;
+  const graphicsCount = objects.filter(o => isDbexportSection(o.ref, 'Graphics')).length;
+  const programmingCount = objects.filter(o => isDbexportSection(o.ref, 'Programming')).length;
+  return {
+    objectCount: objects.length,
+    referenceCount: file.data.references.length,
+    classCount,
+    engineCount,
+    scheduleCount,
+    graphicsCount,
+    programmingCount,
+  };
+}
+
+function exportCsvRow(values: Array<string | number | null | undefined>): string {
+  return values.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',');
+}
 
 function normalizeTreeQuery(value: string): string {
   return value.trim().toLowerCase();
@@ -238,6 +279,8 @@ function ObjectDetail({
   if (obj.bacoidInstance !== null) rows.push(['Instance', String(obj.bacoidInstance)]);
   if (obj.units) rows.push(['Units', obj.units]);
   if (obj.defaultValue !== null) rows.push(['Default', String(obj.defaultValue)]);
+  if (obj.createdAt) rows.push(['Created', obj.createdAt]);
+  if (obj.modifiedAt) rows.push(['Modified', obj.modifiedAt]);
   rows.push(['Class', `${obj.className} (${obj.classid})`]);
   rows.push(['Ref', obj.ref]);
   const filteredChildren = useMemo(() => {
@@ -440,6 +483,9 @@ function DiffTab({
     return rows.sort((a, b) => a.status.localeCompare(b.status) || a.ref.localeCompare(b.ref));
   }, [fileAState, fileBState]);
 
+  const summaryA = useMemo(() => fileAState ? summarizeArchive(fileAState) : null, [fileAState]);
+  const summaryB = useMemo(() => fileBState ? summarizeArchive(fileBState) : null, [fileBState]);
+
   const loadFile = async (file: File, slot: 'a' | 'b') => {
     setLoading(true);
     try {
@@ -482,6 +528,35 @@ function DiffTab({
             </span>
             <button className="btn btn-ghost" style={{ fontSize: 11, marginLeft: 'auto' }} onClick={downloadDiffCsv}>Export CSV</button>
           </div>
+          {summaryA && summaryB && (
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'grid', gap: 10, gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Before</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{fileAState?.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                  {summaryA.objectCount.toLocaleString()} objects · {summaryA.referenceCount.toLocaleString()} refs · {summaryA.classCount.toLocaleString()} classes
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>After</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{fileBState?.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                  {summaryB.objectCount.toLocaleString()} objects · {summaryB.referenceCount.toLocaleString()} refs · {summaryB.classCount.toLocaleString()} classes
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Structural delta</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{(summaryB.objectCount - summaryA.objectCount).toLocaleString()} objects</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{(summaryB.referenceCount - summaryA.referenceCount).toLocaleString()} refs</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Archive sections</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                  {summaryB.scheduleCount.toLocaleString()} schedules · {summaryB.graphicsCount.toLocaleString()} graphics · {summaryB.programmingCount.toLocaleString()} programs
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
               <thead style={{ position: 'sticky', top: 0, background: 'var(--sidebar-bg)' }}>
@@ -517,17 +592,29 @@ function DiffTab({
 
 // ─── Export tab ──────────────────────────────────────────────────────────────
 
-function ExportTab({ file }: { file: LoadedFile }) {
+function ExportTab({ file, referenceIndex }: { file: LoadedFile; referenceIndex: { byTarget: Map<string, ReferenceHit[]>; counts: Map<string, number>; totalHits: number } }) {
   const objects = getObjects(file);
+  const summary = useMemo(() => summarizeArchive(file), [file]);
+  const audit = useMemo(() => buildArchiveAudit(file, referenceIndex), [file, referenceIndex]);
 
   const exportCsv = () => {
-    const header = 'ref,classid,className,tag,description,units,defaultValue,bacoidType,bacoidInstance\n';
+    const header = 'ref,classid,className,tag,description,units,defaultValue,bacoidType,bacoidInstance,createdAt,modifiedAt\n';
     const rows = objects.map(o =>
-      `"${o.ref}",${o.classid},"${o.className}","${o.tag}","${o.description}","${o.units ?? ''}",${o.defaultValue ?? ''},${o.bacoidType ?? ''},${o.bacoidInstance ?? ''}`
+      exportCsvRow([o.ref, o.classid, o.className, o.tag, o.description, o.units ?? '', o.defaultValue ?? '', o.bacoidType ?? '', o.bacoidInstance ?? '', o.createdAt ?? '', o.modifiedAt ?? ''])
     ).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `${file.name.replace(/\.[^.]+$/, '')}.csv`; a.click();
+  };
+
+  const exportPointListCsv = () => {
+    const header = 'ref,label,tag,description,units,defaultValue,bacoidType,bacoidInstance,createdAt,modifiedAt\n';
+    const rows = objects.map(o =>
+      exportCsvRow([o.ref, getPointLabel(o), o.tag, o.description, o.units ?? '', o.defaultValue ?? '', o.bacoidType ?? '', o.bacoidInstance ?? '', o.createdAt ?? '', o.modifiedAt ?? ''])
+    ).join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${file.name.replace(/\.[^.]+$/, '')}.point-list.csv`; a.click();
   };
 
   const exportJson = () => {
@@ -537,6 +624,16 @@ function ExportTab({ file }: { file: LoadedFile }) {
   };
 
   const stats = file.type === 'caf' ? file.data.stats : file.data.stats;
+  const validationRows: Array<[string, string, string]> = [
+    ['Objects', summary.objectCount.toLocaleString(), 'Parsed objects available for export'],
+    ['References', summary.referenceCount.toLocaleString(), 'Reference graph available for audit'],
+    ['Missing tags', audit.summary.missingTags.toLocaleString(), 'Objects without a tag'],
+    ['Missing descriptions', audit.summary.missingDescriptions.toLocaleString(), 'Objects without a description'],
+    ['Unbound refs', audit.summary.unbound.toLocaleString(), 'Targets that do not exist in this archive'],
+    ['Duplicates', (audit.summary.duplicateDescriptions + audit.summary.duplicateTags + audit.summary.duplicateRefs).toLocaleString(), 'Potential cleanup candidates'],
+    ['Suppressed alarms', audit.summary.suppressedAlarms.toLocaleString(), 'Alarm-like objects with suppress/disable text'],
+    ['I/O missing units', audit.summary.ioMissingUnits.toLocaleString(), 'Points that may benefit from a units label'],
+  ];
 
   return (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -546,10 +643,34 @@ function ExportTab({ file }: { file: LoadedFile }) {
           <button className="btn btn-primary" onClick={exportCsv}>
             Download CSV — {objects.length.toLocaleString()} objects
           </button>
+          <button className="btn btn-ghost" onClick={exportPointListCsv}>
+            Download point list CSV
+          </button>
           <button className="btn btn-ghost" onClick={exportJson}>
             Download JSON (full)
           </button>
         </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 8 }}>PRE-EXPORT VALIDATION</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+              <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Check</th>
+              <th style={{ textAlign: 'left', padding: '4px 8px' }}>Value</th>
+              <th style={{ textAlign: 'left', padding: '4px 8px' }}>What it means</th>
+            </tr>
+          </thead>
+          <tbody>
+            {validationRows.map(([label, value, note]) => (
+              <tr key={label} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '4px 8px 4px 0' }}>{label}</td>
+                <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace' }}>{value}</td>
+                <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <div>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 8 }}>OBJECT TYPE BREAKDOWN</div>
@@ -559,6 +680,27 @@ function ExportTab({ file }: { file: LoadedFile }) {
             <span style={{ color: 'var(--accent)', fontFamily: 'Consolas,monospace' }}>{s.count}</span>
           </div>
         ))}
+      </div>
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 8 }}>ARCHIVE SECTIONS</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Schedules</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{summary.scheduleCount.toLocaleString()}</div>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Graphics</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{summary.graphicsCount.toLocaleString()}</div>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Programming</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{summary.programmingCount.toLocaleString()}</div>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Classes</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{summary.classCount.toLocaleString()}</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -919,7 +1061,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
           onResetRewrite={() => { setPreviewFile(null); setSelected(null); }}
         />
       )}
-      {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={currentFile} /></div>}
+      {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={currentFile} referenceIndex={referenceIndex} /></div>}
       {tab === 'diff' && <DiffTab fileA={previewFile ?? file} fileB={previewFile ? file : null} loadArchive={loadArchive} />}
 
       {tab === 'tree' && (

@@ -35,6 +35,14 @@ function makeUnitLabel(unitId: number | null): string | null {
   return UNIT_LABELS[unitId] ?? `unit${unitId}`;
 }
 
+function getOptionalAttr(el: Element, names: string[]): string | null {
+  for (const name of names) {
+    const value = el.getAttribute(name);
+    if (value && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 function buildReferenceHits(xml: string, referringItem: string, referringAttr: string, source: string, sourcePath = source, referringPath = referringItem): ReferenceHit[] {
   const hits: ReferenceHit[] = [];
   const seen = new Set<string>();
@@ -84,6 +92,8 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
     const ref = el.getAttribute('ref') ?? '';
     const classid = parseInt(el.getAttribute('classid') ?? '0', 10) || 0;
     const objectid = parseInt(el.getAttribute('objectid') ?? '0', 10) || 0;
+    const createdAt = getOptionalAttr(el, ['created', 'createdAt', 'creationTime', 'creationDate']);
+    const modifiedAt = getOptionalAttr(el, ['modified', 'modifiedAt', 'lastModified', 'updated', 'timestamp']);
 
     let tag = '';
     let description = '';
@@ -148,6 +158,8 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
       defaultValue,
       bacoidType,
       bacoidInstance,
+      createdAt,
+      modifiedAt,
       engineRef,
     });
   }
@@ -242,6 +254,8 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
       const ref = el.getAttribute('ref') ?? '';
       const classid = parseInt(el.getAttribute('classid') ?? '0', 10) || 0;
       const objectid = parseInt(el.getAttribute('objectid') ?? '0', 10) || 0;
+      const createdAt = getOptionalAttr(el, ['created', 'createdAt', 'creationTime', 'creationDate']);
+      const modifiedAt = getOptionalAttr(el, ['modified', 'modifiedAt', 'lastModified', 'updated', 'timestamp']);
 
       let tag = '';
       let description = '';
@@ -319,6 +333,8 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
         defaultValue,
         bacoidType,
         bacoidInstance,
+        createdAt,
+        modifiedAt,
       });
 
       if (classid === 862 && !controller) {

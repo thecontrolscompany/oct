@@ -119,6 +119,14 @@ function displayName(o: AnyObject): string {
   return o.tag || o.description || o.ref;
 }
 
+function isSectionRef(ref: string, needle: string): boolean {
+  return new RegExp(`(?:^|[/.])${needle}(?:[/.]|$)`, 'i').test(ref);
+}
+
+function collectSectionRefs(objects: AnyObject[], needle: string): AnyObject[] {
+  return objects.filter(obj => isSectionRef(obj.ref, needle));
+}
+
 function tail(ref: string): string {
   const parts = ref.split(/[\/:.]/).filter(Boolean);
   return parts[parts.length - 1] ?? ref;
@@ -629,6 +637,18 @@ export function buildAsBuiltReport(file: LoadedArchive, audit: AuditReport, rewr
     lines.push(`<div>Objects renamed: ${rewrite.summary.renamedObjects.toLocaleString()} · Parents renamed: ${rewrite.summary.renamedParents.toLocaleString()} · Engines renamed: ${rewrite.summary.renamedEngines.toLocaleString()}</div>`);
     lines.push(`<div>Objects deleted: ${rewrite.summary.deletedObjects.toLocaleString()} · References deleted: ${rewrite.summary.deletedReferences.toLocaleString()}</div>`);
   }
+  lines.push('</section>');
+  const scheduleObjects = collectSectionRefs(active.data.objects, 'Schedule');
+  const graphicsObjects = collectSectionRefs(active.data.objects, 'Graphics');
+  const programmingObjects = collectSectionRefs(active.data.objects, 'Programming');
+  lines.push('<section>');
+  lines.push('<h2>Archive Sections</h2>');
+  lines.push(`<div>Schedules: ${scheduleObjects.length.toLocaleString()} · Graphics: ${graphicsObjects.length.toLocaleString()} · Programming: ${programmingObjects.length.toLocaleString()}</div>`);
+  lines.push('<table><thead><tr><th>Section</th><th>Count</th><th>Sample</th></tr></thead><tbody>');
+  for (const [label, list] of [['Schedules', scheduleObjects], ['Graphics', graphicsObjects], ['Programming', programmingObjects]] as const) {
+    lines.push(`<tr><td>${label}</td><td>${list.length}</td><td>${list.slice(0, 5).map(obj => `${displayName(obj)} (${obj.ref})`).join(' · ')}</td></tr>`);
+  }
+  lines.push('</tbody></table>');
   lines.push('</section>');
   if (rewrite && rewrite.acceptedEntries.length > 0) {
     lines.push('<section>');

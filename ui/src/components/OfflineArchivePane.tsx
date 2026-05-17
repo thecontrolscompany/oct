@@ -348,6 +348,8 @@ function DetailPane({
     if (selectedObject.description) lines.push(['Description', selectedObject.description]);
     if (selectedObject.units) lines.push(['Units', selectedObject.units]);
     if (selectedObject.defaultValue !== null) lines.push(['Default', String(selectedObject.defaultValue)]);
+    if (selectedObject.createdAt) lines.push(['Created', selectedObject.createdAt]);
+    if (selectedObject.modifiedAt) lines.push(['Modified', selectedObject.modifiedAt]);
     lines.push(['Ref', selectedObject.ref]);
   } else if (selectedNode.ref) {
     lines.push(['Ref', selectedNode.ref]);

@@ -5,6 +5,8 @@ import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import { buildArchiveAudit } from './archiveAudit';
+import CafWorkspacePane from './CafWorkspacePane';
+import GraphicsBrowser, { buildGraphicTagMap, GRAPHIC_CLASS_IDS } from './GraphicsBrowser';
 import ObjectBrowser from './ObjectBrowser';
 import ObjectPropertiesTable from './ObjectPropertiesTable';
 import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
@@ -14,7 +16,7 @@ import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
 type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
 type ViewMode = 'online' | 'offline';
 type AnyObject = CafObject | DbexportObject;
-type ViewTab = 'tree' | 'objects' | 'io' | 'refs' | 'audit' | 'diff' | 'export';
+type ViewTab = 'tree' | 'workspace' | 'objects' | 'io' | 'graphics' | 'refs' | 'audit' | 'diff' | 'export';
 
 interface ArchiveSummary {
   objectCount: number;
@@ -266,12 +268,14 @@ function ObjectDetail({
   children,
   onSelectReference,
   onSelectChild,
+  graphicTagMap,
 }: {
   obj: AnyObject;
   incoming: ReferenceHit[];
   children: TreeChildRow[];
   onSelectReference?: (ref: string) => void;
   onSelectChild?: (ref: string) => void;
+  graphicTagMap?: Map<string, string>;
 }) {
   const [childSearch, setChildSearch] = useState('');
   const rows: [string, string][] = [];
@@ -370,6 +374,45 @@ function ObjectDetail({
           </table>
         )}
       </div>
+      {graphicTagMap && graphicTagMap.size > 0 && (() => {
+        const graphicHits = incoming.filter(h => graphicTagMap.has(h.referringItem));
+        if (graphicHits.length === 0) return null;
+        return (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
+              BOUND TO GRAPHICS
+            </div>
+            <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Graphic</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px', width: 140 }}>Binding type</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>SVG element</th>
+                </tr>
+              </thead>
+              <tbody>
+                {graphicHits.slice(0, 20).map((hit, i) => {
+                  const graphicName = graphicTagMap.get(hit.referringItem) ?? hit.referringItem;
+                  const svgElement = hit.referringPath?.split('/').pop() ?? '';
+                  return (
+                    <tr
+                      key={i}
+                      style={{ borderBottom: '1px solid var(--border)', cursor: onSelectReference ? 'pointer' : 'default' }}
+                      onClick={() => onSelectReference?.(hit.referringItem)}
+                      onMouseEnter={e => { if (onSelectReference) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
+                      onMouseLeave={e => { if (onSelectReference) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                    >
+                      <td style={{ padding: '4px 8px 4px 0', fontWeight: 500 }}>{graphicName}</td>
+                      <td style={{ padding: '4px 8px', color: 'var(--text-dim)', fontSize: 11 }}>{hit.referringAttr}</td>
+                      <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace', fontSize: 10, color: 'var(--text-dim)' }}>{svgElement}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
       <div style={{ marginTop: 14 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
           REFERENCED BY
@@ -974,6 +1017,11 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     });
   }, [currentFile, selected, childMap, incomingCounts, selectedNavNode]);
 
+  const graphicTagMap = useMemo(
+    () => (currentFile ? buildGraphicTagMap(getObjects(currentFile)) : new Map<string, string>()),
+    [currentFile],
+  );
+
   const handleFile = useCallback(async (f: File) => {
     setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTreeSearch(''); setTreeExpanded(new Set()); setTab('tree');
     try {
@@ -1020,7 +1068,14 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   if (!currentFile) return null;
 
   const allObjects = getObjects(currentFile);
-  const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['refs', 'References'], ['audit', 'Audit'], ['diff', 'Diff'], ['export', 'Export']];
+  const hasGraphics = allObjects.some(o => GRAPHIC_CLASS_IDS.has(o.classid));
+  const TABS: [ViewTab, string][] = [
+    ['tree', 'Tree'],
+    ...(currentFile.type === 'caf' ? [['workspace', 'CAF Workspace'] as [ViewTab, string]] : []),
+    ['objects', 'Objects'], ['io', 'I/O Points'],
+    ...(hasGraphics ? [['graphics', 'Graphics'] as [ViewTab, string]] : []),
+    ['refs', 'References'], ['audit', 'Audit'], ['diff', 'Diff'], ['export', 'Export'],
+  ];
   const selectedDetailObj = selectedObj ?? (selectedNavNode ? currentFile.data.objects.find(o => o.ref === selectedNavNode.reference) ?? null : null);
   const treeStats = useMemo(() => {
     if (!currentFile) return { total: 0, visible: 0 };
@@ -1089,7 +1144,25 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
 
       {/* Content */}
       {tab === 'objects' && <ObjectBrowser objects={allObjects} onSelect={setSelected} incomingCounts={incomingCounts} />}
+      {tab === 'workspace' && currentFile.type === 'caf' && (
+        <CafWorkspacePane
+          caf={currentFile.data}
+          selected={selected}
+          onSelect={setSelected}
+          referenceIndex={referenceIndex}
+        />
+      )}
       {tab === 'io' && <div style={{ flex: 1, overflow: 'hidden' }}><IoTable objects={allObjects} /></div>}
+      {tab === 'graphics' && (
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <GraphicsBrowser
+            objects={allObjects}
+            references={currentFile.data.references}
+            referenceIndex={referenceIndex}
+            onSelectObject={ref => { setSelected(ref); setTab('tree'); }}
+          />
+        </div>
+      )}
       {tab === 'refs' && (
         <ReferencesTab
           file={currentFile}
@@ -1177,6 +1250,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
                     children={treeChildren}
                     onSelectReference={setSelected}
                     onSelectChild={setSelected}
+                    graphicTagMap={graphicTagMap}
                   />
                 : <div style={{ padding: 24, color: 'var(--text-dim)', fontSize: 13 }}>Select an object in the tree</div>
               }

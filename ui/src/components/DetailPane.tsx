@@ -13,7 +13,7 @@ const TYPE_NAME: Record<number, string> = { 9: 'Folder', 15: 'Typical', 21: 'Pac
 type DetailTab = 'all' | 'overview' | 'attributes' | 'ports' | 'commissioning';
 
 export default function DetailPane({ item }: Props) {
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const [tab, setTab] = useState<DetailTab>('all');
 
   const { data: detail, isLoading: loadingDetail, error: detailError } = useQuery({
     queryKey: ['item', item?.ItemId],
@@ -48,15 +48,20 @@ export default function DetailPane({ item }: Props) {
 
   return (
     <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div className="tabs">
+      <div className="detail-tabs">
         {tabs.map(t => (
-          <div key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            className={`detail-tab${tab === t.id ? ' active' : ''}`}
+            onClick={() => setTab(t.id)}
+          >
             {t.label}
-          </div>
+          </button>
         ))}
       </div>
 
-      <div className="content">
+      <div className="detail-content">
         {detailError && <div className="error-msg">Error loading controller details: {String(detailError)}</div>}
         {attributesError && <div className="error-msg">Error loading attributes: {String(attributesError)}</div>}
 

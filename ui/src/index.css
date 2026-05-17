@@ -324,6 +324,49 @@ html, body, #root {
   border-top: 3px solid var(--accent);
 }
 
+.detail-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.detail-tab {
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--shell-blue-ink);
+  padding: 8px 14px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  white-space: nowrap;
+}
+
+.detail-tab:hover {
+  color: var(--accent);
+  background: #f5f9fd;
+}
+
+.detail-tab.active {
+  color: var(--accent);
+  background: var(--surface);
+  border-color: var(--border);
+  margin-bottom: -1px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset;
+}
+
+.detail-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+}
+
 .btn {
   padding: 5px 14px;
   border-radius: 20px;

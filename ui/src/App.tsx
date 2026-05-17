@@ -228,7 +228,6 @@ function AppShell() {
           </div>
           <div className="topbar-center">
             <span className="topbar-title">Open Configuration Tool</span>
-            <span className="topbar-subtitle">Offline and online archive browser</span>
           </div>
           {renderTopbarStatus()}
         </header>

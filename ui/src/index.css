@@ -218,18 +218,13 @@ html, body, #root {
   text-shadow: 0 1px 0 rgba(0,0,0,0.15);
 }
 .topbar-title {
+  font-family: 'Segoe UI Variable Display', 'Aptos Display', 'Segoe UI', sans-serif;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 17px;
   color: rgba(255,255,255,0.96);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-.topbar-subtitle {
-  margin-top: 2px;
-  font-size: 10px;
-  color: rgba(255,255,255,0.72);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.16);
 }
 .topbar-sep { color: var(--border); }
 

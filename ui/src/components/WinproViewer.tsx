@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { LoadedWinpro, WinproRecord, WinproSymbolBlock } from '../winproParser';
+import { WorkspacePropertiesCard, WorkspaceSection } from './ObjectWorkspace';
 
 type WinproTab = 'overview' | 'sections' | 'symbols' | 'records' | 'raw';
 
@@ -35,7 +36,7 @@ function recordLabel(record: WinproRecord): string {
 
 function renderKeyValueTable(entries: Array<[string, string]>) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+    <table className="sct-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
       <tbody>
         {entries.map(([key, value]) => (
           <tr key={key} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -179,16 +180,26 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '320px 1fr', minHeight: 0 }}>
         <div style={{ borderRight: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: 12, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
-                <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Byte size</div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.byteLength.toLocaleString()}</div>
+            <WorkspaceSection title="Summary" meta={`${file.data.kind.toUpperCase()} · ${file.data.byteLength.toLocaleString()} bytes`}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
+                  <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Sections</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.sections.length.toLocaleString()}</div>
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
+                  <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Records</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.records.length.toLocaleString()}</div>
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
+                  <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Symbols</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.symbols.length.toLocaleString()}</div>
+                </div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
+                  <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Strings</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.strings.length.toLocaleString()}</div>
+                </div>
               </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
-                <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Strings</div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.strings.length.toLocaleString()}</div>
-              </div>
-            </div>
+            </WorkspaceSection>
             <input
               type="text"
               placeholder={tab === 'symbols' ? 'Search symbols…' : tab === 'records' ? 'Search records…' : 'Search sections…'}
@@ -200,27 +211,41 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {tab === 'overview' && (
               <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>OVERVIEW</div>
-                  {renderKeyValueTable(metaEntries)}
-                </section>
+                <WorkspacePropertiesCard
+                  title="Overview"
+                  subtitle={`${metaEntries.length} entries`}
+                  properties={metaEntries.map(([key, value], index) => ({
+                    key: `${key}-${index}`,
+                    name: key,
+                    value,
+                    type: 'Info',
+                    number: index,
+                  }))}
+                  emptyMessage="No overview data available."
+                />
                 {applicationLines.length > 0 && (
-                  <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>APPLICATION</div>
-                    {renderKeyValueTable(applicationLines)}
-                  </section>
+                  <WorkspacePropertiesCard
+                    title="Application"
+                    subtitle={`${applicationLines.length} entries`}
+                    properties={applicationLines.map(([key, value], index) => ({
+                      key: `app-${index}`,
+                      name: key,
+                      value,
+                      type: 'Info',
+                      number: index,
+                    }))}
+                    emptyMessage="No application information."
+                  />
                 )}
-                <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>COMPANIONS</div>
+                <WorkspaceSection title="Companions" meta={`${file.data.companionNames.length} inferred`}>
                   <div style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--text)' }}>
                     {file.data.companionNames.length === 0
                       ? 'No companion files inferred.'
                       : file.data.companionNames.map(name => <div key={name}>{name}</div>)}
                   </div>
-                </section>
+                </WorkspaceSection>
                 {correlationGroups.length > 0 && (
-                  <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>CORRELATIONS</div>
+                  <WorkspaceSection title="Correlations" meta={`${correlationGroups.length} grouped keys`}>
                     <div style={{ display: 'grid', gap: 8 }}>
                       {correlationGroups.slice(0, 8).map(group => (
                         <div key={group.key} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--bg)' }}>
@@ -231,11 +256,10 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                         </div>
                       ))}
                     </div>
-                  </section>
+                  </WorkspaceSection>
                 )}
                 {file.data.kind === 'asc' && (
-                  <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>EXTRACTED STRINGS</div>
+                  <WorkspaceSection title="Extracted Strings" meta={`${file.data.strings.length} items`}>
                     <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>
                       Printable runs recovered from the compiled export.
                     </div>
@@ -244,7 +268,7 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                         ? 'No printable strings found.'
                         : file.data.strings.slice(0, 80).map((s, i) => <div key={`${s}-${i}`}>{s}</div>)}
                     </div>
-                  </section>
+                  </WorkspaceSection>
                 )}
               </div>
             )}
@@ -358,30 +382,27 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                 <div style={{ overflow: 'auto', padding: 16 }}>
                   {activeRecord ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>RECORD</div>
-                        {renderKeyValueTable([
-                          ['Label', activeRecord.label],
-                          ['Kind', activeRecord.kind],
-                          ['Section', activeRecord.sectionTitle],
-                          ['Key', activeRecord.normalizedKey || '—'],
-                          ['Short name', activeRecord.shortName ?? '—'],
-                          ['Long name', activeRecord.longName ?? '—'],
-                          ['Start line', String(activeRecord.startLine)],
-                        ])}
-                      </section>
-                      <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>FIELDS</div>
+                      <WorkspacePropertiesCard
+                        title="Record"
+                        subtitle={activeRecord.sectionTitle}
+                        properties={[
+                          { key: 'label', name: 'Label', value: activeRecord.label, type: activeRecord.kind, number: 0 },
+                          { key: 'short', name: 'Short name', value: activeRecord.shortName ?? '—', type: 'Text', number: 1 },
+                          { key: 'long', name: 'Long name', value: activeRecord.longName ?? '—', type: 'Text', number: 2 },
+                          { key: 'key', name: 'Key', value: activeRecord.normalizedKey || '—', type: 'Key', number: 3 },
+                          { key: 'line', name: 'Start line', value: String(activeRecord.startLine), type: 'Line', number: 4 },
+                        ]}
+                        emptyMessage="No record details."
+                      />
+                      <WorkspaceSection title="Fields" meta={`${Object.keys(activeRecord.fields).length} fields`}>
                         {renderKeyValueTable(Object.entries(activeRecord.fields).map(([key, value]) => [key, value]))}
-                      </section>
-                      <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>SOURCE LINES</div>
+                      </WorkspaceSection>
+                      <WorkspaceSection title="Source Lines" meta={`${activeRecord.lines.length} lines`}>
                         <pre style={{ margin: 0, padding: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                           {activeRecord.lines.join('\n')}
                         </pre>
-                      </section>
-                      <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>RELATED RECORDS</div>
+                      </WorkspaceSection>
+                      <WorkspaceSection title="Related Records" meta={`${correlationGroups.find(group => group.key === activeRecord.normalizedKey)?.records.length ?? 0} linked`}>
                         {correlationGroups.find(group => group.key === activeRecord.normalizedKey)?.records.filter(record => record.id !== activeRecord.id).length
                           ? correlationGroups.find(group => group.key === activeRecord.normalizedKey)!.records.filter(record => record.id !== activeRecord.id).map(record => (
                               <div key={record.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
@@ -390,7 +411,7 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                               </div>
                             ))
                           : <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No related records in this file.</div>}
-                      </section>
+                      </WorkspaceSection>
                     </div>
                   ) : (
                     <div style={{ color: 'var(--text-dim)' }}>Select a record to inspect it.</div>

@@ -52,6 +52,7 @@ const KIND_LABEL: Record<string, string> = {
   'orphaned-object': 'Orphaned object',
   'reference-hotspot': 'Hotspot',
   'unreferenced-object': 'Unreferenced',
+  'hidden-or-disabled': 'Hidden/disabled',
   'suppressed-alarm': 'Suppressed alarm',
   'io-missing-units': 'I/O units',
 };

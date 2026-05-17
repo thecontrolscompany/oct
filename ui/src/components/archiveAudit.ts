@@ -19,6 +19,7 @@ export type AuditKind =
   | 'reference-hotspot'
   | 'self-reference'
   | 'unreferenced-object'
+  | 'hidden-or-disabled'
   | 'suppressed-alarm'
   | 'placeholder-name'
   | 'io-missing-units';
@@ -71,6 +72,7 @@ export interface AuditReport {
     hotspots: number;
     selfReferences: number;
     unreferenced: number;
+    hiddenOrDisabled: number;
     suppressedAlarms: number;
     placeholderNames: number;
     ioMissingUnits: number;
@@ -108,6 +110,7 @@ const IO_CLASS_IDS = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
 const ALARMISH_RE = /(alarm|alarms|fault|warning|event)/i;
 const SUPPRESS_RE = /(suppress|suppressed|disable|disabled|inhibit|bypass|silence|mute|hold ?off)/i;
+const HIDDEN_RE = /(hidden|hide|inactive|disabled|disable|offline|out of service|maintenance only|not used|unused|bypass)/i;
 const PLACEHOLDER_RE = /^(tbd|todo|temp|test|new|unnamed|unknown|object|value|point|sensor|actuator|device)(\s+.*)?$/i;
 
 function getObjects(file: LoadedArchive): AnyObject[] {
@@ -120,6 +123,15 @@ function normalizeText(value: string | null | undefined): string {
 
 function displayName(o: AnyObject): string {
   return o.tag || o.description || o.ref;
+}
+
+function propertyTextBlob(o: AnyObject): string {
+  const props = (o as AnyObject & { properties?: Array<{ name?: string; value?: string; valueType?: string }> }).properties ?? [];
+  return props.map(prop => `${prop.name ?? ''} ${prop.value ?? ''} ${prop.valueType ?? ''}`).join(' ');
+}
+
+function objectTextBlob(o: AnyObject): string {
+  return [o.className, o.tag, o.description, o.ref, propertyTextBlob(o)].join(' ');
 }
 
 function isSectionRef(ref: string, needle: string): boolean {
@@ -161,6 +173,7 @@ function severityCounts(findings: AuditFinding[]): AuditReport['summary'] {
     hotspots: 0,
     selfReferences: 0,
     unreferenced: 0,
+    hiddenOrDisabled: 0,
     suppressedAlarms: 0,
     placeholderNames: 0,
     ioMissingUnits: 0,
@@ -179,6 +192,7 @@ function severityCounts(findings: AuditFinding[]): AuditReport['summary'] {
       case 'reference-hotspot': summary.hotspots += 1; break;
       case 'self-reference': summary.selfReferences += 1; break;
       case 'unreferenced-object': summary.unreferenced += 1; break;
+      case 'hidden-or-disabled': summary.hiddenOrDisabled += 1; break;
       case 'suppressed-alarm': summary.suppressedAlarms += 1; break;
       case 'placeholder-name': summary.placeholderNames += 1; break;
       case 'io-missing-units': summary.ioMissingUnits += 1; break;
@@ -550,8 +564,20 @@ export function buildArchiveAudit(file: LoadedArchive, referenceIndex: Reference
     ));
   }
 
+  const hiddenOrDisabled = objects.filter(o => HIDDEN_RE.test(objectTextBlob(o)));
+  for (const obj of hiddenOrDisabled.slice(0, 80)) {
+    findings.push(makeFinding(
+      'hidden-or-disabled',
+      'low',
+      'Hidden or disabled candidate',
+      'Text suggests this object may be hidden, inactive, disabled, or only used for maintenance.',
+      [obj.ref],
+      { details: `${obj.className} · ${displayName(obj)} · ${obj.description || '(no description)'}` },
+    ));
+  }
+
   const suppressedAlarms = objects.filter(o => {
-    const text = `${o.className} ${o.tag} ${o.description}`;
+    const text = objectTextBlob(o);
     return ALARMISH_RE.test(text) && SUPPRESS_RE.test(text);
   });
   for (const obj of suppressedAlarms.slice(0, 50)) {
@@ -711,7 +737,7 @@ export function buildAsBuiltReport(file: LoadedArchive, audit: AuditReport, rewr
   lines.push('<section>');
   lines.push('<h2>Audit Overview</h2>');
   lines.push(`<div>High: ${audit.summary.high} · Medium: ${audit.summary.medium} · Low: ${audit.summary.low}</div>`);
-  lines.push(`<div>Unbound: ${audit.summary.unbound} · Orphans: ${audit.summary.orphans} · Duplicates: ${audit.summary.duplicateDescriptions + audit.summary.duplicateTags}</div>`);
+  lines.push(`<div>Unbound: ${audit.summary.unbound} · Orphans: ${audit.summary.orphans} · Hidden/disabled: ${audit.summary.hiddenOrDisabled} · Duplicates: ${audit.summary.duplicateDescriptions + audit.summary.duplicateTags}</div>`);
   lines.push('</section>');
   lines.push('<section>');
   lines.push('<h2>Reference Hotspots</h2>');

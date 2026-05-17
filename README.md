@@ -114,7 +114,7 @@ ZIP archive containing `navtree.xml` (site/engine/trunk/equipment hierarchy) and
 
 ## Acknowledgements
 
-- [jmsboswell67-alt/dbexport-viewer](https://github.com/jmsboswell67-alt/dbexport-viewer) — Apache 2.0. Inspired the unified file viewer and diff features. Class/attribute ID cross-reference.
+- [jmsboswell67-alt/dbexport-viewer](https://github.com/jmsboswell67-alt/dbexport-viewer) — Apache 2.0. Inspired the overall archive viewer approach, especially the unified file viewer, diff workflow, and class/attribute ID cross-reference.
 - [bacstack](https://www.npmjs.com/package/bacstack) — BACnet/IP client for Node.js
 - [serialport](https://www.npmjs.com/package/serialport) — USB serial port access
 - Class ID dictionary sourced from JCI `Primitives.xml` files distributed with CCT (factual ID↔name mappings under interoperability reference)

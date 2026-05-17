@@ -826,6 +826,67 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
       });
     }
 
+    // Fallback: if no graphic objects came from archive.xml (e.g. a graphics-only
+    // export that has no archive.xml), enumerate the hash-named SVG .json files
+    // directly and synthesize class-844 objects for them.
+    const hasGraphicObjects = objects.some(o => o.classid === 844 || o.classid === 717 || o.classid === 357);
+    if (!hasGraphicObjects) {
+      // Pattern: <folder>/<timestamp>-<hash>.json  (NOT -bindings.json or -metadata.json)
+      const SVG_FILE_RE = /\d{8}-\d{6}-[\w]+\.json$/;
+      const svgEntries = entries.filter(e => {
+        if (e.dir) return false;
+        const n = e.name.replace(/\\/g, '/');
+        return SVG_FILE_RE.test(n) && !n.endsWith('-bindings.json') && !n.endsWith('-metadata.json');
+      });
+
+      const foldersSeen = new Set<string>();
+      for (const entry of svgEntries) {
+        const n = entry.name.replace(/\\/g, '/');
+        const slash = n.lastIndexOf('/');
+        const folder = slash >= 0 ? n.slice(0, slash) : '';
+        const filename = slash >= 0 ? n.slice(slash + 1) : n;
+        const hash = filename.replace(/\.json$/, '');
+        const ref = `${folder}/$FacilityGraphics.${hash}`;
+        const serverPrefix = folder.split('/')[0] || 'ADS-1';
+
+        objects.push({
+          ref,
+          classid: 844,
+          className: 'FacilityGraphic',
+          objectid: 0,
+          tag: '',
+          description: hash,
+          units: null, unitsId: null, defaultValue: null,
+          bacoidType: null, bacoidInstance: null,
+          createdAt: null, modifiedAt: null,
+          properties: [],
+          engineRef: folder,
+          bindingFileName: filename,
+        });
+
+        // Parse the corresponding -bindings.json if present
+        const bindingName = `${folder ? folder + '/' : ''}${hash}-bindings.json`;
+        const bindingEntry = entries.find(e => e.name.replace(/\\/g, '/') === bindingName);
+        if (bindingEntry) {
+          references.push(...parseGraphicBindings(
+            await bindingEntry.async('string'),
+            ref,
+            bindingName,
+            serverPrefix,
+          ));
+        }
+
+        if (!foldersSeen.has(folder)) {
+          foldersSeen.add(folder);
+          engines.push({ name: folder || 'Graphics', ref: folder, modelName: '', firmwareRevision: '', ip: null, objectCount: 0 });
+        }
+      }
+      // Update objectCount now that we know how many per folder
+      for (const engine of engines) {
+        engine.objectCount = objects.filter(o => o.engineRef === engine.ref).length;
+      }
+    }
+
     const classCounts = new Map<number, number>();
     for (const obj of objects) classCounts.set(obj.classid, (classCounts.get(obj.classid) ?? 0) + 1);
     const stats = [...classCounts.entries()]

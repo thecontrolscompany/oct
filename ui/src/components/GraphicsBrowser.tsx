@@ -215,6 +215,20 @@ function GraphicViewer({
     );
   }
 
+  // Class 717 "Graphic" objects use legacy XAML/Silverlight format (.xaml files)
+  // which cannot be rendered in a browser. Only class 844 Facility Graphics (.json SVG) render.
+  if (svgFilename.toLowerCase().endsWith('.xaml')) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, color: 'var(--text-dim)', fontSize: 13, textAlign: 'center' }}>
+        <div>
+          <div style={{ marginBottom: 6, fontWeight: 600 }}>{displayName(graphic)}</div>
+          <div style={{ marginBottom: 4 }}>Legacy Silverlight graphic — cannot render in browser.</div>
+          <div style={{ fontSize: 11, fontFamily: 'Consolas, monospace' }}>{svgFilename}</div>
+        </div>
+      </div>
+    );
+  }
+
   if (!graphicResolver) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, color: 'var(--text-dim)', fontSize: 13, textAlign: 'center' }}>

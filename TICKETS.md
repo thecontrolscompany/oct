@@ -175,3 +175,136 @@ Acceptance criteria:
 
 Depends on:
 - Tickets 001 through 012
+
+## Ticket 014 - Rewrite Execution Engine
+
+Summary:
+- Apply accepted cleanup manifests back onto archive content.
+
+Acceptance criteria:
+- Accepted cleanup entries can be executed in batch.
+- The original archive remains untouched.
+- The output archive is still importable.
+
+Depends on:
+- Ticket 007
+- Ticket 008
+
+## Ticket 015 - Rewrite Dry Run
+
+Summary:
+- Preview rewrite operations before saving anything.
+
+Acceptance criteria:
+- Every cleanup action has a dry-run preview.
+- The preview shows before/after object changes.
+- The preview can be exported for review.
+
+Depends on:
+- Ticket 014
+
+## Ticket 016 - Bulk Rename Normalization
+
+Summary:
+- Normalize tag, description, and ref patterns in bulk.
+
+Acceptance criteria:
+- Pattern-based rename candidates are grouped.
+- Confidence scoring is visible to the user.
+- Users can accept or skip each group.
+
+Depends on:
+- Ticket 014
+
+## Ticket 017 - File-Level Delete Workflow
+
+Summary:
+- Add controlled delete operations for supported archive items.
+
+Acceptance criteria:
+- File-level deletes require hard confirmation.
+- The UI clearly distinguishes safe and destructive actions.
+- Deleted content is listed in the follow-up summary.
+
+Depends on:
+- Ticket 014
+
+## Ticket 018 - Nested Payload Expansion
+
+Summary:
+- Broaden scan coverage to more embedded payload formats.
+
+Acceptance criteria:
+- Additional XML variants are scanned.
+- Archive-like blobs inside properties are decoded when possible.
+- The scan preserves source context for drill-down.
+
+Depends on:
+- Ticket 003
+
+## Ticket 019 - Reference Cache Layer
+
+Summary:
+- Avoid rebuilding the same reference groups repeatedly.
+
+Acceptance criteria:
+- Reference groups and counts are cached per loaded file.
+- Tab switching does not re-run the full index build unnecessarily.
+- The cache stays coherent after file changes.
+
+Depends on:
+- Ticket 001
+
+## Ticket 020 - As-Built Report Generator
+
+Summary:
+- Generate printable consultant-ready report output from archive data.
+
+Acceptance criteria:
+- Report includes summary, inventory, and audit sections.
+- Dependency hotspots and findings are included.
+- The output opens cleanly in a browser tab.
+
+Depends on:
+- Ticket 009
+- Ticket 005
+
+## Ticket 021 - Fixture Corpus Expansion
+
+Summary:
+- Add more representative archive fixtures for regression coverage.
+
+Acceptance criteria:
+- Fixtures cover `.caf`, `.dbexport`, and cleanup cases.
+- Each major bug gets a minimal reproduction sample.
+- Fixtures are organized for easy reuse in tests.
+
+Depends on:
+- Ticket 011
+
+## Ticket 022 - Automated Regression Tests
+
+Summary:
+- Cover the long-running archive workflows with automated checks.
+
+Acceptance criteria:
+- Reverse lookup, audit, cleanup, and export flows are tested.
+- The tests include at least one large archive case.
+- The build remains green under the new coverage.
+
+Depends on:
+- Ticket 012
+- Ticket 021
+
+## Ticket 023 - Release Verification Checklist
+
+Summary:
+- Make deployment verification boring and repeatable.
+
+Acceptance criteria:
+- GitHub, Vercel, branch aliases, and production branch settings are checked after release pushes.
+- The checklist records the SHA and outcome of each release.
+- The fallback deploy path is documented only as a fallback.
+
+Depends on:
+- Ticket 013

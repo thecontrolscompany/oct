@@ -315,3 +315,18 @@ The sprint is complete when OCT can:
 - The current audit pass covers unbound refs, duplicate refs, duplicate descriptions/tags, missing tags/descriptions, orphaned CAF objects, hotspots, self-references, unreferenced objects, suppressed-alarm candidates, placeholder names, and I/O points missing units.
 - The cleanup queue can be accepted and exported as a manifest for later rewrite execution.
 - Next practical slice: add actual rewrite execution controls on top of the cleanup plan.
+
+## Extended Unattended Queue
+
+1. Build rewrite execution controls that consume the accepted cleanup manifest and apply safe repoint operations in batch.
+2. Add a dry-run mode for every rewrite action so the user can inspect the exact before/after changes before saving anything.
+3. Implement bulk rename normalization for tag, description, and ref cleanup patterns detected by the audit engine.
+4. Add a delete workflow for file-level archive content with hard confirmation and a preserved original input.
+5. Expand audit coverage with orphaned graphics, hidden/disabled object checks, and additional suppressed-alarm heuristics.
+6. Extend nested payload scanning to decode more embedded XML variants and archive-like blobs found inside object properties.
+7. Add a reference-index cache so large archives do not rebuild the same counts and target groups repeatedly during tab switches.
+8. Generate consultant-ready as-built documentation from the audit and reference data, including summary sections and drill-down tables.
+9. Build a fixture corpus from representative `.caf`, `.dbexport`, and audit cases so future regressions can be replayed automatically.
+10. Add parser and UI regression tests for reverse lookup, audit findings, cleanup planning, and export formatting.
+11. Add performance measurements for large production-sized archives and surface hotspots that slow the reference index or audit passes.
+12. Harden the release path with a verification checklist that confirms GitHub, Vercel, branch aliases, and production branch settings after each push.

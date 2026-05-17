@@ -129,7 +129,9 @@ function AppShell() {
             {renderModeToggle()}
             {renderTopbarStatus()}
           </header>
-          <OfflineArchivePane />
+          <div className="view-viewport">
+            <OfflineArchivePane />
+          </div>
         </div>
       </div>
     );
@@ -243,15 +245,17 @@ function AppShell() {
           )}
         </div>
 
-        {view === 'library'  && <DetailPane item={selected} />}
-        {view === 'live'     && <LivePane />}
-        {view === 'quick-trend' && <QuickTrendPane />}
-        {view === 'preview'  && <CommissioningPreviewPane />}
-        {view === 'serial'   && <MstpSerialPane />}
-        {view === 'packages'    && <PackagesPane />}
-        {view === 'caf'         && <FileViewerPane mode="online" />}
-        {view === 'dictionary'  && <DictionaryPane />}
-        {view === 'enums'       && <EnumsPane />}
+        <div className="view-viewport">
+          {view === 'library'  && <DetailPane item={selected} />}
+          {view === 'live'     && <LivePane />}
+          {view === 'quick-trend' && <QuickTrendPane />}
+          {view === 'preview'  && <CommissioningPreviewPane />}
+          {view === 'serial'   && <MstpSerialPane />}
+          {view === 'packages'    && <PackagesPane />}
+          {view === 'caf'         && <FileViewerPane mode="online" />}
+          {view === 'dictionary'  && <DictionaryPane />}
+          {view === 'enums'       && <EnumsPane />}
+        </div>
       </div>
     </div>
   );

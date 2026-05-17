@@ -108,6 +108,12 @@ html, body, #root {
 
 .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 
+.view-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 .topbar {
   height: 48px;
   background: var(--surface);

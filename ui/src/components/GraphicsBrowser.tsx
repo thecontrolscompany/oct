@@ -307,8 +307,16 @@ type LegacyGraphicModel = {
   backgroundSvg: string;
   width: number;
   height: number;
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
   title: string | null;
 };
+
+function getLegacyStageDimensions(model: LegacyGraphicModel): { width: number; height: number } {
+  return {
+    width: Math.max(model.width, model.bounds.maxX - model.bounds.minX),
+    height: Math.max(model.height, model.bounds.maxY - model.bounds.minY),
+  };
+}
 
 function isLegacyGraphicDocument(raw: string): boolean {
   return raw.trimStart().startsWith('<GMFDocument');
@@ -374,7 +382,23 @@ async function parseLegacyGraphicModel(raw: string): Promise<LegacyGraphicModel 
   if (!backgroundSvg) return null;
   const dims = getSvgDimensions(backgroundSvg);
   const title = doc.querySelector('graph > comment')?.textContent?.trim() ?? null;
-  return { document: doc, backgroundSvg, width: dims.width, height: dims.height, title };
+  const nodes = Array.from(doc.querySelectorAll('node'));
+  const xs = nodes.map(node => legacyNumber(node.querySelector('geometry'), 'x', legacyNumber(node, 'Canvas.Left', 0)));
+  const ys = nodes.map(node => legacyNumber(node.querySelector('geometry'), 'y', legacyNumber(node, 'Canvas.Top', 0)));
+  const ws = nodes.map(node => legacyNumber(node.querySelector('geometry'), 'width', legacyNumber(node, 'Width', 0)));
+  const hs = nodes.map(node => legacyNumber(node.querySelector('geometry'), 'height', legacyNumber(node, 'Height', 0)));
+  const minX = xs.length ? Math.min(...xs, 0) : 0;
+  const minY = ys.length ? Math.min(...ys, 0) : 0;
+  const maxX = xs.length ? Math.max(...xs.map((x, i) => x + (ws[i] ?? 0)), dims.width) : dims.width;
+  const maxY = ys.length ? Math.max(...ys.map((y, i) => y + (hs[i] ?? 0)), dims.height) : dims.height;
+  return {
+    document: doc,
+    backgroundSvg,
+    width: dims.width,
+    height: dims.height,
+    bounds: { minX, minY, maxX, maxY },
+    title,
+  };
 }
 
 function legacyLocalName(el: Element): string {
@@ -873,6 +897,7 @@ function LegacyGraphicStage({
   onSelectObject?: (ref: string) => void;
   onSelectGraphic?: (ref: string) => void;
 }) {
+  const stage = getLegacyStageDimensions(model);
   const graphEl = model.document.querySelector('graph');
   const topologyEl = graphEl?.querySelector('topology');
   const graphChildren = useMemo(() => {
@@ -894,16 +919,22 @@ function LegacyGraphicStage({
   }, [topologyEl, objectMap, graphicRefs, onSelectObject, onSelectGraphic]);
 
   return (
-    <div style={{ position: 'relative', width: model.width, height: model.height }}>
+    <div style={{ position: 'relative', width: stage.width, height: stage.height }}>
       <div
         className="oct-legacy-background"
-        style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          transform: `translate(${-model.bounds.minX}px, ${-model.bounds.minY}px)`,
+        }}
         dangerouslySetInnerHTML={{ __html: model.backgroundSvg }}
       />
       <svg
         className="oct-legacy-overlay"
-        width={model.width}
-        height={model.height}
+        width={stage.width}
+        height={stage.height}
+        viewBox={`${model.bounds.minX} ${model.bounds.minY} ${stage.width} ${stage.height}`}
         style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'auto' }}
       >
         {graphChildren}
@@ -1009,7 +1040,7 @@ export function GraphicViewer({
     if (!containerRef.current) return;
     const dims =
       graphicKind === 'legacy' && legacyModel
-        ? { width: legacyModel.width, height: legacyModel.height }
+        ? getLegacyStageDimensions(legacyModel)
         : graphicText
           ? getSvgDimensions(graphicText)
           : null;
@@ -1069,7 +1100,7 @@ export function GraphicViewer({
     if (!containerRef.current) return { zoom: 1, pan: { x: 0, y: 0 } };
     const dims =
       graphicKind === 'legacy' && legacyModel
-        ? { width: legacyModel.width, height: legacyModel.height }
+        ? getLegacyStageDimensions(legacyModel)
         : graphicText
           ? getSvgDimensions(graphicText)
           : { width: 1920, height: 1080 };

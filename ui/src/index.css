@@ -55,6 +55,58 @@ html, body, #root {
   text-transform: uppercase;
 }
 
+.sidebar-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 8px 0;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 7px 10px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shell-blue-ink);
+  background: transparent;
+  cursor: pointer;
+}
+
+.sidebar-tab:hover {
+  background: #f5f9fd;
+  color: var(--accent);
+}
+
+.sidebar-tab.active {
+  background: var(--surface);
+  border-color: var(--border);
+  margin-bottom: -1px;
+  color: var(--accent);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset;
+}
+
+.sidebar-tab-count {
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e8f0fa;
+  color: var(--accent);
+  font-size: 10px;
+  text-align: center;
+}
+
+.sidebar-tab.active .sidebar-tab-count {
+  background: rgba(67, 120, 181, 0.14);
+}
+
 .sidebar-search {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);

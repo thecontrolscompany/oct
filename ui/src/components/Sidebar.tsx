@@ -37,7 +37,6 @@ export default function Sidebar({ selected, onSelect }: Props) {
     [data]
   );
 
-  // Build tree: group items by ParentItemId
   const { roots, childMap } = useMemo(() => {
     if (!visibleData.length) return { roots: [], childMap: new Map<string, CctItem[]>() };
     const map = new Map<string, CctItem[]>();
@@ -54,7 +53,6 @@ export default function Sidebar({ selected, onSelect }: Props) {
     return { roots, childMap: map };
   }, [visibleData]);
 
-  // Filter: when searching, flatten all items
   const filtered = useMemo(() => {
     if (!search || !visibleData.length) return null;
     const q = search.toLowerCase();
@@ -64,7 +62,8 @@ export default function Sidebar({ selected, onSelect }: Props) {
   function toggle(id: string) {
     setExpanded(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
@@ -83,7 +82,7 @@ export default function Sidebar({ selected, onSelect }: Props) {
             onSelect(item);
             if (hasChildren) toggle(item.ItemId);
           }}
-          >
+        >
           {hasChildren
             ? <span className={`expand-arrow${isOpen ? ' open' : ''}`}>▶</span>
             : <span style={{ width: 14, flexShrink: 0 }} />

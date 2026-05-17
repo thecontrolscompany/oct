@@ -3,53 +3,12 @@ import multer from 'multer';
 import AdmZip from 'adm-zip';
 import { DOMParser } from '@xmldom/xmldom';
 import fs from 'fs';
+import type { DbexportObject, EngineInfo, NavNode, ParsedDbexport, ReferenceHit } from '@oct/shared';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
-import { collectReferenceHits, serializeNode, type ReferenceHit } from '../archiveAnalysis';
+import { collectReferenceHits, serializeNode } from '../archiveAnalysis';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
-
-// ─── Types ─────────────────────────────────────────────────────────────────
-
-export interface NavNode {
-  label: string;
-  reference: string;
-  classid: number;
-  className: string;
-  children: NavNode[];
-}
-
-export interface DbexportObject {
-  ref: string;
-  classid: number;
-  className: string;
-  objectid: number;
-  tag: string;
-  description: string;
-  units: string | null;
-  unitsId: number | null;
-  defaultValue: number | null;
-  bacoidType: number | null;
-  bacoidInstance: number | null;
-  engineRef: string;
-}
-
-export interface EngineInfo {
-  name: string;
-  ref: string;
-  modelName: string;
-  firmwareRevision: string;
-  ip: string | null;
-  objectCount: number;
-}
-
-export interface ParsedDbexport {
-  site: NavNode | null;
-  engines: EngineInfo[];
-  objects: DbexportObject[];
-  references: ReferenceHit[];
-  stats: Array<{ className: string; classid: number; count: number }>;
-}
 
 // ─── Nav tree parser ────────────────────────────────────────────────────────
 

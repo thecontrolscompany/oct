@@ -1,3 +1,10 @@
+import type {
+  EnumSetDetail,
+  EnumSetSummary,
+  ParsedCaf,
+  ParsedDbexport,
+} from '@oct/shared';
+
 export interface CctItem {
   ItemId: string;
   Name: string;
@@ -70,86 +77,7 @@ export interface PackageDetail extends PackageSummary {
   }>;
 }
 
-export interface CafObject {
-  ref: string;
-  parentRef: string | null;
-  classid: number;
-  className: string;
-  objectid: number;
-  tag: string;
-  description: string;
-  shortTag: string;
-  units: string | null;
-  unitsId: number | null;
-  defaultValue: number | null;
-  bacoidType: number | null;
-  bacoidInstance: number | null;
-}
-
-export interface ParsedCaf {
-  controller: {
-    ref: string;
-    modelName: string;
-    appVersion: string;
-    description: string;
-    tag: string;
-    objectId: number;
-    ip: string | null;
-  };
-  objects: CafObject[];
-  references: ReferenceHit[];
-  stats: Array<{ className: string; classid: number; count: number }>;
-}
-
-export interface NavNode {
-  label: string;
-  reference: string;
-  classid: number;
-  className: string;
-  children: NavNode[];
-}
-
-export interface DbexportObject {
-  ref: string;
-  classid: number;
-  className: string;
-  objectid: number;
-  tag: string;
-  description: string;
-  units: string | null;
-  unitsId: number | null;
-  defaultValue: number | null;
-  bacoidType: number | null;
-  bacoidInstance: number | null;
-  engineRef: string;
-}
-
-export interface ParsedDbexport {
-  site: NavNode | null;
-  engines: Array<{ name: string; ref: string; modelName: string; firmwareRevision: string; ip: string | null; objectCount: number }>;
-  objects: DbexportObject[];
-  references: ReferenceHit[];
-  stats: Array<{ className: string; classid: number; count: number }>;
-}
-
-export interface ReferenceHit {
-  target: string;
-  referringItem: string;
-  referringAttr: string;
-  source: string;
-}
-
-export interface EnumSetSummary {
-  EnumSetId: number;
-  Name: string;
-  MemberCount: number;
-}
-
-export interface EnumSetDetail {
-  EnumSetId: number;
-  Name: string;
-  members: Array<{ EnumMemberId: number; Name: string }>;
-}
+export type { CafObject, DbexportObject, EnumSetDetail, EnumSetSummary, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
 
 export interface PerspectiveSummary {
   name: string;

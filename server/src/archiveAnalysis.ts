@@ -1,11 +1,5 @@
 import { XMLSerializer } from '@xmldom/xmldom';
-
-export interface ReferenceHit {
-  target: string;
-  referringItem: string;
-  referringAttr: string;
-  source: string;
-}
+import type { ReferenceHit } from '@oct/shared';
 
 const REF_ATTR_RE = /\b(?:ref|reference|target|source|objectref|objectRef)\s*=\s*"([^"]+)"/gi;
 const REF_TAG_RE = /<(?:ref|reference|target|source|objectref|objectRef)>([^<]+)<\/(?:ref|reference|target|source|objectref|objectRef)>/gi;

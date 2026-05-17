@@ -3,42 +3,12 @@ import multer from 'multer';
 import AdmZip from 'adm-zip';
 import { DOMParser } from '@xmldom/xmldom';
 import fs from 'fs';
+import type { CafObject, ParsedCaf, ReferenceHit } from '@oct/shared';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
-import { collectReferenceHits, serializeNode, type ReferenceHit } from '../archiveAnalysis';
+import { collectReferenceHits, serializeNode } from '../archiveAnalysis';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
-
-export interface ParsedCaf {
-  controller: {
-    ref: string;
-    modelName: string;
-    appVersion: string;
-    description: string;
-    tag: string;
-    objectId: number;
-    ip: string | null;
-  };
-  objects: ParsedObject[];
-  references: ReferenceHit[];
-  stats: Array<{ className: string; classid: number; count: number }>;
-}
-
-export interface ParsedObject {
-  ref: string;
-  parentRef: string | null;
-  classid: number;
-  className: string;
-  objectid: number;
-  tag: string;
-  description: string;
-  shortTag: string;
-  units: string | null;
-  unitsId: number | null;
-  defaultValue: number | null;
-  bacoidType: number | null;
-  bacoidInstance: number | null;
-}
 
 function getParentRef(ref: string): string | null {
   // Parent is everything before the last '/' or '.'
@@ -57,7 +27,7 @@ function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: s
   const doc = new DOMParser().parseFromString(stripBom(xml), 'text/xml');
   const objectEls = doc.getElementsByTagName('object');
 
-  const objects: ParsedObject[] = [];
+  const objects: CafObject[] = [];
   const references: ReferenceHit[] = [];
   const classCounts = new Map<number, number>();
   let controller: ParsedCaf['controller'] | null = null;
@@ -129,7 +99,7 @@ function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: s
 
     classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
 
-    const parsed: ParsedObject = {
+    const parsed: CafObject = {
       ref, parentRef: getParentRef(ref),
       classid, className, objectid,
       tag, description, shortTag,

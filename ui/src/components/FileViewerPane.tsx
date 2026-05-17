@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
+import { buildReferenceMap } from '@oct/shared';
 import ObjectBrowser from './ObjectBrowser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
@@ -21,15 +22,6 @@ function displayName(o: AnyObject): string {
 }
 
 function getRef(o: AnyObject): string { return o.ref; }
-
-function buildReferenceMap(references: ReferenceHit[]): Map<string, ReferenceHit[]> {
-  const map = new Map<string, ReferenceHit[]>();
-  for (const hit of references) {
-    if (!map.has(hit.target)) map.set(hit.target, []);
-    map.get(hit.target)!.push(hit);
-  }
-  return map;
-}
 
 // ─── Drop zone ─────────────────────────────────────────────────────────────
 

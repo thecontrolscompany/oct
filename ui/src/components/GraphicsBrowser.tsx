@@ -79,34 +79,19 @@ function categorizeGraphicSegment(seg: string): { label: string; kind: string } 
 }
 
 function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
-  const roots = new Map<string, GraphicTreeNode>();
+  const roots = new Map<GraphicFamily, GraphicTreeNode>();
 
   for (const obj of objects) {
     if (!GRAPHIC_CLASS_IDS.has(obj.classid)) continue;
     const { engine, segments } = parseGraphicRef(obj.ref);
     if (!engine) continue;
     const family = getGraphicFamily(obj);
-    const familyKey = `${engine}#family#${family}`;
     const familyLabel = graphicFamilyLabel(family);
 
-    let node = roots.get(engine);
+    let node = roots.get(family);
     if (!node) {
       node = {
-        key: engine,
-        label: engine,
-        ref: null,
-        classid: null,
-        className: 'Engine',
-        graphic: null,
-        children: [],
-      };
-      roots.set(engine, node);
-    }
-
-    let familyNode = node.children.find(entry => entry.key === familyKey);
-    if (!familyNode) {
-      familyNode = {
-        key: familyKey,
+        key: family,
         label: familyLabel,
         ref: null,
         classid: null,
@@ -115,7 +100,21 @@ function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
         family,
         children: [],
       };
-      node.children.push(familyNode);
+      roots.set(family, node);
+    }
+
+    let engineNode = node.children.find(entry => entry.key === `${family}#engine#${engine}`);
+    if (!engineNode) {
+      engineNode = {
+        key: `${family}#engine#${engine}`,
+        label: engine,
+        ref: null,
+        classid: null,
+        className: 'Engine',
+        graphic: null,
+        children: [],
+      };
+      node.children.push(engineNode);
     }
 
     const segmentOffset =
@@ -124,15 +123,15 @@ function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
         : (segments[0] === 'Graphics' ? 1 : 0);
 
     if (segments.length <= segmentOffset) {
-      familyNode.graphic = obj;
-      familyNode.ref = obj.ref;
-      familyNode.classid = obj.classid;
-      familyNode.className = obj.className;
+      engineNode.graphic = obj;
+      engineNode.ref = obj.ref;
+      engineNode.classid = obj.classid;
+      engineNode.className = obj.className;
       continue;
     }
 
-    let current = familyNode;
-    let keyPath = familyNode.key;
+    let current = engineNode;
+    let keyPath = engineNode.key;
     for (let i = segmentOffset; i < segments.length; i += 1) {
       const seg = segments[i];
       keyPath = `${keyPath}#${seg}`;
@@ -157,10 +156,10 @@ function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
         current.classid = obj.classid;
         current.className = obj.className;
         if (/^\d+$/i.test(current.label) || /^\d{8}-\d{6}-[\w]+$/i.test(current.label)) {
-          current.label = displayName(obj);
-        }
+        current.label = displayName(obj);
       }
     }
+  }
   }
 
   const sortNodes = (nodes: GraphicTreeNode[]): GraphicTreeNode[] =>
@@ -176,7 +175,15 @@ function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
         children: sortNodes(node.children),
       }));
 
-  return sortNodes([...roots.values()]);
+  return sortNodes(
+    [...roots.values()].sort((a, b) => {
+      const order: Record<GraphicFamily, number> = { facility: 0, silverlight: 1, legacy: 2 };
+      const aKey = a.family ? order[a.family] : 99;
+      const bKey = b.family ? order[b.family] : 99;
+      if (aKey !== bKey) return aKey - bKey;
+      return a.label.localeCompare(b.label, undefined, { numeric: true });
+    }),
+  );
 }
 
 function graphicTreeMatches(node: GraphicTreeNode, query: string): boolean {

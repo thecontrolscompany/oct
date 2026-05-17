@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
+import type { CafObject, DbexportObject, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
 
@@ -17,12 +17,29 @@ interface TreeNode {
   kind: 'group' | 'object';
 }
 
+interface HierNode {
+  label: string;
+  kind: string;
+  classid: number | string;
+  obj: AnyObject | null;
+  children: Map<string, HierNode>;
+  totalCount: number;
+  key: string;
+  _segmentLabel?: string;
+  _labelFromDescription?: boolean;
+}
+
 function displayName(o: AnyObject): string {
   return o.tag || o.description || `${o.className} #${o.objectid}`;
 }
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function isSqlExportName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith('.sql') || (lower.startsWith('.') && lower.includes('dbexport') && lower.includes('sql'));
 }
 
 function treeMatches(node: TreeNode, query: string): boolean {
@@ -50,22 +67,152 @@ function buildCafNodes(objects: CafObject[]): TreeNode[] {
   return (byParent.get(null) ?? objects).map(build);
 }
 
-function buildDbexportNodes(file: ParsedDbexport, objects: DbexportObject[]): TreeNode[] {
-  const byRef = new Map(objects.map(obj => [obj.ref, obj]));
-  if (file.site) {
-    const convert = (node: NavNode): TreeNode => ({
-      key: node.reference || node.label,
-      label: node.label || node.reference.split(/[/\\]/).pop() || node.reference,
-      ref: node.reference || null,
-      classid: node.classid,
-      className: node.className,
-      object: node.reference ? byRef.get(node.reference) ?? null : null,
-      kind: node.reference ? 'object' : 'group',
-      children: node.children.map(convert),
-    });
-    return [convert(file.site)];
+function parseRef(ref: string): { adx: string; engine: string; segments: string[]; path: string } {
+  const colonIdx = ref.indexOf(':');
+  let adx = '';
+  let after = ref;
+  if (colonIdx >= 0) {
+    adx = ref.slice(0, colonIdx);
+    after = ref.slice(colonIdx + 1);
+  }
+  const slashIdx = after.indexOf('/');
+  if (slashIdx < 0) return { adx, engine: after, segments: [], path: '' };
+  const engine = after.slice(0, slashIdx);
+  const path = after.slice(slashIdx + 1);
+  const segments = path.split('.').filter(Boolean);
+  return { adx, engine, segments, path };
+}
+
+function categorizeFirstSegment(seg: string): { label: string; kind: string } {
+  if (/^FC-\d+$/i.test(seg)) return { label: `Field Bus ${seg}`, kind: 'fieldbus' };
+  if (/^FCB$/i.test(seg)) return { label: 'Field Bus (FCB)', kind: 'fieldbus' };
+  if (/^Field\s*Bus/i.test(seg)) return { label: seg, kind: 'fieldbus' };
+  if (/^N2(\s|-)/i.test(seg)) return { label: seg, kind: 'n2trunk' };
+  if (/^BACnet\s*Trunk/i.test(seg)) return { label: seg, kind: 'bacnettrunk' };
+  if (/^LON\s*Trunk/i.test(seg)) return { label: seg, kind: 'lontrunk' };
+  if (seg === 'Programming') return { label: 'Programming', kind: 'programming' };
+  if (seg === 'System Programs') return { label: 'System Programs', kind: 'sysprograms' };
+  if (seg === 'Schedule') return { label: 'Schedules', kind: 'schedules' };
+  if (seg === 'Graphics') return { label: 'Graphics', kind: 'graphics' };
+  if (seg.startsWith('$site')) return { label: 'Site Configuration', kind: 'site' };
+  if (seg.startsWith('$Generic')) return { label: 'Generic Archive', kind: 'generic' };
+  if (seg.startsWith('$Facility')) return { label: seg, kind: 'generic' };
+  return { label: seg, kind: 'category' };
+}
+
+function isOpaqueSegment(seg: string): boolean {
+  if (!seg) return true;
+  if (/^\d+$/.test(seg)) return true;
+  if (/^\d+[_\-.]\d+$/.test(seg)) return true;
+  if (/^\$\d+$/.test(seg)) return true;
+  return false;
+}
+
+function buildHierarchy(objects: AnyObject[]): Map<string, HierNode> {
+  const engines = new Map<string, HierNode>();
+
+  for (const obj of objects) {
+    const { engine: engineName, segments } = parseRef(obj.ref);
+    if (!engineName) continue;
+
+    let engine = engines.get(engineName);
+    if (!engine) {
+      engine = {
+        label: engineName,
+        kind: 'engine',
+        classid: '',
+        obj: null,
+        children: new Map(),
+        totalCount: 0,
+        key: engineName,
+      };
+      engines.set(engineName, engine);
+    }
+
+    if (segments.length === 0) {
+      engine.classid = obj.classid;
+      engine.obj = obj;
+      continue;
+    }
+
+    let node = engine;
+    let keyPath = engineName;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      keyPath = `${keyPath}#${seg}`;
+      if (!node.children.has(seg)) {
+        let label = seg;
+        let kind = i === segments.length - 1 ? 'point' : 'equipment';
+        if (i === 0) {
+          const cat = categorizeFirstSegment(seg);
+          label = cat.label;
+          kind = cat.kind;
+        }
+        node.children.set(seg, {
+          label,
+          kind,
+          classid: '',
+          obj: null,
+          children: new Map(),
+          totalCount: 0,
+          key: keyPath,
+        });
+      }
+      node = node.children.get(seg)!;
+      if (i === segments.length - 1) {
+        node.classid = obj.classid;
+        node.obj = obj;
+      }
+    }
   }
 
+  const computeCounts = (node: HierNode): number => {
+    let count = node.obj ? 1 : 0;
+    for (const child of node.children.values()) count += computeCounts(child);
+    node.totalCount = count;
+    if (node.obj && !node._labelFromDescription && isOpaqueSegment(node.label)) {
+      const desc = node.obj.description || node.obj.tag;
+      if (desc && desc.length > 0 && desc !== node.label) {
+        node._segmentLabel = node.label;
+        node.label = desc;
+        node._labelFromDescription = true;
+      }
+    }
+    return count;
+  };
+
+  for (const engine of engines.values()) computeCounts(engine);
+  return engines;
+}
+
+function mapHierarchyToTree(nodes: Map<string, HierNode>): TreeNode[] {
+  const convert = (node: HierNode): TreeNode => ({
+    key: node.key,
+    label: node.label,
+    ref: node.obj?.ref ?? null,
+    classid: typeof node.classid === 'number' ? node.classid : 0,
+    className: typeof node.classid === 'number' && node.classid ? `Class ${node.classid}` : (node.kind === 'engine' ? 'Engine' : node.kind),
+    object: node.obj,
+    kind: node.children.size > 0 ? 'group' : 'object',
+    children: [...node.children.values()]
+      .sort((a, b) => {
+        const ao = a.kind === 'engine' ? 0 : 1;
+        const bo = b.kind === 'engine' ? 0 : 1;
+        if (ao !== bo) return ao - bo;
+        return a.label.localeCompare(b.label, undefined, { numeric: true });
+      })
+      .map(convert),
+  });
+  return [...nodes.values()]
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
+    .map(convert);
+}
+
+function buildDbexportNodes(file: ParsedDbexport, objects: DbexportObject[]): TreeNode[] {
+  const hier = buildHierarchy(objects);
+  if (hier.size > 0) {
+    return mapHierarchyToTree(hier);
+  }
   const roots = file.engines.map(engine => ({
     key: `engine:${engine.ref}`,
     label: engine.name || engine.ref,
@@ -311,7 +458,7 @@ function FileDropZone({ onFile }: { onFile: (file: File) => void }) {
       onClick={() => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.caf,.dbexport';
+        input.accept = '.caf,.dbexport,.sql';
         input.onchange = () => {
           if (input.files?.[0]) onFile(input.files[0]);
         };
@@ -327,7 +474,7 @@ function FileDropZone({ onFile }: { onFile: (file: File) => void }) {
       }}
     >
       <div style={{ fontSize: 28, marginBottom: 6 }}>📂</div>
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop a `.caf` or `.dbexport` archive</div>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop a `.caf`, `.dbexport`, or `.sql` file</div>
       <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>or click to browse</div>
     </div>
   );
@@ -384,6 +531,9 @@ export default function OfflineArchivePane() {
     setLoading(true);
     setError(null);
     try {
+      if (isSqlExportName(file.name)) {
+        throw new Error('SQL export detected. This browser loads archive `.caf` and `.dbexport` files; keep SQL exports separate by naming them with a leading period.');
+      }
       const loaded = await parseArchiveFile(file);
       setArchive(loaded);
       setSelectedKey(null);

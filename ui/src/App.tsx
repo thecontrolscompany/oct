@@ -80,24 +80,26 @@ function AppShell() {
   const renderModeToggle = () => (
     <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
       <button
-        className="btn btn-ghost"
+        className="btn"
         style={{
           padding: '3px 10px',
           fontSize: 11,
-          borderColor: onlineMode ? 'var(--accent)' : 'var(--border)',
-          color: onlineMode ? 'var(--text)' : 'var(--text-dim)',
+          background: onlineMode ? '#fff' : 'rgba(255,255,255,0.08)',
+          color: onlineMode ? 'var(--shell-blue-ink)' : 'rgba(255,255,255,0.9)',
+          borderColor: onlineMode ? '#fff' : 'rgba(255,255,255,0.2)',
         }}
         onClick={() => setMode('online')}
       >
         Online
       </button>
       <button
-        className="btn btn-ghost"
+        className="btn"
         style={{
           padding: '3px 10px',
           fontSize: 11,
-          borderColor: !onlineMode ? 'var(--accent)' : 'var(--border)',
-          color: !onlineMode ? 'var(--text)' : 'var(--text-dim)',
+          background: !onlineMode ? '#fff' : 'rgba(255,255,255,0.08)',
+          color: !onlineMode ? 'var(--shell-blue-ink)' : 'rgba(255,255,255,0.9)',
+          borderColor: !onlineMode ? '#fff' : 'rgba(255,255,255,0.2)',
         }}
         onClick={() => setMode('offline')}
       >

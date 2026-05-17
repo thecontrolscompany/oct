@@ -659,7 +659,7 @@ export default function OfflineArchivePane() {
           display: 'grid',
           gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
           gap: 12,
-          background: 'var(--panel-bg)',
+          background: 'var(--surface)',
         }}>
           <div>
             <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>SCT ARCHIVE DB</div>

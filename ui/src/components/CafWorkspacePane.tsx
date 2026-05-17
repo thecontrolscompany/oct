@@ -102,8 +102,8 @@ function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
   if (setpointLike) return 'setpoint-misc';
   if (logicLike) return 'state-generation';
   if (outputControlLike) return 'output-control';
-  if (inputLike) return 'misc-inputs';
-  if (/output/.test(buildSearchText(obj))) return 'misc-outputs';
+  if (mode === 'control' && inputLike && bacoidType !== null) return 'misc-inputs';
+  if (mode === 'control' && /output/.test(buildSearchText(obj)) && bacoidType !== null) return 'misc-outputs';
   return 'setpoint-misc';
 }
 
@@ -144,6 +144,14 @@ function collectDescendants(rootRef: string, byParent: Map<string | null, CafObj
     stack.unshift(...(byParent.get(item.ref) ?? []));
   }
   return result;
+}
+
+function countDescendants(rootRef: string, byParent: Map<string | null, CafObject[]>): number {
+  return collectDescendants(rootRef, byParent).length;
+}
+
+function isApplicationRootCandidate(obj: CafObject): boolean {
+  return [575, 555, 540, 585, 307, 526, 527, 528, 529, 530, 531].includes(obj.classid);
 }
 
 function makeSummaryLine(obj: CafObject): string {
@@ -288,14 +296,38 @@ export default function CafWorkspacePane({
     return map;
   }, [caf.objects]);
 
-  useEffect(() => {
-    if (!selected || objMap.has(selected)) return;
-    const fallback = objMap.get(caf.controller.ref) ?? caf.objects[0] ?? null;
-    if (fallback && fallback.ref !== selected) onSelect(fallback.ref);
-  }, [caf.controller.ref, caf.objects, objMap, onSelect, selected]);
+  const applicationRoots = useMemo(() => {
+    const roots = (byParent.get(caf.controller.ref) ?? [])
+      .filter(obj => isApplicationRootCandidate(obj) && (byParent.get(obj.ref)?.length ?? 0) > 0)
+      .map(obj => ({
+        obj,
+        descendantCount: countDescendants(obj.ref, byParent),
+      }))
+      .sort((a, b) => {
+        const aScore = (a.obj.classid === 575 ? 0 : a.obj.classid === 555 ? 1 : 2);
+        const bScore = (b.obj.classid === 575 ? 0 : b.obj.classid === 555 ? 1 : 2);
+        if (aScore !== bScore) return aScore - bScore;
+        return b.descendantCount - a.descendantCount;
+      });
+    return roots;
+  }, [byParent, caf.controller.ref]);
 
-  const selectedObject = selected ? objMap.get(selected) ?? null : null;
-  const activeObject = selectedObject ?? objMap.get(caf.controller.ref) ?? caf.objects[0] ?? null;
+  const activeApplicationRoot = applicationRoots[0]?.obj ?? caf.objects.find(obj => obj.parentRef === caf.controller.ref && obj.classid === 575) ?? caf.objects.find(obj => obj.parentRef === caf.controller.ref && (byParent.get(obj.ref)?.length ?? 0) > 0) ?? caf.controller;
+  const activeApplicationLabel = displayName(activeApplicationRoot);
+  const workspaceObjects = useMemo(() => {
+    const subtree = collectDescendants(activeApplicationRoot.ref, byParent);
+    return [activeApplicationRoot, ...subtree];
+  }, [activeApplicationRoot, byParent]);
+  const workspaceRefSet = useMemo(() => new Set(workspaceObjects.map(obj => obj.ref)), [workspaceObjects]);
+
+  useEffect(() => {
+    if (!selected || workspaceRefSet.has(selected)) return;
+    const fallback = objMap.get(activeApplicationRoot.ref) ?? caf.objects[0] ?? null;
+    if (fallback && fallback.ref !== selected) onSelect(fallback.ref);
+  }, [activeApplicationRoot.ref, caf.objects, objMap, onSelect, selected, workspaceRefSet]);
+
+  const selectedObject = selected && workspaceRefSet.has(selected) ? objMap.get(selected) ?? null : null;
+  const activeObject = selectedObject ?? objMap.get(activeApplicationRoot.ref) ?? caf.objects[0] ?? null;
   const selectedIncoming = useMemo(() => (
     activeObject ? buildReferenceRows(referenceIndex, activeObject.ref) : []
   ), [activeObject, referenceIndex]);
@@ -313,7 +345,7 @@ export default function CafWorkspacePane({
       'misc-outputs': [],
     };
 
-    for (const obj of caf.objects) {
+    for (const obj of workspaceObjects) {
       const bucket = classifyPanelKey(obj, mode);
       buckets[bucket].push(obj);
     }
@@ -323,17 +355,17 @@ export default function CafWorkspacePane({
     }
 
     return buckets;
-  }, [caf.objects, mode]);
+  }, [mode, workspaceObjects]);
 
   const stateTableCandidates = useMemo(() => {
     if (!activeObject) return [];
-    const descendants = collectDescendants(activeObject.ref, byParent);
+    const descendants = collectDescendants(activeObject.ref, byParent).filter(candidate => workspaceObjects.some(obj => obj.ref === candidate.ref));
     return descendants.filter(candidate => {
       const hay = buildSearchText(candidate);
       return /state|table|logic|sequence|program|compare|calc|pid/.test(hay)
         || LOGIC_CLASSES.has(candidate.classid);
     });
-  }, [activeObject, byParent]);
+  }, [activeObject, byParent, workspaceObjects]);
 
   useEffect(() => {
     setFeatureSection(current => {
@@ -413,7 +445,7 @@ export default function CafWorkspacePane({
         <div className="card-header">
           CAF Workspace
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)' }}>
-            {caf.controller.tag || caf.controller.modelName} · {caf.controller.modelName} · {caf.objects.length} objects
+            {activeApplicationLabel} · {workspaceObjects.length} layout object(s)
           </span>
         </div>
         <div className="card-body" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -432,6 +464,11 @@ export default function CafWorkspacePane({
           >
             Logic
           </button>
+          {applicationRoots.length > 1 && (
+            <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-dim)' }}>
+              Applications: {applicationRoots.length}
+            </span>
+          )}
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)' }}>
             Select a block to inspect parameters and references
           </span>

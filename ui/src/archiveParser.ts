@@ -287,6 +287,7 @@ async function parseArchiveXml(xml: string, engineRef: string, sourceName: strin
     let defaultValue: number | null = null;
     let bacoidType: number | null = null;
     let bacoidInstance: number | null = null;
+    let bindingFileName: string | undefined;
 
     const propEls = Array.from(el.getElementsByTagName('property'));
     for (const prop of propEls) {
@@ -302,6 +303,12 @@ async function parseArchiveXml(xml: string, engineRef: string, sourceName: strin
         case 117: {
           const e = dataEl.getElementsByTagName('enum')[0];
           if (e) unitsId = parseInt(e.textContent ?? '0', 10);
+          break;
+        }
+        case 902: {
+          // File Name — first <string> child inside the <struct> is the filename
+          const fn = getTextContent(dataEl.getElementsByTagName('string')[0] ?? null);
+          if (fn) bindingFileName = fn;
           break;
         }
         case 2390:
@@ -349,6 +356,7 @@ async function parseArchiveXml(xml: string, engineRef: string, sourceName: strin
       modifiedAt,
       properties,
       engineRef,
+      bindingFileName,
     });
   }
 
@@ -414,6 +422,65 @@ function parseXmlDocument(xml: string): Document {
     throw new Error('Invalid XML document');
   }
   return doc;
+}
+
+// ─── Graphic binding JSON parser (mirrors server/src/routes/dbexport.ts) ──────
+// Converts flat binding JSON keys of the form
+//   "{svgElementId}${layerIndex}${bindingType}${equipmentContext}"
+// into ReferenceHit entries so they enter the same reference graph as every
+// other archive reference, enabling the Graphics tab and "Bound to Graphics"
+// section in offline mode.
+
+function parseGraphicBindings(
+  json: string,
+  bindingObjectRef: string,
+  sourceFile: string,
+  serverPrefix: string,
+): ReferenceHit[] {
+  let data: Record<string, string>;
+  try { data = JSON.parse(json); } catch { return []; }
+
+  const hits: ReferenceHit[] = [];
+  const seen = new Set<string>();
+
+  for (const [key, pointTag] of Object.entries(data)) {
+    const parts = key.split('$');
+    if (parts.length < 4) continue;
+    const [svgElement, , bindingType, ...rest] = parts;
+    const tag = pointTag.trim();
+    if (!tag) continue;
+
+    const context = rest.join('$').trim();
+    let target: string;
+    if (!context || context === 'null') {
+      target = tag;
+    } else if (context.startsWith('equipment.')) {
+      const segments = context.replace(/^equipment\./, '').split('.').filter(Boolean);
+      if (segments.length === 0) {
+        target = tag;
+      } else {
+        const engineName = segments[0];
+        const pathParts = segments.slice(1);
+        const path = pathParts.length > 0 ? `${pathParts.join('.')}.${tag}` : tag;
+        target = `${serverPrefix || 'ADS-1'}:${engineName}/${path}`;
+      }
+    } else {
+      target = `${context}.${tag}`;
+    }
+
+    const hitKey = `${target}|${bindingObjectRef}|${bindingType}|${sourceFile}|${svgElement}`;
+    if (seen.has(hitKey)) continue;
+    seen.add(hitKey);
+    hits.push({
+      target,
+      referringItem: bindingObjectRef,
+      referringAttr: bindingType,
+      source: sourceFile,
+      sourcePath: sourceFile,
+      referringPath: `${bindingObjectRef}/${svgElement}`,
+    });
+  }
+  return hits;
 }
 
 export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
@@ -697,6 +764,32 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
       const parsed = await parseArchiveXml(await entry.async('string'), zipFolder, entry.name);
       objects.push(...parsed.objects);
       references.push(...parsed.references);
+
+      // Load graphic binding JSON files for each class-357 (Graphic Binding) object
+      // that has a bindingFileName extracted from property 902.
+      const folder = zipFolder.replace(/\\/g, '/');
+      for (const obj of parsed.objects) {
+        if (obj.classid !== 357 || !obj.bindingFileName) continue;
+        const bindingEntry = entries.find(e => {
+          if (e.dir) return false;
+          const n = e.name.replace(/\\/g, '/');
+          return (
+            n === `${folder}/${obj.bindingFileName}` ||
+            n.endsWith(`/${obj.bindingFileName!}`) ||
+            n === obj.bindingFileName
+          );
+        });
+        if (!bindingEntry) continue;
+        const serverPrefix = obj.ref.includes(':') ? obj.ref.split(':')[0] : 'ADS-1';
+        references.push(
+          ...parseGraphicBindings(
+            await bindingEntry.async('string'),
+            obj.ref,
+            bindingEntry.name,
+            serverPrefix,
+          ),
+        );
+      }
 
       const deepRef = parsed.objects.find(o => o.ref.includes('/') && o.ref.includes(':'))?.ref ?? '';
       const properEngineRef = deepRef ? deepRef.split('/')[0] : zipFolder;

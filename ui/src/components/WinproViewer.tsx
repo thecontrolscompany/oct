@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import type { LoadedWinpro, WinproRecord, WinproSymbolBlock } from '../winproParser';
 import { WorkspacePropertiesCard, WorkspaceSection } from './ObjectWorkspace';
 
@@ -90,6 +90,34 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(file.data.sections[0]?.key ?? null);
   const [activeSymbolKey, setActiveSymbolKey] = useState<string | null>(file.data.symbols[0]?.rawHeader ?? null);
   const [activeRecordId, setActiveRecordId] = useState<string | null>(file.data.records[0]?.id ?? null);
+  const [leftPaneWidth, setLeftPaneWidth] = useState(440);
+  const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      if (!resizeState.current) return;
+      const delta = event.clientX - resizeState.current.startX;
+      setLeftPaneWidth(Math.min(620, Math.max(340, resizeState.current.startWidth + delta)));
+    };
+    const onUp = () => {
+      resizeState.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  const beginResize = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    resizeState.current = { startX: event.clientX, startWidth: leftPaneWidth };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   const metaEntries = useMemo(() => {
     const entries: Array<[string, string]> = [
@@ -207,26 +235,26 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '320px 1fr', minHeight: 0 }}>
-        <div style={{ borderRight: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <div style={{ width: leftPaneWidth, minWidth: 340, maxWidth: 620, borderRight: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: 12, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <WorkspaceSection title="Summary" meta={`${file.data.kind.toUpperCase()} · ${file.data.byteLength.toLocaleString()} bytes`}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
                   <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Sections</div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.sections.length.toLocaleString()}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{file.data.sections.length.toLocaleString()}</div>
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
                   <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Records</div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.records.length.toLocaleString()}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{file.data.records.length.toLocaleString()}</div>
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
                   <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Symbols</div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.symbols.length.toLocaleString()}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{file.data.symbols.length.toLocaleString()}</div>
                 </div>
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
                   <div style={{ color: 'var(--text-dim)', fontSize: 10, textTransform: 'uppercase' }}>Strings</div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{file.data.strings.length.toLocaleString()}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{file.data.strings.length.toLocaleString()}</div>
                 </div>
               </div>
             </WorkspaceSection>
@@ -235,6 +263,7 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
               placeholder={tab === 'symbols' ? 'Search symbols…' : tab === 'records' ? 'Search records…' : 'Search sections…'}
               value={tab === 'symbols' ? symbolSearch : tab === 'records' ? recordSearch : sectionSearch}
               onChange={e => tab === 'symbols' ? setSymbolSearch(e.target.value) : tab === 'records' ? setRecordSearch(e.target.value) : setSectionSearch(e.target.value)}
+              style={{ fontSize: 13, padding: '10px 12px' }}
             />
           </div>
 
@@ -299,6 +328,36 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </WorkspaceSection>
+                )}
+                {file.data.sections.length > 0 && (
+                  <WorkspaceSection title="Section Map" meta={`${file.data.sections.length} sections`}>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {file.data.sections.map(section => {
+                        const selected = activeSection?.key === section.key;
+                        return (
+                          <button
+                            key={section.key}
+                            type="button"
+                            onClick={() => { setActiveSectionKey(section.key); setTab('sections'); }}
+                            style={{
+                              textAlign: 'left',
+                              border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                              borderRadius: 8,
+                              padding: '10px 12px',
+                              background: selected ? 'rgba(100,160,255,0.10)' : 'var(--panel)',
+                              color: 'var(--text)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>{section.title}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
+                              {section.lines.length.toLocaleString()} line{section.lines.length === 1 ? '' : 's'}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </WorkspaceSection>
                 )}
@@ -523,7 +582,20 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
           </div>
         </div>
 
-        <div style={{ overflow: 'hidden' }}>
+        <div
+          onMouseDown={beginResize}
+          title="Drag to resize the left pane"
+          style={{
+            width: 8,
+            flexShrink: 0,
+            cursor: 'col-resize',
+            background: 'linear-gradient(180deg, transparent, rgba(100,160,255,0.16), transparent)',
+            borderRight: '1px solid var(--border)',
+            borderLeft: '1px solid var(--border)',
+          }}
+        />
+
+        <div style={{ flex: 1, overflow: 'hidden' }}>
           {tab === 'overview' && (
             <div style={{ padding: 16, height: '100%', overflow: 'auto' }}>
               <section style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 12 }}>

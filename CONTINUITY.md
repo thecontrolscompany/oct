@@ -341,6 +341,7 @@ Close the dbexport-viewer parity gap: graphics browsing, binding inspection, and
 
 ### Commits this session
 ```
+afb1d70  Organize graphics in tree with readable names and inline SVG viewer
 1cd2f09  Fix graphics rendering for exports without archive.xml
 99346b8  Restore TreeGlyph icons and workspace tabs in dbexport tree view
 735f182  Fix Vercel build: remove unused navNodeHasMatch and navNodeMatches
@@ -423,8 +424,8 @@ export async function createResolverFromBytes(bytes: ArrayBuffer): Promise<Graph
 | `ui/src/App.tsx` | Removed `OfflineArchivePane` early-return; unified tab shell for both modes |
 | `ui/src/archiveParser.ts` | Added `GraphicResolver` interface, `createResolverFromBytes`, property 902 extraction, binding JSON parsing, graphics-only export fallback |
 | `ui/src/archiveStore.ts` | Added `archiveBytes` IndexedDB store (DB v2), `saveStoredArchiveBytes`, `loadStoredArchiveBytes` |
-| `ui/src/components/FileViewerPane.tsx` | Major rewrite: `DbexportTreeRow`, `DbexportDetailPane`, `buildDbexportHierarchy` and helpers; hooks moved before early returns; `selectedDbexportNode` state |
-| `ui/src/components/GraphicsBrowser.tsx` | New component: graphic list + SVG viewer with zoom/pan/binding overlays; `.xaml` legacy message |
+| `ui/src/components/FileViewerPane.tsx` | Major rewrite: `DbexportTreeRow`+glyphs, `DbexportDetailPane`+workspace tabs, `buildDbexportHierarchy`, hooks order fix, `selectedDbexportNode`, `dbexportObjectMap`, `outgoing` refs, graphic-inline viewer wiring |
+| `ui/src/components/GraphicsBrowser.tsx` | New component: graphic list + inline SVG viewer (zoom/pan/binding overlays); `.xaml` legacy message; `GraphicViewer` exported for reuse |
 | `server/src/routes/dbexport.ts` | Added `lastArchiveBuffer` cache, `GET /graphic` route, property 902 extraction, `parseGraphicBindings` |
 
 ### Archive format discoveries
@@ -465,6 +466,53 @@ ADS-1NAE-10/
   archive.xml              — field controller objects
   ...
 ```
+
+#### Class-844 object structure (from archive.xml)
+Property 902 stores the SVG filename inside a `<struct><structElement><string>` nesting:
+```xml
+<object classid="844" ref="ADS-1:ADS-1/$FacilityGraphics.00001.20191212-191901-5wkojwyy">
+  <property id="902"><data><struct><structElement>
+    <string>20191212-191901-5wkojwyy.json</string>
+  </structElement>...</struct></data></property>
+  <property id="2390"><data><string>Deland B1 Exh Fans</string></data></property>
+</object>
+```
+- Property 2390 (tag) is the **human-readable name** — always populated on class-844 objects
+- Property 902 first `<string>` is the SVG filename (just the basename, no path)
+- The SVG file lives in `<engine-folder>/<hash>.json` in the ZIP
+
+#### Ref path anatomy for graphics
+```
+ADS-1:ADS-1/$FacilityGraphics.00001.20191212-191901-5wkojwyy
+│      │     │                 │     └── hash (maps to SVG filename)
+│      │     │                 └── index (00001 — groups multiple graphics, not meaningful to users)
+│      │     └── $FacilityGraphics (Facility Graphics folder)
+│      └── engine name (ADS-1)
+└── server name (ADS-1)
+```
+The `00001` intermediate segment groups all graphics under one engine. It is not user-meaningful and is hidden by the label-rename logic (if the segment node has no object, it keeps its numeric label as a folder).
+
+### Graphics in the Tree tab (added afb1d70)
+
+- `categorizeDbexportSegment` now maps `$FacilityGraphics` → **"Facility Graphics"** and `Graphics` → **"Graphics"**
+- `computeCounts` label-rename extended to cover timestamp-hash filenames (`\d{8}-\d{6}-[\w]+`): the node label is replaced with `obj.tag || obj.description`, so the tree shows **"Deland B1 Exh Fans"** instead of the raw hash
+- When a class-844 or class-717 node is selected in the Tree tab, `DbexportDetailPane` bypasses workspace tabs and renders **`GraphicViewer` inline** (same zoom/pan/binding-overlay viewer as the Graphics tab)
+- `GraphicViewer` is now exported from `GraphicsBrowser.tsx` for reuse
+- `outgoing` references (refs FROM the selected object) are computed in `FileViewerPane` and passed to `DbexportDetailPane` so binding data appears in the viewer panel
+- `dbexportObjectMap` (Map<ref, AnyObject>) built in `FileViewerPane` and passed through so `GraphicViewer` can resolve binding targets
+
+### Current state of the graphics feature
+
+| Scenario | Works? | Notes |
+|----------|--------|-------|
+| Full dbexport (DaytonaStateCollege) — Facility Graphics tab | ✅ | Shows all class-844 graphics with readable names |
+| Full dbexport — Tree tab, click graphic | ✅ | SVG viewer opens inline |
+| Full dbexport — Tree tab, filter/search | ✅ | Searches tag names |
+| Graphics-only export (no archive.xml) — Facility Graphics tab | ✅ | Synthesized from hash files; names are hash strings (no tag available) |
+| Full dbexport — legacy "Graphics" folder (class 717, .xaml) | ⚠️ | Shows "Legacy Silverlight" message; cannot render |
+| Page refresh — offline, graphics still visible | ✅ | Raw bytes stored in IndexedDB, resolver rebuilt via `createResolverFromBytes` |
+| Online mode — graphic rendering | ✅ | `api.dbexport.graphic(filename)` → server reads from `lastArchiveBuffer` |
+| Online mode — graphic rendering after server restart | ❌ | `lastArchiveBuffer` lost; user must re-upload |
 
 ---
 

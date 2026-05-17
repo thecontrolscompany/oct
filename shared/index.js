@@ -40,7 +40,7 @@ function getPropertyName(propertyId, explicitName, classId) {
   const raw = String(explicitName ?? '').trim();
   if (raw && !isGenericPropertyName(raw)) return raw;
   const classMap = classId != null ? METASYS_ATTRIBUTE_NAMES_BY_CLASS[classId] : null;
-  return (classMap && classMap[propertyId]) ?? PROPERTY_NAMES[propertyId] ?? METASYS_ATTRIBUTE_NAMES[propertyId] ?? 'Unknown Property';
+  return (classMap && classMap[propertyId]) ?? PROPERTY_NAMES[propertyId] ?? METASYS_ATTRIBUTE_NAMES[propertyId] ?? `Property ${propertyId}`;
 }
 
 module.exports = {

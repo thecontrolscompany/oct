@@ -1,6 +1,6 @@
 # OCT — Open Configuration Tool — Project Continuity & Turnover
 
-**Last updated:** 2026-05-16  
+**Last updated:** 2026-05-17  
 **Status:** Active development — Phases 1–3 complete, Phase 4 not started
 
 ---
@@ -331,6 +331,140 @@ From `tools/dll-inspection-output.txt`:
 - `Metasys.DataAccess.dll` — .NET Framework 4.6.1, 79 public types, entry class `JohnsonControls.Metasys.DataAccess.LocalRequests.MceRequest`
 - `Metasys.FCAccess.dll` — .NET Framework 4.6.1
 - Cannot load via Node.js directly; would require a .NET Framework 4.8 host process bridged via named pipes or gRPC
+
+---
+
+## Session Log — 2026-05-17: Graphics Viewer, UI Unification, Archive Tree
+
+### Goal
+Close the dbexport-viewer parity gap: graphics browsing, binding inspection, and a consistent online/offline UI experience.
+
+### Commits this session
+```
+1cd2f09  Fix graphics rendering for exports without archive.xml
+99346b8  Restore TreeGlyph icons and workspace tabs in dbexport tree view
+735f182  Fix Vercel build: remove unused navNodeHasMatch and navNodeMatches
+a316d08  Restore full dbexport drill-down using ref-based hierarchy tree
+9331bf7  Fix white page: move treeStats/toggleTreeNode hooks before early returns
+531d049  Unify online/offline UI and persist offline graphics resolver
+7d7634c  Add graphics viewer and tighten CAF workspace
+6e58d76  Load graphic bindings in offline archive parser
+35a6df7  Parse dbexport graphic bindings
+```
+
+### What was built
+
+#### Graphics viewer (`GraphicsBrowser.tsx`)
+- Left panel: list of class-844 / class-717 graphic objects with TreeGlyph icons and binding counts
+- Right panel (`GraphicViewer`): loads SVG via `graphicResolver`, renders inline with zoom/pan (wheel + drag), collapsible "Bound Points" panel showing binding targets
+- Binding overlays: injects `<style>` into the SVG DOM after render, applies `oct-bound` class (orange `drop-shadow`) to each bound SVG element by ID
+- Exports `GRAPHIC_CLASS_IDS`, `buildGraphicTagMap` used by `FileViewerPane`
+
+#### Graphic bindings in the reference graph
+- **Server** (`server/src/routes/dbexport.ts`): `parseGraphicBindings()` reads `-bindings.json` files for class-357 objects; parses the compound key format `{svgElementId}${layerIndex}${bindingType}${equipmentContext}` → emits `ReferenceHit`s into the reference graph
+- **Client** (`archiveParser.ts`): mirrors the server — after each engine's `archive.xml` is parsed, loops class-357 objects, loads their `-bindings.json`, emits hits into `references[]`
+- Equipment context resolution: `equipment.{engineName}.{dotPath}` → `{serverPrefix}:{engineName}/{path}.{tag}`
+- Property 902 ("File Name") extracted in the XML parser's switch on `pid` for both class-357 (bindings JSON) and class-844 (SVG JSON)
+
+#### Graphics-only export fallback (added 2026-05-17)
+- Some exports (e.g. "Export — Facility Graphics folder only") have **no `archive.xml`** — just hash-named `.json` SVG files and their `-bindings.json` counterparts
+- When `objects.some(o => classid ∈ {357,717,844})` is false after the main parse loop, `archiveParser.ts` enumerates entries matching `/\d{8}-\d{6}-[\w]+\.json$/` and synthesizes class-844 `DbexportObject` entries with `bindingFileName` set
+- Bindings from corresponding `-bindings.json` files are also parsed and added to `references[]`
+- Synthetic objects get `tag: ''`, `description: <hash>` (no readable name is available without archive XML)
+
+#### Class 717 "Graphics" vs class 844 "Facility Graphics"
+- Class 717 objects (old "Graphics" folder in Metasys) store a `.xaml` filename in property 902 — these are legacy Silverlight/XAML graphics and **cannot render in a browser**
+- Class 844 objects ("Facility Graphics") store a hash-named `.json` filename — these ARE SVG content despite the extension and render fine
+- `GraphicViewer` now shows a clear "Legacy Silverlight graphic — cannot render in browser" message for `.xaml` filenames instead of the generic "file not found" error
+
+#### GraphicResolver + IndexedDB persistence
+```typescript
+export interface GraphicResolver {
+  resolve(svgFilename: string): Promise<string | null>;
+}
+export async function createResolverFromBytes(bytes: ArrayBuffer): Promise<GraphicResolver>;
+```
+- In offline mode: resolver is a JSZip closure over the live archive in memory — not serializable
+- `archiveStore.ts` gained a second IndexedDB object store (`archiveBytes`, DB version 2) to persist the raw `ArrayBuffer` alongside the parsed archive
+- On page refresh: `FileViewerPane` reads both stores, calls `createResolverFromBytes(bytes)` to rebuild the resolver from stored bytes so graphics work after reload
+- In online mode: resolver calls `api.dbexport.graphic(filename)` → server's `GET /dbexport/graphic?filename=...`; server caches the last uploaded archive buffer in `lastArchiveBuffer`
+
+#### Online/offline UI unification (`App.tsx`, `FileViewerPane.tsx`)
+- Removed the separate `OfflineArchivePane` early-return path from `App.tsx`
+- Both modes now use the same tabbed shell; offline mode hides the Library sidebar and BACnet connection bar; switching to offline auto-navigates to the File Viewer tab
+- Initial view: `HAS_API_HOST ? 'library' : 'caf'`
+- `FileViewerPane` accepts `mode: 'online' | 'offline'` prop and picks the correct store key and loading strategy
+
+#### Ref-based dbexport navigation tree
+- Replaced the shallow navtree.xml (`NavTreeNode`) approach with `buildDbexportHierarchy` which parses object refs (`ADS-1:NAE-1/FC-1.AHU-1.zone_temp`) to build a full deep tree: ADS → NAE → field bus / category → equipment → points
+- `categorizeDbexportSegment` recognises FC-N, FCB, N2 Trunk, BACnet Trunk, Programming, Schedule, Graphics, $site, $Generic segments
+- `DbexportTreeRow` renders with `TreeGlyph` icons (engine / bus / folder / equipment / point) matching the original `OfflineArchivePane` visual style
+
+#### Workspace tabs on device nodes (`DbexportDetailPane`)
+- Right panel for dbexport Tree tab now uses `WorkspaceTabs` / `WorkspaceSection` / `WorkspacePropertiesCard` from `ObjectWorkspace`
+- Device nodes (non-folder, non-engine objects) show: Configuration · Diagnostics · Communication · Email · SNMP · Syslog · Alarm · Trend · Security · Audit · Network · Device · All Properties tabs
+- Group nodes (folders, engines, categories) show: Overview · Contents · All Properties tabs
+- "Bound to Graphics" section surfaces graphic hit references inside the detail pane
+- CAF files still use the simple `ObjectDetail` panel (no workspace tabs — CAF objects don't have the same property density)
+
+### Bugs fixed this session
+
+| Commit | Bug | Root cause |
+|--------|-----|------------|
+| `9331bf7` | White page on startup (offline mode) | `treeStats` useMemo and `toggleTreeNode` useCallback were called **after** four `if (restoring) return` / `if (!currentFile) return` early-return statements — React hooks rule violation; inconsistent hook count between first render (`restoring=true`, hooks not reached) and subsequent renders |
+| `735f182` | Vercel build failure | `navNodeHasMatch` and `navNodeMatches` became unused after replacing `NavTreeNode` with `DbexportTreeRow`; `noUnusedLocals: true` in tsconfig causes `tsc -b` to error |
+| `a316d08` | Navigation drill-down lost below NAE level | `FileViewerPane` used navtree.xml which only has top-level engine nodes; OfflineArchivePane had `buildDbexportHierarchy` (ref-based) which was not ported during unification |
+| `99346b8` | TreeGlyph icons and workspace tabs gone | Same cause — `OfflineArchivePane` had `TreeRow`+`TreeGlyph` and full `DetailPane`; `FileViewerPane` used simpler `NavTreeNode`+`ObjectDetail` |
+
+### Key files changed this session
+
+| File | What changed |
+|------|-------------|
+| `ui/src/App.tsx` | Removed `OfflineArchivePane` early-return; unified tab shell for both modes |
+| `ui/src/archiveParser.ts` | Added `GraphicResolver` interface, `createResolverFromBytes`, property 902 extraction, binding JSON parsing, graphics-only export fallback |
+| `ui/src/archiveStore.ts` | Added `archiveBytes` IndexedDB store (DB v2), `saveStoredArchiveBytes`, `loadStoredArchiveBytes` |
+| `ui/src/components/FileViewerPane.tsx` | Major rewrite: `DbexportTreeRow`, `DbexportDetailPane`, `buildDbexportHierarchy` and helpers; hooks moved before early returns; `selectedDbexportNode` state |
+| `ui/src/components/GraphicsBrowser.tsx` | New component: graphic list + SVG viewer with zoom/pan/binding overlays; `.xaml` legacy message |
+| `server/src/routes/dbexport.ts` | Added `lastArchiveBuffer` cache, `GET /graphic` route, property 902 extraction, `parseGraphicBindings` |
+
+### Archive format discoveries
+
+#### Two graphic class types in Metasys dbexport
+| Class | ID | Folder in ref | File format | Renderable |
+|-------|----|--------------|-------------|-----------|
+| Facility Graphic | 844 | `$FacilityGraphics` | Hash-named `.json` that is SVG content | ✅ Yes |
+| Graphic (legacy) | 717 | `Graphics` | `.xaml` Silverlight file | ❌ No |
+| Graphic Binding | 357 | (child of 844) | Hash-named `-bindings.json` | — |
+
+#### Binding key format (`-bindings.json`)
+```
+"{svgElementId}${layerIndex}${bindingType}${equipmentContext}": "{pointTag}"
+```
+Equipment context resolution: `equipment.{engineName}.{dotPath}` → `{serverPrefix}:{engineName}/{path}.{tag}`
+
+#### Graphics-only export structure (no archive.xml)
+```
+archiveobject.xml          — site-level object (classid 2000), no graphic objects
+navtree.xml                — shallow site nav only
+ADS-1ADS-1/
+  <hash>.json              — SVG content
+  <hash>-bindings.json     — binding data
+  <hash>-metadata.json     — {"MasterLayer_ViewerVisibility":"true"}
+```
+
+#### Full dbexport structure (with archive.xml)
+```
+archiveobject.xml          — site object
+navtree.xml
+ADS-1ADS-1/
+  archive.xml              — ALL graphic objects (classid 844/717/357) with property 902
+  archive0001.xml–archive0048.xml  — point/equipment objects (no graphic class objects)
+  <hash>.json              — SVG content
+  <hash>-bindings.json
+ADS-1NAE-10/
+  archive.xml              — field controller objects
+  ...
+```
 
 ---
 

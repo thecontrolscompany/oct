@@ -1,19 +1,95 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
-import type { CctItem, TemplateAttribute, CctAttribute } from '../api';
-import AttributeTable from './AttributeTable';
+import type { CctItem, CctAttribute } from '../api';
 import PortsTable from './PortsTable';
 
 interface Props {
   item: CctItem | null;
 }
 
+type WorkspaceKind = 'device' | 'group';
+type DetailTabId =
+  | 'configuration'
+  | 'diagnostics'
+  | 'communication'
+  | 'email'
+  | 'snmp'
+  | 'syslog'
+  | 'alarm'
+  | 'trend'
+  | 'security'
+  | 'audit'
+  | 'network'
+  | 'device'
+  | 'overview'
+  | 'contents'
+  | 'all-properties';
+
+interface DetailTabDef {
+  id: DetailTabId;
+  label: string;
+  keywords?: string[];
+  description?: string;
+}
+
 const TYPE_NAME: Record<number, string> = { 9: 'Folder', 15: 'Typical', 21: 'Package' };
-type DetailTab = 'all' | 'overview' | 'attributes' | 'ports' | 'commissioning';
+
+const DEVICE_TABS: DetailTabDef[] = [
+  { id: 'configuration', label: 'Configuration', keywords: ['name', 'description', 'model', 'version', 'location', 'firmware', 'object identifier', 'object name'] },
+  { id: 'diagnostics', label: 'Diagnostics', keywords: ['diagnostic', 'status', 'fault', 'error', 'reliability', 'out of service', 'health', 'warning'] },
+  { id: 'communication', label: 'Communication', keywords: ['communication', 'comm', 'bacnet', 'mstp', 'ms/tp', 'router', 'port', 'host', 'baud', 'trunk'] },
+  { id: 'email', label: 'Email', keywords: ['email', 'mail', 'smtp', 'recipient', 'notification'] },
+  { id: 'snmp', label: 'SNMP', keywords: ['snmp'] },
+  { id: 'syslog', label: 'Syslog', keywords: ['syslog'] },
+  { id: 'alarm', label: 'Alarm', keywords: ['alarm', 'event', 'acked', 'notification', 'intrinsic'] },
+  { id: 'trend', label: 'Trend', keywords: ['trend', 'history', 'log', 'record', 'archive', 'sample'] },
+  { id: 'security', label: 'Security', keywords: ['security', 'auth', 'password', 'certificate', 'ssl', 'tls', 'encrypt'] },
+  { id: 'audit', label: 'Audit', keywords: ['audit'] },
+  { id: 'network', label: 'Network', keywords: ['network', 'ip', 'mac', 'dhcp', 'broadcast', 'subnet', 'gateway', 'dns', 'address'] },
+  { id: 'device', label: 'Device', keywords: ['device', 'controller', 'hardware', 'platform', 'boot', 'restart', 'power', 'name', 'model'] },
+  { id: 'all-properties', label: 'All Properties' },
+];
+
+const GROUP_TABS: DetailTabDef[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'contents', label: 'Contents' },
+  { id: 'all-properties', label: 'All Properties' },
+];
+
+function inferWorkspaceKind(item: CctItem): WorkspaceKind {
+  return item.ItemTypeId === 9 ? 'group' : 'device';
+}
+
+function propHaystack(prop: CctAttribute): string {
+  return [
+    prop.AttributeName,
+    prop.ValueString ?? '',
+    prop.ValueString1 ?? '',
+    prop.SystemOfUnits ?? '',
+  ].join(' ').toLowerCase();
+}
+
+function matchesKeywords(prop: CctAttribute, keywords?: string[]): boolean {
+  if (!keywords || keywords.length === 0) return true;
+  const hay = propHaystack(prop);
+  return keywords.some(keyword => hay.includes(keyword));
+}
+
+function filterProps(attributes: CctAttribute[], keywords?: string[]): CctAttribute[] {
+  const filtered = keywords ? attributes.filter(prop => matchesKeywords(prop, keywords)) : attributes;
+  return [...filtered].sort((a, b) => {
+    const ai = a.MetasysAttributeNumber ?? Number.MAX_SAFE_INTEGER;
+    const bi = b.MetasysAttributeNumber ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+}
 
 export default function DetailPane({ item }: Props) {
-  const [tab, setTab] = useState<DetailTab>('all');
+  const workspaceKind = item ? inferWorkspaceKind(item) : 'group';
+  const tabs = workspaceKind === 'device' ? DEVICE_TABS : GROUP_TABS;
+  const defaultTab = tabs[0].id;
+  const [tab, setTab] = useState<DetailTabId>(defaultTab);
 
   const { data: detail, isLoading: loadingDetail, error: detailError } = useQuery({
     queryKey: ['item', item?.ItemId],
@@ -27,6 +103,13 @@ export default function DetailPane({ item }: Props) {
     enabled: !!item,
   });
 
+  useEffect(() => {
+    setTab(defaultTab);
+  }, [defaultTab, item?.ItemId]);
+
+  const currentTab = tabs.find(t => t.id === tab) ?? tabs[0];
+  const currentProps = useMemo(() => filterProps(attributes, currentTab?.keywords), [attributes, currentTab]);
+
   if (!item) {
     return (
       <div className="content">
@@ -37,14 +120,6 @@ export default function DetailPane({ item }: Props) {
       </div>
     );
   }
-
-  const tabs: Array<{ id: DetailTab; label: string }> = [
-    { id: 'all', label: 'All' },
-    { id: 'overview', label: 'Overview' },
-    { id: 'attributes', label: 'Attributes' },
-    { id: 'ports', label: 'Ports' },
-    { id: 'commissioning', label: 'Commissioning' },
-  ];
 
   return (
     <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -65,33 +140,163 @@ export default function DetailPane({ item }: Props) {
         {detailError && <div className="error-msg">Error loading controller details: {String(detailError)}</div>}
         {attributesError && <div className="error-msg">Error loading attributes: {String(attributesError)}</div>}
 
-        {tab === 'all' && (
+        {workspaceKind === 'device' && tab === 'configuration' && (
           <div className="sct-detail-stack">
             <OverviewCard item={item} detail={detail ?? null} />
-            <div className="grid-2">
-              <SnapshotCard
-                title="Attributes"
-                subtitle={loadingAttributes ? 'Loading attributes…' : `${attributes.length.toLocaleString()} total`}
-                emptyMessage="No attribute values stored for this object"
-              >
-                <SnapshotAttributes attributes={attributes} />
-              </SnapshotCard>
-              <SnapshotCard
-                title="Ports"
-                subtitle={loadingDetail ? 'Loading ports…' : `${detail?.ports.length ?? 0} total`}
-                emptyMessage="No ports defined"
-              >
-                <SnapshotPorts ports={detail?.ports ?? []} />
-              </SnapshotCard>
-            </div>
-            {item.ItemTypeId === 21 && <CommissioningActions />}
+            <PropertyCard
+              title="Configuration Properties"
+              subtitle={loadingAttributes ? 'Loading…' : `${currentProps.length.toLocaleString()} matching`}
+              properties={currentProps}
+              emptyMessage="No configuration-style properties matched this controller."
+            />
           </div>
         )}
 
-        {tab === 'overview' && <OverviewCard item={item} detail={detail ?? null} />}
-        {tab === 'attributes' && <AttributeTable objectId={item.ItemId} />}
-        {tab === 'ports' && <PortsTab ports={detail?.ports ?? null} loading={loadingDetail} />}
-        {tab === 'commissioning' && <CommissioningTab item={item} />}
+        {workspaceKind === 'device' && tab === 'diagnostics' && (
+          <PropertyCard
+            title="Diagnostics"
+            subtitle={`${currentProps.length.toLocaleString()} matching`}
+            properties={currentProps}
+            emptyMessage="No diagnostic properties matched this controller."
+          />
+        )}
+
+        {workspaceKind === 'device' && tab === 'communication' && (
+          <PropertyCard
+            title="Communication"
+            subtitle={`${currentProps.length.toLocaleString()} matching`}
+            properties={currentProps}
+            emptyMessage="No communication properties matched this controller."
+          />
+        )}
+
+        {workspaceKind === 'device' && tab === 'email' && (
+          <PropertyCard title="Email" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No email-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'snmp' && (
+          <PropertyCard title="SNMP" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No SNMP-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'syslog' && (
+          <PropertyCard title="Syslog" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No syslog-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'alarm' && (
+          <PropertyCard title="Alarm" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No alarm-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'trend' && (
+          <PropertyCard title="Trend" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No trend-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'security' && (
+          <PropertyCard title="Security" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No security-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'audit' && (
+          <PropertyCard title="Audit" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No audit-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'network' && (
+          <PropertyCard title="Network" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No network-related properties matched this controller." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'device' && (
+          <div className="sct-detail-stack">
+            <OverviewCard item={item} detail={detail ?? null} />
+            <div className="sct-detail-section">
+              <div className="sct-detail-section-header">Ports</div>
+              <div className="sct-detail-section-body">
+                {loadingDetail && !detail ? <div className="loading">Loading ports…</div> : <PortsTab ports={detail?.ports ?? null} />}
+              </div>
+            </div>
+            <PropertyCard
+              title="Device Properties"
+              subtitle={`${currentProps.length.toLocaleString()} matching`}
+              properties={currentProps}
+              emptyMessage="No device-oriented properties matched this controller."
+            />
+          </div>
+        )}
+
+        {workspaceKind === 'device' && tab === 'all-properties' && (
+          <PropertyCard
+            title="All Properties"
+            subtitle={`${attributes.length.toLocaleString()} total`}
+            properties={attributes}
+            emptyMessage="No properties stored for this object."
+          />
+        )}
+
+        {workspaceKind === 'group' && tab === 'overview' && (
+          <div className="sct-detail-stack">
+            <OverviewCard item={item} detail={detail ?? null} />
+            <div className="sct-detail-section">
+              <div className="sct-detail-section-header">Summary</div>
+              <div className="sct-detail-section-body">
+                <table className="sct-table">
+                  <tbody>
+                    <tr><td style={{ width: 130, color: 'var(--text-dim)' }}>Type</td><td>{TYPE_NAME[item.ItemTypeId] ?? `Type ${item.ItemTypeId}`}</td></tr>
+                    <tr><td style={{ color: 'var(--text-dim)' }}>Item ID</td><td style={{ fontFamily: 'Consolas, monospace' }}>{item.ItemId}</td></tr>
+                    <tr><td style={{ color: 'var(--text-dim)' }}>Parent ID</td><td style={{ fontFamily: 'Consolas, monospace' }}>{item.ParentItemId ?? '—'}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {workspaceKind === 'group' && tab === 'contents' && (
+          <div className="sct-detail-section">
+            <div className="sct-detail-section-header">Contents</div>
+            <div className="sct-detail-section-body">
+              {detail?.children?.length ? (
+                <table className="sct-table">
+                  <thead>
+                    <tr>
+                      <th>Child</th>
+                      <th>Type</th>
+                      <th>ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.children.map(child => (
+                      <tr key={child.ItemId}>
+                        <td style={{ fontWeight: 600 }}>{child.Name}</td>
+                        <td style={{ color: 'var(--text-dim)' }}>{TYPE_NAME[child.ItemTypeId] ?? `Type ${child.ItemTypeId}`}</td>
+                        <td style={{ color: 'var(--text-dim)', fontFamily: 'Consolas, monospace' }}>{child.ItemId}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="empty-state" style={{ height: 160 }}>
+                  <div className="icon">—</div>
+                  <p>No child items found.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {workspaceKind === 'group' && tab === 'all-properties' && (
+          <PropertyCard
+            title="All Properties"
+            subtitle={`${attributes.length.toLocaleString()} total`}
+            properties={attributes}
+            emptyMessage="No properties stored for this item."
+          />
+        )}
+
+        {workspaceKind === 'device' && !tabs.some(t => t.id === tab) && (
+          <PropertyCard
+            title="All Properties"
+            subtitle={`${attributes.length.toLocaleString()} total`}
+            properties={attributes}
+            emptyMessage="No properties stored for this object."
+          />
+        )}
       </div>
     </div>
   );
@@ -117,123 +322,69 @@ function OverviewCard({ item, detail }: { item: CctItem; detail: Awaited<ReturnT
   );
 }
 
-function SnapshotCard({
+function PropertyCard({
   title,
   subtitle,
+  properties,
   emptyMessage,
-  children,
 }: {
   title: string;
   subtitle: string;
+  properties: CctAttribute[];
   emptyMessage: string;
-  children: React.ReactNode;
 }) {
   return (
-    <div className="card">
-      <div className="card-header">
+    <div className="sct-detail-section">
+      <div className="sct-detail-section-header">
         {title}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)', textTransform: 'none', letterSpacing: 0 }}>
-          {subtitle}
-        </span>
+        <span className="meta" style={{ marginLeft: 'auto' }}>{subtitle}</span>
       </div>
-      <div className="card-body" style={{ padding: 0 }}>
-        {children || (
+      <div className="sct-detail-section-body">
+        {properties.length === 0 ? (
           <div className="empty-state" style={{ height: 160 }}>
             <div className="icon">—</div>
             <p>{emptyMessage}</p>
           </div>
+        ) : (
+          <table className="sct-table">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Value</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {properties.map(prop => (
+                <tr key={prop.ValueId}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{prop.AttributeName}</div>
+                    <div style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 2 }}>
+                      Property {prop.MetasysAttributeNumber ?? prop.AttributeId ?? '—'}
+                    </div>
+                  </td>
+                  <td style={{ wordBreak: 'break-word' }}>{prop.ValueString ?? prop.ValueString1 ?? '—'}</td>
+                  <td style={{ color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
+                    {prop.swDataTypeId != null ? `T${prop.swDataTypeId}` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
   );
 }
 
-function SnapshotAttributes({ attributes }: { attributes: CctAttribute[] }) {
-  if (!attributes.length) {
-    return (
-      <div className="empty-state" style={{ height: 160 }}>
-        <div className="icon">📋</div>
-        <p>No attribute values stored for this object</p>
-      </div>
-    );
+function PortsTab({ ports }: { ports: Awaited<ReturnType<typeof api.controller>>['ports'] | null }) {
+  if (!ports) {
+    return <div className="empty-state"><div className="icon">🔌</div><p>No ports defined</p></div>;
   }
-
-  const preview = attributes.slice(0, 8);
-  return (
-    <table className="attr-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Attribute Name</th>
-          <th>Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        {preview.map(attr => (
-          <tr key={attr.ValueId}>
-            <td style={{ color: 'var(--text-dim)', fontSize: 11 }}>
-              {attr.MetasysAttributeNumber ?? '—'}
-            </td>
-            <td style={{ color: 'var(--text)' }}>{attr.AttributeName}</td>
-            <td className="attr-value">{attr.ValueString ?? attr.ValueString1 ?? '—'}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function SnapshotPorts({ ports }: { ports: Awaited<ReturnType<typeof api.controller>>['ports'] }) {
   if (!ports.length) {
-    return (
-      <div className="empty-state" style={{ height: 160 }}>
-        <div className="icon">🔌</div>
-        <p>No ports defined</p>
-      </div>
-    );
+    return <div className="empty-state"><div className="icon">🔌</div><p>No ports defined</p></div>;
   }
-
-  const preview = ports.slice(0, 8);
-  return (
-    <table className="attr-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Signal ID</th>
-        </tr>
-      </thead>
-      <tbody>
-        {preview.map(p => (
-          <tr key={p.PortId}>
-            <td>{p.Name}</td>
-            <td style={{ color: 'var(--text-dim)' }}>{p.PortTypeId}</td>
-            <td className="attr-value">{p.ActualSignalId ?? '—'}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function PortsTab({ ports, loading }: { ports: Awaited<ReturnType<typeof api.controller>>['ports'] | null; loading: boolean }) {
-  if (loading && !ports) return <div className="loading">Loading ports…</div>;
-  if (!ports) return <div className="empty-state"><div className="icon">🔌</div><p>No ports defined</p></div>;
-  if (!ports.length) return <div className="empty-state"><div className="icon">🔌</div><p>No ports defined</p></div>;
   return <PortsTable ports={ports} />;
-}
-
-function CommissioningActions() {
-  return (
-    <div className="card">
-      <div className="card-header">Commissioning Actions</div>
-      <div className="card-body" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn btn-primary" disabled>Upload from Device</button>
-        <button className="btn btn-primary" disabled>Download to Device</button>
-        <button className="btn btn-ghost" disabled>Run Commissioning</button>
-      </div>
-    </div>
-  );
 }
 
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -248,173 +399,4 @@ function Stat({ label, value, mono }: { label: string; value: string; mono?: boo
       </div>
     </div>
   );
-}
-
-function CommissioningTab({ item }: { item: CctItem }) {
-  const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [step, setStep] = useState(0);
-
-  const { data: templates = [], isLoading: loadingTemplates } = useQuery({
-    queryKey: ['commissioning', 'templates'],
-    queryFn: api.commissioningTemplates,
-  });
-
-  const { data: templateDetail, isLoading: loadingDetail } = useQuery({
-    queryKey: ['commissioning', 'template', selectedTemplate],
-    queryFn: () => api.commissioningTemplate(selectedTemplate),
-    enabled: !!selectedTemplate,
-  });
-
-  if (loadingTemplates) return <div className="loading">Loading templates…</div>;
-
-  if (templates.length === 0) {
-    return (
-      <div className="empty-state">
-        <div className="icon">📋</div>
-        <p>No commissioning templates found</p>
-        <p style={{ fontSize: 11 }}>Templates should be in the AttributeTemplates folder</p>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="card">
-        <div className="card-header">Commissioning Templates</div>
-        <div className="card-body">
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {templates.map(t => (
-              <button
-                key={t.name}
-                className={`btn${selectedTemplate === t.name ? ' btn-primary' : ' btn-ghost'}`}
-                onClick={() => { setSelectedTemplate(t.name); setStep(0); }}
-              >
-                {t.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {selectedTemplate && (
-        loadingDetail
-          ? <div className="loading">Loading template…</div>
-          : templateDetail && (
-            <CommissioningWizard
-              item={item}
-              templateName={templateDetail.name}
-              attributes={templateDetail.attributes}
-              step={step}
-              onStep={setStep}
-            />
-          )
-      )}
-    </>
-  );
-}
-
-function CommissioningWizard({
-  item, templateName, attributes, step, onStep,
-}: {
-  item: CctItem;
-  templateName: string;
-  attributes: TemplateAttribute[];
-  step: number;
-  onStep: (s: number) => void;
-}) {
-  const [values, setValues] = useState<Record<number, string>>({});
-
-  const grouped = chunkArray(attributes, 5);
-  const totalSteps = grouped.length;
-  const currentAttrs = grouped[step] ?? [];
-
-  function setValue(idx: number, val: string) {
-    setValues(prev => ({ ...prev, [idx]: val }));
-  }
-
-  return (
-    <div className="card">
-      <div className="card-header">
-        {templateName}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)' }}>
-          Step {step + 1} of {totalSteps} · {item.Name}
-        </span>
-      </div>
-
-      <div style={{ height: 3, background: 'var(--border)' }}>
-        <div style={{ height: '100%', background: 'var(--accent)', width: `${((step + 1) / totalSteps) * 100}%`, transition: 'width 0.3s' }} />
-      </div>
-
-      <table className="attr-table">
-        <thead>
-          <tr>
-            <th>Module</th>
-            <th>Element</th>
-            <th>Object Ref</th>
-            <th>Default</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {currentAttrs.map((attr, i) => {
-            const globalIdx = step * 5 + i;
-            const displayDefault = attr.valueType === 'enum' && attr.enumText
-              ? `${attr.enumText} (${attr.defaultValue})`
-              : attr.defaultValue;
-            return (
-              <tr key={globalIdx}>
-                <td style={{ color: 'var(--text-dim)', fontSize: 12 }}>{attr.module ?? '—'}</td>
-                <td style={{ fontWeight: 500 }}>{attr.element ?? '—'}</td>
-                <td style={{ fontFamily: 'Consolas, monospace', fontSize: 10, color: 'var(--text-dim)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {attr.objectRef ?? '—'}
-                </td>
-                <td className="attr-value">{displayDefault}</td>
-                <td>
-                  <input
-                    type="text"
-                    placeholder={attr.defaultValue}
-                    value={values[globalIdx] ?? ''}
-                    onChange={e => setValue(globalIdx, e.target.value)}
-                    style={{
-                      background: 'var(--bg)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 4,
-                      padding: '3px 8px',
-                      color: 'var(--text)',
-                      width: 110,
-                      fontSize: 12,
-                    }}
-                  />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      <div style={{ padding: '10px 16px', display: 'flex', gap: 8, borderTop: '1px solid var(--border)' }}>
-        <button className="btn btn-ghost" disabled={step === 0} onClick={() => onStep(step - 1)}>
-          ← Back
-        </button>
-        {step < totalSteps - 1 ? (
-          <button className="btn btn-primary" onClick={() => onStep(step + 1)}>
-            Next →
-          </button>
-        ) : (
-          <button className="btn btn-primary" onClick={() => alert('Commissioning data ready — live write requires TL-CWCVT-0 connection.')}>
-            Apply to Device
-          </button>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)', alignSelf: 'center' }}>
-          {Object.keys(values).length} value(s) set
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
-  return result;
 }

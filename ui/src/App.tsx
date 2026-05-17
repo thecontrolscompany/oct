@@ -141,11 +141,14 @@ function AppShell() {
 
       <div className="main">
         <header className="topbar">
-          <div className="brand-lockup">
+          <div className="topbar-left">
             <span className="logo">OCT</span>
-            <span className="topbar-title">Open Configuration Tool</span>
+            {renderModeToggle()}
           </div>
-          {renderModeToggle()}
+          <div className="topbar-center">
+            <span className="topbar-title">Open Configuration Tool</span>
+            <span className="topbar-subtitle">Offline and online archive browser</span>
+          </div>
           {renderTopbarStatus()}
         </header>
 

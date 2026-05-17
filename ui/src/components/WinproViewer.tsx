@@ -611,10 +611,28 @@ export default function WinproViewer({ file, onClose }: { file: LoadedWinpro; on
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>SECTION MAP</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
                     {file.data.sections.map(section => (
-                      <div key={section.key} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'var(--panel)' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{section.title}</div>
+                      <button
+                        key={section.key}
+                        type="button"
+                        onClick={() => { setActiveSectionKey(section.key); setTab('sections'); }}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'left',
+                          border: `1px solid ${activeSection?.key === section.key ? 'var(--accent)' : 'var(--border)'}`,
+                          borderRadius: 8,
+                          padding: '12px 14px',
+                          background: activeSection?.key === section.key ? 'rgba(100,160,255,0.10)' : 'var(--panel)',
+                          color: 'var(--text)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{section.title}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>Open</div>
+                        </div>
                         <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{section.lines.length.toLocaleString()} line{section.lines.length === 1 ? '' : 's'}</div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </section>

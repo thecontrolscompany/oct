@@ -1200,7 +1200,7 @@ export default function GraphicsBrowser({
   }, [references, objectMap]);
 
   const graphicEntries = useMemo((): GraphicEntry[] => {
-    const graphics = objects.filter(o => o.classid === 844 || o.classid === 717);
+    const graphics = objects.filter(o => GRAPHIC_CLASS_IDS.has(o.classid));
     return graphics
       .map(g => ({
         graphic: g,

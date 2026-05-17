@@ -556,6 +556,7 @@ export default function CafWorkspacePane({
         setSectionWeights(prev => ({ ...prev, [col]: next.map(v => Math.max(min, v * scale)) }));
       } else if (op.kind === 'h') {
         setLayoutHeight(Math.max(240, op.startH + (event.clientY - op.startY)));
+      }
       event.preventDefault();
     };
 

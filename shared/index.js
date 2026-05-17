@@ -7,7 +7,7 @@ const ARCHIVE_ATTRIBUTE_NAMES_BY_CLASS = require('./archiveAttributeNamesByClass
 const METASYS_ATTRIBUTE_NAMES = require('./metasysAttributeNames.json');
 const METASYS_ATTRIBUTE_NAMES_BY_CLASS = require('./metasysAttributeNamesByClass.json');
 
-const GENERIC_PROPERTY_RE = /^(?:property\s*\d+|unknown\s+property(?:\s*\d+)?)$/i;
+const GENERIC_PROPERTY_RE = /^(?:property\s*\d+|unknown\s+property(?:\s*\d+)?|array|bits|boolean|date|time|enum|listof|string|struct|unsigned(?:short|long|integer)|signed(?:short|long|integer)|real|double|float|objectid|bacoid|octetstring|charstring)(?:\s*:.*)?$/i;
 
 function buildReferenceMap(references) {
   return buildReferenceIndex(references).byTarget;

@@ -13,7 +13,19 @@ const TYPE_NAME: Record<number, string> = { 9: 'Folder', 15: 'Typical', 21: 'Pac
 type DetailTab = 'all' | 'overview' | 'attributes' | 'ports' | 'commissioning';
 
 export default function DetailPane({ item }: Props) {
-  const [tab, setTab] = useState<DetailTab>('all');
+  const [tab, setTab] = useState<DetailTab>('overview');
+
+  const { data: detail, isLoading: loadingDetail, error: detailError } = useQuery({
+    queryKey: ['item', item?.ItemId],
+    queryFn: () => api.controller(item!.ItemId),
+    enabled: !!item,
+  });
+
+  const { data: attributes = [], isLoading: loadingAttributes, error: attributesError } = useQuery({
+    queryKey: ['attributes', item?.ItemId],
+    queryFn: () => api.attributes(item!.ItemId),
+    enabled: !!item,
+  });
 
   if (!item) {
     return (
@@ -25,16 +37,6 @@ export default function DetailPane({ item }: Props) {
       </div>
     );
   }
-
-  const { data: detail, isLoading: loadingDetail, error: detailError } = useQuery({
-    queryKey: ['item', item.ItemId],
-    queryFn: () => api.controller(item.ItemId),
-  });
-
-  const { data: attributes = [], isLoading: loadingAttributes, error: attributesError } = useQuery({
-    queryKey: ['attributes', item.ItemId],
-    queryFn: () => api.attributes(item.ItemId),
-  });
 
   const tabs: Array<{ id: DetailTab; label: string }> = [
     { id: 'all', label: 'All' },

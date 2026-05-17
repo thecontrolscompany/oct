@@ -30,10 +30,69 @@ export default function App() {
 type View = 'library' | 'live' | 'quick-trend' | 'preview' | 'serial' | 'packages' | 'caf' | 'dictionary' | 'enums';
 type Mode = 'online' | 'offline';
 
+type HelpContext = {
+  title: string;
+  body: string;
+};
+
 const CIDR_OPTIONS = [8, 16, 24, 28, 30];
 
 // TL-CWCVT-0 / MAP adapter defaults
 const DEFAULTS = { ip: '192.168.142.1', cidr: 24, networkNumber: 65001 };
+
+function getHelpContext(view: View, onlineMode: boolean): HelpContext {
+  switch (view) {
+    case 'library':
+      return {
+        title: 'Library',
+        body: onlineMode
+          ? 'Browse controllers and selected items. Use the left sidebar to pick a device, then inspect details on the right.'
+          : 'The library view is only available in online mode. Switch to File Viewer or use the archive browser instead.',
+      };
+    case 'live':
+      return {
+        title: 'Live Devices',
+        body: 'Monitor connected BACnet devices, read live values, and open a device to inspect points and properties.',
+      };
+    case 'quick-trend':
+      return {
+        title: 'Quick Trend',
+        body: 'Choose a point to start a lightweight trend view. Use it for quick spot checks without opening the full trend workflow.',
+      };
+    case 'preview':
+      return {
+        title: 'Preview',
+        body: 'Open a commissioning preview layout without a live controller connection. Useful for checking point placement and bindings.',
+      };
+    case 'serial':
+      return {
+        title: 'MS/TP Serial',
+        body: 'Inspect serial bus frames, node activity, and token rotation details. Helpful when troubleshooting RS-485 networks.',
+      };
+    case 'packages':
+      return {
+        title: 'Packages',
+        body: 'Browse controller package metadata and supported capabilities for the selected device or archive.',
+      };
+    case 'caf':
+      return {
+        title: 'File Viewer',
+        body: onlineMode
+          ? 'Open .caf or .dbexport files, explore the archive tree, and inspect graphics inline.'
+          : 'Drop a .caf or .dbexport file here to browse it offline. Graphics render when the archive is loaded in the viewer.',
+      };
+    case 'dictionary':
+      return {
+        title: 'Dictionary',
+        body: 'Look up BACnet and CCT terms, property names, and model mappings used throughout OCT.',
+      };
+    case 'enums':
+      return {
+        title: 'Enums',
+        body: 'Inspect the enum tables and raw identifiers that OCT uses for class, property, and type mapping.',
+      };
+  }
+}
 
 function AppShell() {
   const [selected, setSelected]     = useState<CctItem | null>(null);
@@ -43,8 +102,10 @@ function AppShell() {
   const [connecting, setConnecting] = useState(false);
   const [view, setView]             = useState<View>(HAS_API_HOST ? 'library' : 'caf');
   const [mode, setMode]             = useState<Mode>(HAS_API_HOST ? 'online' : 'offline');
+  const [helpOpen, setHelpOpen]     = useState(false);
   const qc = useQueryClient();
   const onlineMode = mode === 'online';
+  const help = getHelpContext(view, onlineMode);
 
   useEffect(() => {
     document.title = 'Open Configuration Tool';
@@ -53,6 +114,7 @@ function AppShell() {
   const handleSetMode = useCallback((m: Mode) => {
     setMode(m);
     if (m === 'offline') setView('caf');
+    setHelpOpen(false);
   }, []);
 
   const { data: health } = useQuery({
@@ -85,6 +147,10 @@ function AppShell() {
     await qc.invalidateQueries({ queryKey: ['health'] });
     await qc.invalidateQueries({ queryKey: ['bacnet'] });
   }, [qc]);
+
+  useEffect(() => {
+    setHelpOpen(false);
+  }, [view, mode]);
 
   const renderModeToggle = () => (
     <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
@@ -127,6 +193,21 @@ function AppShell() {
             ? 'Backend unavailable'
             : 'Offline')
         : 'Offline archive browser'}
+      <button
+        className="topbar-help"
+        type="button"
+        aria-label={`Help for ${help.title}`}
+        title={help.title}
+        onClick={() => setHelpOpen(open => !open)}
+      >
+        ?
+      </button>
+      {helpOpen && (
+        <div className="topbar-help-popover" role="dialog" aria-label={`${help.title} help`}>
+          <div className="topbar-help-popover-title">{help.title}</div>
+          <div className="topbar-help-popover-body">{help.body}</div>
+        </div>
+      )}
     </div>
   );
 

@@ -16,9 +16,24 @@ type PanelKey =
   | 'outputs'
   | 'misc-outputs';
 
-const HW_INPUT_CLASSES = new Set([240, 242, 243, 671, 673]);
+const HW_INPUT_CLASSES  = new Set([240, 242, 243, 671, 673]);
 const HW_OUTPUT_CLASSES = new Set([239, 241, 672, 674]);
-const LOGIC_CLASSES = new Set([307, 526, 527, 528, 529, 530, 531, 540, 555, 575, 585, 862]);
+
+// CCT Signal Blocks — 526/528/530 = Input Float/Enum/Boolean, 527/529/531 = Output Float/Enum/Boolean
+// Only objects with a friendly label are network interface points; the rest are internal wires.
+const NETWORK_INPUT_CLASSES  = new Set([526, 528, 530]);
+const NETWORK_OUTPUT_CLASSES = new Set([527, 529, 531]);
+
+// CCT primitive/logic classids
+// 536=Control Activity, 538=Last Value, 539=Reliability Check, 540=State Selection
+// 543=Command Hierarchy, 551=Float Constant, 556=Sensor Primitive, 559=Boolean Primitive
+// 560=Comparison Primitive, 561=Math Primitive, 562=Mux Primitive, 568=Enum Constant
+const SETPOINT_CLASSES    = new Set([536, 538, 551, 568]);
+const STATE_GEN_CLASSES   = new Set([540, 559, 562]);
+const OUTPUT_CTRL_CLASSES = new Set([543]);
+const SENSOR_CLASSES      = new Set([556, 539]); // Sensor Primitive, Reliability Check → Inputs
+
+const LOGIC_CLASSES = new Set([307, 540, 555, 575, 585, 862]);
 
 const FEATURE_TABS: Array<{ id: FeatureTab; label: string }> = [
   { id: 'parameters', label: 'Parameters' },
@@ -82,37 +97,72 @@ function isOutputControlLike(obj: CafObject): boolean {
   return /output|control|cmd|actuator|drive|valve|relay|fan|open|close/.test(hay);
 }
 
-function isRenderableWorkspaceObject(obj: CafObject, mode: WorkspaceMode): boolean {
-  if (obj.classid === 575 || obj.classid === 555 || obj.classid === 540 || obj.classid === 585) return true;
+function isRenderableWorkspaceObject(obj: CafObject, _mode: WorkspaceMode): boolean {
+  // Always render hardware I/O
   if (HW_INPUT_CLASSES.has(obj.classid) || HW_OUTPUT_CLASSES.has(obj.classid)) return true;
-  if (isLogicLike(obj)) return true;
-  if (mode === 'logic' && isOutputControlLike(obj)) return true;
-  if (mode === 'control') {
-    if (isSetpointLike(obj) || isOutputControlLike(obj)) return true;
-    if (hasFriendlyLabel(obj) && /command|setup|status|reset|delay|enable|maintenance|manual|alarm|usage/i.test(buildSearchText(obj))) {
-      return true;
-    }
+  // Signal blocks: only render those with a friendly label (internal wires have no tag/desc)
+  if (NETWORK_INPUT_CLASSES.has(obj.classid) || NETWORK_OUTPUT_CLASSES.has(obj.classid)) {
+    return hasFriendlyLabel(obj);
   }
+  // Sensor/reliability primitives, setpoint logic, state-gen, output control
+  if (SENSOR_CLASSES.has(obj.classid) || SETPOINT_CLASSES.has(obj.classid) ||
+      STATE_GEN_CLASSES.has(obj.classid) || OUTPUT_CTRL_CLASSES.has(obj.classid)) {
+    return hasFriendlyLabel(obj);
+  }
+  // Control Points and Math/Comparison/Boolean primitives
+  if (obj.classid === 555 || obj.classid === 560 || obj.classid === 561) return true;
+  // Application root types
+  if (obj.classid === 575 || obj.classid === 540 || obj.classid === 585) return true;
+  // Keyword fallback for any other class with a friendly label
+  if (hasFriendlyLabel(obj) && (isLogicLike(obj) || isSetpointLike(obj) || isOutputControlLike(obj))) return true;
   return false;
 }
 
 function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
-  const isHardwareInput = HW_INPUT_CLASSES.has(obj.classid);
-  const isHardwareOutput = HW_OUTPUT_CLASSES.has(obj.classid);
-  const logicLike = isLogicLike(obj);
-  const setpointLike = isSetpointLike(obj);
-  const outputControlLike = isOutputControlLike(obj);
-
-  if (mode === 'logic') {
-    if (logicLike) return 'state-generation';
-    if (outputControlLike) return 'output-control';
+  // Network interface first — signal blocks with friendly labels
+  if (NETWORK_INPUT_CLASSES.has(obj.classid)) return 'network-inputs';
+  if (NETWORK_OUTPUT_CLASSES.has(obj.classid)) {
+    // Output blocks that look like a calculated setpoint belong in setpoint-misc
+    if (isSetpointLike(obj)) return 'setpoint-misc';
+    return 'network-outputs';
   }
 
-  if (isHardwareInput) return 'inputs';
-  if (isHardwareOutput) return 'outputs';
-  if (setpointLike) return 'setpoint-misc';
-  if (logicLike) return 'state-generation';
-  if (outputControlLike) return 'output-control';
+  // Physical hardware I/O
+  if (HW_INPUT_CLASSES.has(obj.classid)) return 'inputs';
+  if (HW_OUTPUT_CLASSES.has(obj.classid)) return 'outputs';
+
+  // Sensor Primitive and Reliability Check → misc-inputs
+  if (SENSOR_CLASSES.has(obj.classid)) return 'misc-inputs';
+
+  // Command Hierarchy → output-control
+  if (OUTPUT_CTRL_CLASSES.has(obj.classid)) return 'output-control';
+
+  // Control Point (555): output-control; in logic mode with bacoid → network-outputs
+  if (obj.classid === 555) {
+    if (mode === 'logic' && obj.bacoidType !== null) return 'network-outputs';
+    return 'output-control';
+  }
+
+  // State Selection Primitive, Boolean Primitive, Mux → state-generation
+  if (STATE_GEN_CLASSES.has(obj.classid)) return 'state-generation';
+
+  // Constants and Last Value → setpoint-misc
+  if (SETPOINT_CLASSES.has(obj.classid)) {
+    if (isOutputControlLike(obj)) return 'output-control';
+    return 'setpoint-misc';
+  }
+
+  // Math (561) and Comparison (560): keyword-guided
+  if (obj.classid === 561 || obj.classid === 560) {
+    if (isOutputControlLike(obj)) return 'output-control';
+    if (isSetpointLike(obj)) return 'setpoint-misc';
+    return 'state-generation';
+  }
+
+  // Keyword-based fallback
+  if (isOutputControlLike(obj)) return 'output-control';
+  if (isSetpointLike(obj)) return 'setpoint-misc';
+  if (isLogicLike(obj)) return 'state-generation';
   return 'setpoint-misc';
 }
 
@@ -346,9 +396,16 @@ export default function CafWorkspacePane({
   useEffect(() => { setActiveAppIndex(0); setPanelSearch(''); }, [caf]);
 
   const workspaceObjects = useMemo(() => {
-    const subtree = collectDescendants(activeApplicationRoot.ref, byParent);
-    return [activeApplicationRoot, ...subtree];
-  }, [activeApplicationRoot, byParent]);
+    const appSubtree = [activeApplicationRoot, ...collectDescendants(activeApplicationRoot.ref, byParent)];
+    // Hardware I/O objects are direct children of the controller, not inside the application subtree
+    const controllerChildren = byParent.get(caf.controller.ref) ?? [];
+    const hwIO = controllerChildren.filter(obj =>
+      (HW_INPUT_CLASSES.has(obj.classid) || HW_OUTPUT_CLASSES.has(obj.classid)) &&
+      obj.ref !== activeApplicationRoot.ref,
+    );
+    const seen = new Set(appSubtree.map(o => o.ref));
+    return [...appSubtree, ...hwIO.filter(o => !seen.has(o.ref))];
+  }, [activeApplicationRoot, byParent, caf.controller.ref]);
 
   const panelSearchQuery = panelSearch.trim().toLowerCase();
   const renderedWorkspaceObjects = useMemo(() => {

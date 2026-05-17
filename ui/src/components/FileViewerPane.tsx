@@ -1038,6 +1038,29 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     [currentFile],
   );
 
+  const treeStats = useMemo(() => {
+    if (!currentFile) return { total: 0, visible: 0 };
+    if (currentFile.type === 'caf') {
+      const roots = cafRoots;
+      const visible = treeQuery ? roots.filter(root => cafNodeHasMatch(root, treeQuery, childMap)).length : roots.length;
+      return { total: currentFile.data.objects.length, visible };
+    }
+    const site = currentFile.data.site;
+    if (!site) return { total: 0, visible: 0 };
+    return {
+      total: currentFile.data.objects.length,
+      visible: treeQuery ? (navNodeHasMatch(site, treeQuery) ? 1 : 0) : 1,
+    };
+  }, [currentFile, cafRoots, childMap, treeQuery]);
+
+  const toggleTreeNode = useCallback((ref: string) => {
+    setTreeExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(ref)) next.delete(ref); else next.add(ref);
+      return next;
+    });
+  }, []);
+
   const handleFile = useCallback(async (f: File) => {
     setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTreeSearch(''); setTreeExpanded(new Set()); setTab('tree');
     try {
@@ -1097,28 +1120,6 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     ['refs', 'References'], ['audit', 'Audit'], ['diff', 'Diff'], ['export', 'Export'],
   ];
   const selectedDetailObj = selectedObj ?? (selectedNavNode ? currentFile.data.objects.find(o => o.ref === selectedNavNode.reference) ?? null : null);
-  const treeStats = useMemo(() => {
-    if (!currentFile) return { total: 0, visible: 0 };
-    if (currentFile.type === 'caf') {
-      const roots = cafRoots;
-      const visible = treeQuery ? roots.filter(root => cafNodeHasMatch(root, treeQuery, childMap)).length : roots.length;
-      return { total: currentFile.data.objects.length, visible };
-    }
-    const site = currentFile.data.site;
-    if (!site) return { total: 0, visible: 0 };
-    return {
-      total: currentFile.data.objects.length,
-      visible: treeQuery ? (navNodeHasMatch(site, treeQuery) ? 1 : 0) : 1,
-    };
-  }, [currentFile, cafRoots, childMap, treeQuery]);
-
-  const toggleTreeNode = useCallback((ref: string) => {
-    setTreeExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(ref)) next.delete(ref); else next.add(ref);
-      return next;
-    });
-  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

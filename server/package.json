@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "export:archive-attributes": "tsx src/scripts/exportArchiveAttributes.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {

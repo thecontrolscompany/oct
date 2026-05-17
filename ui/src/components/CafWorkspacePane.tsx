@@ -97,24 +97,23 @@ function isOutputControlLike(obj: CafObject): boolean {
   return /output|control|cmd|actuator|drive|valve|relay|fan|open|close/.test(hay);
 }
 
-function isRenderableWorkspaceObject(obj: CafObject, _mode: WorkspaceMode): boolean {
+function isRenderableWorkspaceObject(obj: CafObject, _mode: WorkspaceMode, ctrl536Refs?: Set<string>): boolean {
   // Always render hardware I/O
   if (HW_INPUT_CLASSES.has(obj.classid) || HW_OUTPUT_CLASSES.has(obj.classid)) return true;
-  // Signal blocks: only render those with a friendly label (internal wires have no tag/desc)
-  if (NETWORK_INPUT_CLASSES.has(obj.classid) || NETWORK_OUTPUT_CLASSES.has(obj.classid)) {
-    return hasFriendlyLabel(obj);
-  }
-  // Sensor/reliability primitives, setpoint logic, state-gen, output control
-  if (SENSOR_CLASSES.has(obj.classid) || SETPOINT_CLASSES.has(obj.classid) ||
-      STATE_GEN_CLASSES.has(obj.classid) || OUTPUT_CTRL_CLASSES.has(obj.classid)) {
-    return hasFriendlyLabel(obj);
-  }
-  // Control Points and Math/Comparison/Boolean primitives
-  if (obj.classid === 555 || obj.classid === 560 || obj.classid === 561) return true;
-  // Application root types
+  // Signal blocks: only those with a readable label are interface points; rest are internal wires
+  if (NETWORK_INPUT_CLASSES.has(obj.classid) || NETWORK_OUTPUT_CLASSES.has(obj.classid)) return hasFriendlyLabel(obj);
+  // Sensor Primitives always have names
+  if (obj.classid === 556) return true;
+  // Application-level structure blocks — always show
   if (obj.classid === 575 || obj.classid === 540 || obj.classid === 585) return true;
-  // Keyword fallback for any other class with a friendly label
-  if (hasFriendlyLabel(obj) && (isLogicLike(obj) || isSetpointLike(obj) || isOutputControlLike(obj))) return true;
+  // Control Activities (536) — show all, even unnamed; they ARE the logic groups
+  if (obj.classid === 536) return true;
+  // Control Points (555) — always show
+  if (obj.classid === 555) return true;
+  // Command Hierarchies (543) — show only if direct child of a Control Activity (536)
+  if (obj.classid === 543) return ctrl536Refs ? (obj.parentRef !== null && ctrl536Refs.has(obj.parentRef)) : true;
+  // Deep internal primitives hidden by CCT: Mux/Math/Comparison/Boolean/Constants/LastValue/Reliability
+  // (560, 561, 562, 559, 551, 568, 538, 539) → do NOT render
   return false;
 }
 
@@ -284,22 +283,49 @@ function SectionCard({
   );
 }
 
+function isHwIO(obj: CafObject): boolean {
+  return HW_INPUT_CLASSES.has(obj.classid) || HW_OUTPUT_CLASSES.has(obj.classid);
+}
+
+function isExpansionPoint(obj: CafObject, controllerRef: string): boolean {
+  // Expansion module points have a parentRef that is NOT the controller itself
+  return isHwIO(obj) && obj.parentRef !== null && obj.parentRef !== controllerRef;
+}
+
 function PanelItem({
   object,
   selected,
   onSelect,
+  controllerRef,
 }: {
   object: CafObject;
   selected: boolean;
   onSelect: (ref: string) => void;
+  controllerRef: string;
 }) {
+  const isHW = isHwIO(object);
+  const isExp = isHW && isExpansionPoint(object, controllerRef);
+  const physicalPoint = isHW ? object.shortTag : null;
+
   return (
     <button
       type="button"
       className={`commission-panel-item${selected ? ' commission-panel-item-active' : ''}`}
       onClick={() => onSelect(object.ref)}
     >
-      <div className="commission-panel-item-title">{displayName(object)}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span className="commission-panel-item-title">{displayName(object)}</span>
+        {physicalPoint && (
+          <span style={{ fontSize: 10, fontFamily: 'Consolas, monospace', color: selected ? 'rgba(255,255,255,0.75)' : 'var(--accent)', flexShrink: 0 }}>
+            {physicalPoint}
+          </span>
+        )}
+        {isExp && (
+          <span style={{ fontSize: 9, color: selected ? 'rgba(255,255,255,0.6)' : 'var(--text-dim)', flexShrink: 0 }}>
+            EXP
+          </span>
+        )}
+      </div>
       <div className="commission-panel-item-meta">{makeSummaryLine(object)}</div>
     </button>
   );
@@ -409,7 +435,8 @@ export default function CafWorkspacePane({
 
   const panelSearchQuery = panelSearch.trim().toLowerCase();
   const renderedWorkspaceObjects = useMemo(() => {
-    const base = workspaceObjects.filter(obj => isRenderableWorkspaceObject(obj, mode));
+    const ctrl536Refs = new Set(workspaceObjects.filter(o => o.classid === 536).map(o => o.ref));
+    const base = workspaceObjects.filter(obj => isRenderableWorkspaceObject(obj, mode, ctrl536Refs));
     if (!panelSearchQuery) return base;
     return base.filter(obj => buildSearchText(obj).includes(panelSearchQuery));
   }, [mode, workspaceObjects, panelSearchQuery]);
@@ -621,6 +648,7 @@ export default function CafWorkspacePane({
                 onToggleSection={(key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))}
                 isLast={columnIndex === sectionsByColumn.length - 1}
                 isFiltered={!!panelSearchQuery}
+                controllerRef={caf.controller.ref}
                 handlePointerDown={handlePointerDown}
               />
             ))}
@@ -879,6 +907,7 @@ function FragmentColumn({
   onToggleSection,
   isLast,
   isFiltered,
+  controllerRef,
   handlePointerDown,
 }: {
   columnIndex: number;
@@ -889,6 +918,7 @@ function FragmentColumn({
   activeObject: CafObject | null;
   onSelect: (ref: string) => void;
   onToggleSection: (key: PanelKey) => void;
+  controllerRef: string;
   isLast: boolean;
   isFiltered: boolean;
   handlePointerDown: (index: number) => (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -923,6 +953,7 @@ function FragmentColumn({
                 object={object}
                 selected={activeObject?.ref === object.ref}
                 onSelect={onSelect}
+                controllerRef={controllerRef}
               />
             ))}
           </SectionCard>

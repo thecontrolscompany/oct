@@ -4,9 +4,18 @@ import { api } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
 import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
-import ObjectPropertiesTable from './ObjectPropertiesTable';
 import { HAS_API_HOST } from '../connection';
 import TreeGlyph from './TreeGlyph';
+import {
+  DEVICE_TABS,
+  GROUP_TABS,
+  type WorkspaceTabId,
+  WorkspacePropertiesCard,
+  WorkspaceSection,
+  WorkspaceTabs,
+  filterWorkspaceProperties,
+  normalizeArchiveProperties,
+} from './ObjectWorkspace';
 
 type LoadedArchive = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
 type AnyObject = CafObject | DbexportObject;
@@ -36,6 +45,13 @@ interface HierNode {
 
 function displayName(o: AnyObject): string {
   return o.tag || o.description || `${o.className} #${o.objectid}`;
+}
+
+function inferWorkspaceKind(node: TreeNode | null, object: AnyObject | null): 'device' | 'group' {
+  if (!node || !object) return 'group';
+  const text = `${node.label} ${node.className}`.toLowerCase();
+  if (/folder|tree|engine|view|category|program|graphics|site configuration|generic archive/.test(text)) return 'group';
+  return 'device';
 }
 
 function normalize(value: string): string {
@@ -355,6 +371,21 @@ function DetailPane({
   onSelectChild: (node: TreeNode) => void;
   onSelectReference: (ref: string) => void;
 }) {
+  const workspaceKind: 'device' | 'group' = inferWorkspaceKind(selectedNode, selectedObject);
+  const tabs = workspaceKind === 'device' ? DEVICE_TABS : GROUP_TABS;
+  const [tab, setTab] = useState<WorkspaceTabId>(tabs[0].id);
+
+  useEffect(() => {
+    setTab(tabs[0].id);
+  }, [selectedNode?.key, tabs]);
+
+  const normalizedProps = useMemo(() => normalizeArchiveProperties(selectedObject?.properties ?? []), [selectedObject]);
+  const currentTab = tabs.find(t => t.id === tab) ?? tabs[0];
+  const currentProps = useMemo(
+    () => filterWorkspaceProperties(normalizedProps, currentTab?.keywords),
+    [normalizedProps, currentTab],
+  );
+
   if (!selectedNode) {
     return (
       <div className="sct-empty-card" style={{ minHeight: 360 }}>
@@ -386,105 +417,243 @@ function DetailPane({
   }
 
   return (
-    <div className="sct-detail-stack sct-panel-scroll" style={{ padding: 0, overflowY: 'auto' }}>
-      <div className="sct-detail-section">
-        <div className="sct-detail-section-header">Details</div>
-        <div className="sct-detail-section-body">
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--shell-blue-ink)', marginBottom: 8 }}>{selectedNode.label}</div>
-          <table className="sct-table">
-            <tbody>
-              {lines.map(([k, v]) => (
-                <tr key={k}>
-                  <td style={{ width: 130, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{k}</td>
-                  <td style={{ wordBreak: 'break-word', fontFamily: k === 'Ref' ? 'Consolas, monospace' : undefined }}>{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {selectedObject && (
-        <div className="sct-detail-section">
-          <div className="sct-detail-section-header">Properties</div>
-          <div className="sct-detail-section-body">
-            <ObjectPropertiesTable properties={selectedObject.properties ?? []} />
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
+      <WorkspaceTabs tabs={tabs} activeTab={tab} onChange={setTab} />
+      <div className="detail-content" style={{ padding: 16 }}>
+        {workspaceKind === 'device' && tab === 'configuration' && (
+          <div className="sct-detail-stack">
+            <WorkspaceSection title="Details">
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--shell-blue-ink)', marginBottom: 8 }}>{selectedNode.label}</div>
+              <table className="sct-table">
+                <tbody>
+                  {lines.map(([k, v]) => (
+                    <tr key={k}>
+                      <td style={{ width: 130, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{k}</td>
+                      <td style={{ wordBreak: 'break-word', fontFamily: k === 'Ref' ? 'Consolas, monospace' : undefined }}>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </WorkspaceSection>
+            <WorkspacePropertiesCard
+              title="Configuration Properties"
+              subtitle={`${currentProps.length.toLocaleString()} matching`}
+              properties={currentProps}
+              emptyMessage="No configuration-style properties matched this archive item."
+            />
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="sct-detail-section">
-        <div className="sct-detail-section-header">Contents</div>
-        <div className="sct-detail-section-body">
-          {children.length === 0 ? (
-            <div className="sct-empty-card" style={{ minHeight: 120 }}>
-              <div className="inner" style={{ gap: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No child nodes.</div>
-                <div style={{ fontSize: 12 }}>This item does not expose a tree beneath it.</div>
-              </div>
-            </div>
-          ) : (
-            <table className="sct-table">
-              <thead>
-                <tr>
-                  <th>Child</th>
-                  <th>Class</th>
-                  <th>Units</th>
-                </tr>
-              </thead>
-              <tbody>
-                {children.map(child => (
-                  <tr
-                    key={child.key}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onSelectChild(child)}
-                  >
-                    <td style={{ fontWeight: 600 }}>{child.label}</td>
-                    <td style={{ color: 'var(--text-dim)' }}>{child.className}</td>
-                    <td style={{ color: 'var(--text-dim)' }}>{child.object?.units ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+        {workspaceKind === 'device' && tab === 'diagnostics' && (
+          <WorkspacePropertiesCard title="Diagnostics" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No diagnostic properties matched this archive item." />
+        )}
 
-      <div className="sct-detail-section">
-        <div className="sct-detail-section-header">Referenced By</div>
-        <div className="sct-detail-section-body">
-          {incoming.length === 0 ? (
-            <div className="sct-empty-card" style={{ minHeight: 96 }}>
-              <div className="inner" style={{ gap: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No incoming references found.</div>
-                <div style={{ fontSize: 12 }}>Nothing in the archive points back to this item.</div>
+        {workspaceKind === 'device' && tab === 'communication' && (
+          <WorkspacePropertiesCard title="Communication" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No communication properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'email' && (
+          <WorkspacePropertiesCard title="Email" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No email-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'snmp' && (
+          <WorkspacePropertiesCard title="SNMP" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No SNMP-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'syslog' && (
+          <WorkspacePropertiesCard title="Syslog" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No syslog-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'alarm' && (
+          <WorkspacePropertiesCard title="Alarm" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No alarm-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'trend' && (
+          <WorkspacePropertiesCard title="Trend" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No trend-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'security' && (
+          <WorkspacePropertiesCard title="Security" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No security-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'audit' && (
+          <WorkspacePropertiesCard title="Audit" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No audit-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'network' && (
+          <WorkspacePropertiesCard title="Network" subtitle={`${currentProps.length.toLocaleString()} matching`} properties={currentProps} emptyMessage="No network-related properties matched this archive item." />
+        )}
+
+        {workspaceKind === 'device' && tab === 'device' && (
+          <div className="sct-detail-stack">
+            <WorkspaceSection title="Details">
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--shell-blue-ink)', marginBottom: 8 }}>{selectedNode.label}</div>
+              <table className="sct-table">
+                <tbody>
+                  {lines.map(([k, v]) => (
+                    <tr key={k}>
+                      <td style={{ width: 130, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{k}</td>
+                      <td style={{ wordBreak: 'break-word', fontFamily: k === 'Ref' ? 'Consolas, monospace' : undefined }}>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </WorkspaceSection>
+            <WorkspaceSection title="Contents">
+              {children.length === 0 ? (
+                <div className="sct-empty-card" style={{ minHeight: 120 }}>
+                  <div className="inner" style={{ gap: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No child nodes.</div>
+                    <div style={{ fontSize: 12 }}>This item does not expose a tree beneath it.</div>
+                  </div>
+                </div>
+              ) : (
+                <table className="sct-table">
+                  <thead>
+                    <tr>
+                      <th>Child</th>
+                      <th>Class</th>
+                      <th>Units</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {children.map(child => (
+                      <tr
+                        key={child.key}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => onSelectChild(child)}
+                      >
+                        <td style={{ fontWeight: 600 }}>{child.label}</td>
+                        <td style={{ color: 'var(--text-dim)' }}>{child.className}</td>
+                        <td style={{ color: 'var(--text-dim)' }}>{child.object?.units ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </WorkspaceSection>
+            <WorkspaceSection title="Referenced By">
+              {incoming.length === 0 ? (
+                <div className="sct-empty-card" style={{ minHeight: 96 }}>
+                  <div className="inner" style={{ gap: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No incoming references found.</div>
+                    <div style={{ fontSize: 12 }}>Nothing in the archive points back to this item.</div>
+                  </div>
+                </div>
+              ) : (
+                <table className="sct-table">
+                  <thead>
+                    <tr>
+                      <th>Referring item</th>
+                      <th>Attribute</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {incoming.slice(0, 20).map(hit => (
+                      <tr
+                        key={`${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.sourcePath ?? hit.source}`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => onSelectReference(hit.referringItem)}
+                      >
+                        <td style={{ wordBreak: 'break-all', fontWeight: 600 }}>{hit.referringItem}</td>
+                        <td style={{ color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
+                        <td style={{ color: 'var(--text-dim)' }}>{hit.source}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </WorkspaceSection>
+            <WorkspacePropertiesCard
+              title="Device Properties"
+              subtitle={`${currentProps.length.toLocaleString()} matching`}
+              properties={currentProps}
+              emptyMessage="No device-oriented properties matched this archive item."
+            />
+          </div>
+        )}
+
+        {workspaceKind === 'device' && tab === 'all-properties' && (
+          <WorkspacePropertiesCard
+            title="All Properties"
+            subtitle={`${normalizedProps.length.toLocaleString()} total`}
+            properties={normalizedProps}
+            emptyMessage="No properties stored for this item."
+          />
+        )}
+
+        {workspaceKind === 'group' && tab === 'overview' && (
+          <div className="sct-detail-stack">
+            <WorkspaceSection title="Details">
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--shell-blue-ink)', marginBottom: 8 }}>{selectedNode.label}</div>
+              <table className="sct-table">
+                <tbody>
+                  {lines.map(([k, v]) => (
+                    <tr key={k}>
+                      <td style={{ width: 130, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{k}</td>
+                      <td style={{ wordBreak: 'break-word', fontFamily: k === 'Ref' ? 'Consolas, monospace' : undefined }}>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </WorkspaceSection>
+            <WorkspaceSection title="Summary">
+              <table className="sct-table">
+                <tbody>
+                  <tr><td style={{ width: 130, color: 'var(--text-dim)' }}>Class</td><td>{selectedNode.className}</td></tr>
+                  <tr><td style={{ color: 'var(--text-dim)' }}>Children</td><td>{children.length.toLocaleString()}</td></tr>
+                  <tr><td style={{ color: 'var(--text-dim)' }}>References</td><td>{incoming.length.toLocaleString()}</td></tr>
+                </tbody>
+              </table>
+            </WorkspaceSection>
+          </div>
+        )}
+
+        {workspaceKind === 'group' && tab === 'contents' && (
+          <WorkspaceSection title="Contents">
+            {children.length === 0 ? (
+              <div className="sct-empty-card" style={{ minHeight: 120 }}>
+                <div className="inner" style={{ gap: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--shell-blue-ink)' }}>No child nodes.</div>
+                  <div style={{ fontSize: 12 }}>This item does not expose a tree beneath it.</div>
+                </div>
               </div>
-            </div>
-          ) : (
-            <table className="sct-table">
-              <thead>
-                <tr>
-                  <th>Referring item</th>
-                  <th>Attribute</th>
-                  <th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {incoming.slice(0, 20).map(hit => (
-                  <tr
-                    key={`${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.sourcePath ?? hit.source}`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onSelectReference(hit.referringItem)}
-                  >
-                    <td style={{ wordBreak: 'break-all', fontWeight: 600 }}>{hit.referringItem}</td>
-                    <td style={{ color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
-                    <td style={{ color: 'var(--text-dim)' }}>{hit.source}</td>
+            ) : (
+              <table className="sct-table">
+                <thead>
+                  <tr>
+                    <th>Child</th>
+                    <th>Class</th>
+                    <th>Units</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {children.map(child => (
+                    <tr
+                      key={child.key}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => onSelectChild(child)}
+                    >
+                      <td style={{ fontWeight: 600 }}>{child.label}</td>
+                      <td style={{ color: 'var(--text-dim)' }}>{child.className}</td>
+                      <td style={{ color: 'var(--text-dim)' }}>{child.object?.units ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </WorkspaceSection>
+        )}
+
+        {workspaceKind === 'group' && tab === 'all-properties' && (
+          <WorkspacePropertiesCard
+            title="All Properties"
+            subtitle={`${normalizedProps.length.toLocaleString()} total`}
+            properties={normalizedProps}
+            emptyMessage="No properties stored for this item."
+          />
+        )}
       </div>
     </div>
   );

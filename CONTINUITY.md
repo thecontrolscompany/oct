@@ -502,6 +502,7 @@ The `00001` intermediate segment groups all graphics under one engine. It is not
 - `outgoing` references (refs FROM the selected object) are computed in `FileViewerPane` and passed to `DbexportDetailPane` so binding data appears in the viewer panel
 - `dbexportObjectMap` (Map<ref, AnyObject>) built in `FileViewerPane` and passed through so `GraphicViewer` can resolve binding targets
 - The previous IndexedDB-backed last-open-file restore path was removed from `FileViewerPane`; the viewer now opens without a persisted archive session
+- Legacy graphics parity is still incomplete: SCT screenshots show additional white value blocks and exact overlay placement that OCT has not fully reproduced yet, so the remaining work is centered on the legacy `JCValueDisplayNodeUI` rendering path and coordinate/layout matching
 
 ### Current state of the graphics feature
 
@@ -512,8 +513,8 @@ The `00001` intermediate segment groups all graphics under one engine. It is not
 | Full dbexport — Tree tab, filter/search | ✅ | Searches tag names |
 | Graphics-only export (no archive.xml) — Facility Graphics tab | ✅ | Synthesized from hash files; names are hash strings (no tag available) |
 | Full dbexport — Silverlight "Graphics" folder (class 717, .xaml) | ⚠️ | Shows "Legacy Silverlight" message; cannot render |
-| Full dbexport — Legacy "Graphics" folder (class 344, Base64Zip-wrapped GMFDocument XML) | 🟡 | Base64Zip wrapper decoded first, then background SVGZ is unpacked and overlay stencils are mapped for offline rendering; export button now emits a combined SVG |
-| Page refresh — offline, graphics still visible | ✅ | Raw bytes stored in IndexedDB, resolver rebuilt via `createResolverFromBytes` |
+| Full dbexport — Legacy "Graphics" folder (class 344, Base64Zip-wrapped GMFDocument XML) | 🟡 | Base64Zip wrapper decoded first, then background SVGZ is unpacked and overlay stencils are mapped for offline rendering; export button now emits a combined SVG. Still missing some visible `JCValueDisplayNodeUI` value blocks compared to SCT, so the renderer is only partially matching the source-of-truth legacy layout |
+| Page refresh — offline, graphics still visible | ❌ | The file viewer no longer restores the last opened archive on refresh; users must re-upload the archive to render graphics again |
 | Online mode — graphic rendering | ✅ | `api.dbexport.graphic(filename)` → server reads from `lastArchiveBuffer` |
 | Online mode — graphic rendering after server restart | ❌ | `lastArchiveBuffer` lost; user must re-upload |
 

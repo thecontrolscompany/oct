@@ -318,6 +318,11 @@ function isLegacyGraphicZip(raw: string): boolean {
   return raw.trimStart().startsWith('<Base64Zip');
 }
 
+function isLegacyGraphicGzipBase64(raw: string): boolean {
+  const trimmed = raw.trimStart();
+  return /^H4s[A-Za-z0-9+/=]/.test(trimmed);
+}
+
 function stripBom(text: string): string {
   return text.replace(/^\uFEFF/, '');
 }
@@ -353,6 +358,10 @@ async function parseLegacyGraphicModel(raw: string): Promise<LegacyGraphicModel 
     const base64Zip = zipDoc.querySelector('Base64Zip')?.textContent?.trim();
     if (!base64Zip) return null;
     const inflated = await inflateGzipBase64ToText(base64Zip);
+    if (!inflated) return null;
+    source = inflated;
+  } else if (isLegacyGraphicGzipBase64(source)) {
+    const inflated = await inflateGzipBase64ToText(source);
     if (!inflated) return null;
     source = inflated;
   }
@@ -433,6 +442,10 @@ function legacyUiMatches(uiName: string, patterns: RegExp[]): boolean {
   return patterns.some(pattern => pattern.test(uiName));
 }
 
+function legacyClassKey(node: Element): string {
+  return `${legacyUiName(node)} ${legacyAttr(node, 'typeStr') ?? ''}`.trim().toLowerCase();
+}
+
 function normalizeSvgExportText(svgText: string): string {
   return svgText.replace(/\bxlink:href\s*=/gi, 'href=');
 }
@@ -485,8 +498,7 @@ function legacyRenderNode(
   objectMap: Map<string, AnyObject>,
   onSelectObject?: (ref: string) => void,
 ) {
-  const uiName = legacyUiName(node);
-  const uiNameLower = uiName.toLowerCase();
+  const classKey = legacyClassKey(node);
   const geometry = node.querySelector('geometry');
   const x = legacyNumber(geometry ?? node, 'x', legacyNumber(node, 'Canvas.Left', 0));
   const y = legacyNumber(geometry ?? node, 'y', legacyNumber(node, 'Canvas.Top', 0));
@@ -494,10 +506,22 @@ function legacyRenderNode(
   const height = legacyNumber(geometry ?? node, 'height', legacyNumber(node, 'Height', 24));
   const fill = legacyColor(legacyAttr(node.querySelector('ui'), 'fillColor') ?? legacyAttr(node, 'fillColor'), '#f5f5f5');
   const border = legacyColor(legacyAttr(node.querySelector('ui'), 'borderColor') ?? legacyAttr(node, 'borderColor'), '#222');
+  const drawBorder = legacyAttr(node.querySelector('ui'), 'drawBorder') !== 'false';
   const hidden = legacyAttr(node, 'hidden') === 'true' || legacyAttr(node, 'hidden') === 'True';
   const target = legacyNodeTarget(node, objectMap);
   const clickable = Boolean(target && onSelectObject);
   const text = legacyTextContent(node, legacyAttr(node, 'bindingObjectNameText') ?? '');
+  const textColor = legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000');
+  const isTextBox =
+    legacyUiMatches(classKey, [
+      /jcvaluedisplaynodeui$/i,
+      /jctextnodeui$/i,
+      /\bvalue\b/i,
+      /\bdisplay\b/i,
+      /\breadout\b/i,
+      /\btextnode\b/i,
+    ]) ||
+    (classKey.includes('label') && classKey.includes('value'));
 
   const commonProps = {
     key,
@@ -512,20 +536,16 @@ function legacyRenderNode(
     'data-oct-target': target ?? undefined,
   } as const;
 
-  if (
-    legacyUiMatches(uiName, [/JCValueDisplayNodeUI$/i, /value/i, /display/i, /readout/i]) ||
-    (uiNameLower.includes('label') && uiNameLower.includes('value'))
-  ) {
+  if (isTextBox) {
     return (
       <g {...commonProps}>
-        <rect x={0} y={0} width={width} height={height} rx={1} ry={1} fill={fill} stroke={border} strokeWidth={1} />
-        {legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000') })}
+        <rect x={0} y={0} width={width} height={height} rx={1} ry={1} fill={fill} stroke={drawBorder ? border : 'none'} strokeWidth={drawBorder ? 1 : 0} />
+        {legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: textColor })}
       </g>
     );
   }
 
-  if (legacyUiMatches(uiName, [/JCJButtonNodeUI$/i, /button/i])) {
-    const drawBorder = legacyAttr(node.querySelector('ui'), 'drawBorder') !== 'false';
+  if (legacyUiMatches(classKey, [/jcjbuttonnodeui$/i, /\bbuttonnode\b/i, /\bbutton\b/i])) {
     return (
       <g {...commonProps}>
         <rect
@@ -539,22 +559,22 @@ function legacyRenderNode(
           stroke={drawBorder ? border : 'none'}
           strokeWidth={drawBorder ? 1 : 0}
         />
-        {legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000') })}
+        {legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: textColor })}
       </g>
     );
   }
 
-  if (legacyUiMatches(uiName, [/JCCircleNodeUI$/i, /circle/i, /lamp/i, /indicator/i, /light/i])) {
+  if (legacyUiMatches(classKey, [/jccirclenodeui$/i, /\bcirclenode\b/i, /\bcircle\b/i, /\blamp\b/i, /\bindicator\b/i, /\blight\b/i])) {
     const r = Math.min(width, height) / 2;
     return (
       <g {...commonProps}>
         <circle cx={r} cy={r} r={Math.max(1, r - 1)} fill={fill} stroke={border} strokeWidth={1} />
-        {text && legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000') })}
+        {text && legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: textColor })}
       </g>
     );
   }
 
-  if (legacyUiMatches(uiName, [/JCAnimatedFanBladesNodeUI$/i, /fan/i])) {
+  if (legacyUiMatches(classKey, [/jcanimatedfanbladesnodeui$/i, /\bfan\b/i])) {
     const cx = width / 2;
     const cy = height / 2;
     const r = Math.min(width, height) / 2;
@@ -574,7 +594,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(uiName, [/gauge/i, /meter/i, /dial/i])) {
+  if (legacyUiMatches(classKey, [/jcdialgaugecomponentnodeui$/i, /\bdialgaugenode\b/i, /\bgauge\b/i, /\bmeter\b/i, /\bdial\b/i])) {
     const cx = width / 2;
     const cy = height / 2;
     const r = Math.min(width, height) / 2;
@@ -601,7 +621,18 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(uiName, [/switch/i, /toggle/i])) {
+  if (legacyUiMatches(classKey, [/jcslidergaugecomponentnodeui$/i, /\bsliderbarnode\b/i, /\bswitch\b/i, /\btoggle\b/i])) {
+    const knobOffset = legacyAttr(node.querySelector('ui'), 'isOn') === 'True' ? width * 0.55 : width * 0.08;
+    const sliderColor = legacyColor(legacyAttr(node.querySelector('ui'), 'sliderColor') ?? fill, fill);
+    return (
+      <g {...commonProps}>
+        <rect x={0} y={height * 0.35} width={width} height={height * 0.3} rx={height * 0.15} ry={height * 0.15} fill={sliderColor} stroke={border} strokeWidth={1} />
+        <circle cx={knobOffset + height * 0.2} cy={height * 0.5} r={height * 0.22} fill="#fff" stroke={border} strokeWidth={1} />
+      </g>
+    );
+  }
+
+  if (legacyUiMatches(classKey, [/switch/i, /toggle/i])) {
     const knobOffset = legacyAttr(node.querySelector('ui'), 'isOn') === 'True' ? width * 0.55 : width * 0.08;
     return (
       <g {...commonProps}>
@@ -611,7 +642,7 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(uiName, [/triangle/i, /arrow/i])) {
+  if (legacyUiMatches(classKey, [/jctrianglenodeui$/i, /\btriangle\b/i, /\barrow\b/i])) {
     return (
       <g {...commonProps}>
         <polygon
@@ -624,11 +655,32 @@ function legacyRenderNode(
     );
   }
 
-  if (legacyUiMatches(uiName, [/rectangle/i, /square/i, /border/i, /panel/i, /frame/i])) {
+  if (legacyUiMatches(classKey, [/jcsquarenodeui$/i, /\brectangle\b/i, /\bsquare\b/i, /\bborder\b/i, /\bpanel\b/i, /\bframe\b/i])) {
     return (
       <g {...commonProps}>
         <rect x={0} y={0} width={width} height={height} rx={legacyNumber(node.querySelector('ui'), 'radiusX', 0)} ry={legacyNumber(node.querySelector('ui'), 'radiusY', 0)} fill={fill} stroke={border} strokeWidth={1} />
-        {text && legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000') })}
+        {text && legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: textColor })}
+      </g>
+    );
+  }
+
+  if (legacyUiMatches(classKey, [/tsesvgimagenodeui$/i, /\bdynamichvacnode\b/i])) {
+    const label = legacyAttr(node, 'nodeDisplayText') ?? legacyAttr(node, 'text') ?? text;
+    const state = label?.split('$#$')[legacyAttr(node, 'currentValue') === '1' ? 1 : 0] ?? label ?? text;
+    return (
+      <g {...commonProps}>
+        <rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          rx={2}
+          ry={2}
+          fill={legacyColor(legacyAttr(node.querySelector('ui'), 'fillColor') ?? fill, fill)}
+          stroke={drawBorder ? border : 'none'}
+          strokeWidth={drawBorder ? 1 : 0}
+        />
+        {state && legacyRenderText(node, `${key}-text`, 0, 0, width, height, { fill: textColor })}
       </g>
     );
   }

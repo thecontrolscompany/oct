@@ -434,12 +434,9 @@ function legacyUiMatches(uiName: string, patterns: RegExp[]): boolean {
 }
 
 function ensureSvgNamespaces(root: Element): void {
-  if (!root.getAttribute('xmlns')) {
-    root.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  }
   const hasHref = Array.from(root.querySelectorAll('*')).some(el => el.hasAttribute('xlink:href') || el.hasAttribute('href'));
-  if (hasHref) {
-    root.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  if (hasHref && !root.hasAttribute('xmlns:xlink')) {
+    root.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xlink', 'http://www.w3.org/1999/xlink');
   }
 }
 

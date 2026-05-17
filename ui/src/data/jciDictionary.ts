@@ -779,3 +779,6 @@ export const DICTIONARY_UNIQUE = DICTIONARY.filter(e => {
 });
 
 export const CATEGORIES = [...new Set(DICTIONARY_UNIQUE.map(e => e.category))].sort();
+export const CLASS_NAMES: Record<number, string> = Object.fromEntries(
+  DICTIONARY_UNIQUE.map(entry => [entry.classid, entry.name]),
+);

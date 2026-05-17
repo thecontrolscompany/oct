@@ -2,12 +2,14 @@ import { useState, useCallback, useMemo } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
+import { parseArchiveFile } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import ObjectBrowser from './ObjectBrowser';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
 type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
+type ViewMode = 'online' | 'offline';
 type AnyObject = CafObject | DbexportObject;
 type ViewTab = 'tree' | 'objects' | 'io' | 'refs' | 'audit' | 'diff' | 'export';
 
@@ -408,7 +410,15 @@ function IoTable({ objects }: { objects: AnyObject[] }) {
 
 type DiffRow = { ref: string; className: string; status: 'added' | 'removed' | 'changed'; before: string; after: string };
 
-function DiffTab({ fileA, fileB }: { fileA: LoadedFile | null; fileB: LoadedFile | null }) {
+function DiffTab({
+  fileA,
+  fileB,
+  loadArchive,
+}: {
+  fileA: LoadedFile | null;
+  fileB: LoadedFile | null;
+  loadArchive: (file: File) => Promise<LoadedFile>;
+}) {
   const [loading, setLoading] = useState(false);
   const [fileAState, setFileAState] = useState<LoadedFile | null>(fileA);
   const [fileBState, setFileBState] = useState<LoadedFile | null>(fileB);
@@ -438,16 +448,9 @@ function DiffTab({ fileA, fileB }: { fileA: LoadedFile | null; fileB: LoadedFile
   const loadFile = async (file: File, slot: 'a' | 'b') => {
     setLoading(true);
     try {
-      const name = file.name;
-      if (file.name.toLowerCase().endsWith('.caf')) {
-        const data = await api.caf.upload(file);
-        if (slot === 'a') setFileAState({ type: 'caf', data, name });
-        else setFileBState({ type: 'caf', data, name });
-      } else {
-        const data = await api.dbexport.upload(file);
-        if (slot === 'a') setFileAState({ type: 'dbexport', data, name });
-        else setFileBState({ type: 'dbexport', data, name });
-      }
+      const loaded = await loadArchive(file);
+      if (slot === 'a') setFileAState(loaded);
+      else setFileBState(loaded);
     } finally { setLoading(false); }
   };
 
@@ -705,7 +708,7 @@ function ReferencesTab({
 
 // ─── Main pane ───────────────────────────────────────────────────────────────
 
-export default function FileViewerPane() {
+export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode }) {
   const [file, setFile] = useState<LoadedFile | null>(null);
   const [previewFile, setPreviewFile] = useState<LoadedFile | null>(null);
   const [loading, setLoading] = useState(false);
@@ -716,6 +719,22 @@ export default function FileViewerPane() {
   const [treeSearch, setTreeSearch] = useState('');
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
   const currentFile = previewFile ?? file;
+  const loadArchive = useCallback(async (f: File): Promise<LoadedFile> => {
+    const lower = f.name.toLowerCase();
+    if (!lower.endsWith('.caf') && !lower.endsWith('.dbexport')) {
+      throw new Error('Unsupported file type. Drop a .caf or .dbexport file.');
+    }
+    if (mode === 'offline') {
+      return parseArchiveFile(f);
+    }
+    const name = f.name;
+    if (lower.endsWith('.caf')) {
+      const data = await api.caf.upload(f);
+      return { type: 'caf', data, name };
+    }
+    const data = await api.dbexport.upload(f);
+    return { type: 'dbexport', data, name };
+  }, [mode]);
 
   // Build maps for CAF tree
   const { objMap, childMap, cafRoots } = useMemo(() => {
@@ -778,18 +797,12 @@ export default function FileViewerPane() {
   const handleFile = useCallback(async (f: File) => {
     setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTreeSearch(''); setTreeExpanded(new Set()); setTab('tree');
     try {
-      const name = f.name;
-      if (f.name.toLowerCase().endsWith('.caf')) {
-        const data = await api.caf.upload(f);
-        setFile({ type: 'caf', data, name });
-      } else if (f.name.toLowerCase().endsWith('.dbexport')) {
-        const data = await api.dbexport.upload(f);
-        setFile({ type: 'dbexport', data, name });
-      } else {
-        setError('Unsupported file type. Drop a .caf or .dbexport file.');
-      }
-    } catch (e) { setError(String(e)); } finally { setLoading(false); }
-  }, []);
+      const loaded = await loadArchive(f);
+      setFile(loaded);
+    } catch (e) {
+      setError(String(e));
+    } finally { setLoading(false); }
+  }, [loadArchive]);
 
   if (!currentFile && !loading) {
     return (
@@ -912,7 +925,7 @@ export default function FileViewerPane() {
         />
       )}
       {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={currentFile} /></div>}
-      {tab === 'diff' && <DiffTab fileA={previewFile ?? file} fileB={previewFile ? file : null} />}
+      {tab === 'diff' && <DiffTab fileA={previewFile ?? file} fileB={previewFile ? file : null} loadArchive={loadArchive} />}
 
       {tab === 'tree' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

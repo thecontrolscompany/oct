@@ -12,6 +12,7 @@ import EnumsPane from './components/EnumsPane';
 import QuickTrendPane from './components/QuickTrendPane';
 import type { CctItem } from './api';
 import { api } from './api';
+import { HAS_API_HOST } from './connection';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -26,6 +27,7 @@ export default function App() {
 }
 
 type View = 'library' | 'live' | 'quick-trend' | 'preview' | 'serial' | 'packages' | 'caf' | 'dictionary' | 'enums';
+type Mode = 'online' | 'offline';
 
 const CIDR_OPTIONS = [8, 16, 24, 28, 30];
 
@@ -39,12 +41,15 @@ function AppShell() {
   const [netNum, setNetNum]         = useState(DEFAULTS.networkNumber);
   const [connecting, setConnecting] = useState(false);
   const [view, setView]             = useState<View>('library');
+  const [mode, setMode]             = useState<Mode>(HAS_API_HOST ? 'online' : 'offline');
   const qc = useQueryClient();
+  const onlineMode = mode === 'online';
 
   const { data: health } = useQuery({
     queryKey: ['health'],
     queryFn: api.health,
-    refetchInterval: 10_000,
+    enabled: onlineMode,
+    refetchInterval: onlineMode ? 10_000 : false,
   });
 
   const bacnetConnected = health?.bacnet?.connected ?? false;
@@ -71,6 +76,64 @@ function AppShell() {
     await qc.invalidateQueries({ queryKey: ['bacnet'] });
   }, [qc]);
 
+  const renderModeToggle = () => (
+    <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
+      <button
+        className="btn btn-ghost"
+        style={{
+          padding: '3px 10px',
+          fontSize: 11,
+          borderColor: onlineMode ? 'var(--accent)' : 'var(--border)',
+          color: onlineMode ? 'var(--text)' : 'var(--text-dim)',
+        }}
+        onClick={() => setMode('online')}
+      >
+        Online
+      </button>
+      <button
+        className="btn btn-ghost"
+        style={{
+          padding: '3px 10px',
+          fontSize: 11,
+          borderColor: !onlineMode ? 'var(--accent)' : 'var(--border)',
+          color: !onlineMode ? 'var(--text)' : 'var(--text-dim)',
+        }}
+        onClick={() => setMode('offline')}
+      >
+        Offline
+      </button>
+    </div>
+  );
+
+  const renderTopbarStatus = () => (
+    <div className="topbar-status">
+      <span className={`status-dot${onlineMode && bacnetConnected ? ' online' : ' offline'}`} />
+      {onlineMode
+        ? (bacnetConnected
+          ? `${health?.bacnet?.converterIp} · Net ${connNetNum} · ${health?.bacnet?.deviceCount ?? 0} device(s)`
+          : HAS_API_HOST
+            ? 'Backend unavailable'
+            : 'Offline')
+        : 'Offline archive browser'}
+    </div>
+  );
+
+  if (!onlineMode) {
+    return (
+      <div className="layout">
+        <div className="main">
+          <header className="topbar">
+            <span className="logo">OCT</span>
+            <span className="topbar-title">Offline archive browser</span>
+            {renderModeToggle()}
+            {renderTopbarStatus()}
+          </header>
+          <FileViewerPane mode="offline" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -81,6 +144,7 @@ function AppShell() {
       <div className="main">
         <header className="topbar">
           <span className="logo">OCT</span>
+          {renderModeToggle()}
           <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
             {([
               ['library',  'Library',        null],
@@ -112,12 +176,7 @@ function AppShell() {
               </button>
             ))}
           </div>
-          <div className="topbar-status">
-            <span className={`status-dot${bacnetConnected ? ' online' : ' offline'}`} />
-            {bacnetConnected
-              ? `${health?.bacnet?.converterIp} · Net ${connNetNum} · ${health?.bacnet?.deviceCount ?? 0} device(s)`
-              : 'Offline'}
-          </div>
+          {renderTopbarStatus()}
         </header>
 
         {/* Connection bar */}
@@ -189,7 +248,7 @@ function AppShell() {
         {view === 'preview'  && <CommissioningPreviewPane />}
         {view === 'serial'   && <MstpSerialPane />}
         {view === 'packages'    && <PackagesPane />}
-        {view === 'caf'         && <FileViewerPane />}
+        {view === 'caf'         && <FileViewerPane mode="online" />}
         {view === 'dictionary'  && <DictionaryPane />}
         {view === 'enums'       && <EnumsPane />}
       </div>

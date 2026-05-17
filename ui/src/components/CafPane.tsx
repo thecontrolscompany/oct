@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { api } from '../api';
 import type { ParsedCaf, CafObject } from '../api';
+import ObjectPropertiesTable from './ObjectPropertiesTable';
 
 // BACnet object type numbers → short label
 const BACNET_TYPE: Record<number, string> = {
@@ -119,6 +120,11 @@ function DetailPanel({ obj }: { obj: CafObject }) {
           ))}
         </tbody>
       </table>
+
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>PROPERTIES</div>
+        <ObjectPropertiesTable properties={obj.properties ?? []} />
+      </div>
     </div>
   );
 }

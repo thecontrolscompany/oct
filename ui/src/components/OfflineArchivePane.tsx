@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CafObject, DbexportObject, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
+import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
+import ObjectPropertiesTable from './ObjectPropertiesTable';
 
 type LoadedArchive = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string };
 type AnyObject = CafObject | DbexportObject;
@@ -370,6 +372,13 @@ function DetailPane({
         </tbody>
       </table>
 
+      {selectedObject && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>PROPERTIES</div>
+          <ObjectPropertiesTable properties={selectedObject.properties ?? []} />
+        </div>
+      )}
+
       <div style={{ marginTop: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>CONTENTS</div>
         {children.length === 0 ? (
@@ -473,10 +482,37 @@ function FileDropZone({ onFile }: { onFile: (file: File) => void }) {
 export default function OfflineArchivePane() {
   const [archive, setArchive] = useState<LoadedArchive | null>(null);
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const storeKey = 'oct:offline-archive';
+
+  useEffect(() => {
+    let cancelled = false;
+    setRestoring(true);
+    loadStoredArchive(storeKey)
+      .then(saved => {
+        if (cancelled) return;
+        if (saved) {
+          setArchive(saved);
+          setSelectedKey(null);
+          setSearch('');
+          setExpanded(new Set());
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setRestoring(false);
+      });
+    return () => { cancelled = true; };
+  }, [storeKey]);
+
+  useEffect(() => {
+    if (!archive) return;
+    saveStoredArchive(storeKey, archive).catch(() => {});
+  }, [archive, storeKey]);
 
   const tree = useMemo(() => {
     if (!archive) return [] as TreeNode[];
@@ -553,6 +589,14 @@ export default function OfflineArchivePane() {
     const first = filteredTree[0] ?? tree[0] ?? null;
     if (first) setSelectedKey(first.key);
   }, [archive, filteredTree, flatNodes, selectedKey, tree]);
+
+  if (restoring) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 24, gap: 14, overflow: 'hidden' }}>
+        <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>Restoring last archive…</div>
+      </div>
+    );
+  }
 
   if (!archive) {
     return (

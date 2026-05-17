@@ -3,7 +3,7 @@ import multer from 'multer';
 import AdmZip from 'adm-zip';
 import { DOMParser } from '@xmldom/xmldom';
 import fs from 'fs';
-import type { CafObject, ParsedCaf, ReferenceHit } from '@oct/shared';
+import type { ArchiveProperty, CafObject, ParsedCaf, ReferenceHit } from '@oct/shared';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
 import { collectReferenceHitsFromNode } from '../archiveAnalysis';
 
@@ -21,6 +21,64 @@ function getParentRef(ref: string): string | null {
 
 function getTextContent(el: { textContent?: string | null } | null): string {
   return el?.textContent?.trim() ?? '';
+}
+
+const PROPERTY_NAMES: Record<number, string> = {
+  12: 'App Version',
+  28: 'Description',
+  31: 'Short Tag',
+  70: 'Model Name',
+  75: 'BACnet Object ID',
+  117: 'Units',
+  2390: 'Tag',
+  3113: 'Default Value',
+  1135: 'IP Address',
+};
+
+function getPropertyName(prop: any, pid: number): string {
+  return prop.getAttribute('name')?.trim() || PROPERTY_NAMES[pid] || `Property ${pid}`;
+}
+
+function formatPropertyValue(dataEl: any): { value: string; valueType: string } {
+  const children = Array.from((dataEl.childNodes ?? []) as any[]).filter((n: any) => n?.nodeType === 1) as any[];
+  if (children.length === 0) {
+    return { value: dataEl.textContent?.trim() ?? '', valueType: dataEl.tagName || 'text' };
+  }
+
+  const valueType = children.length === 1 ? children[0].tagName : 'compound';
+  const parts = children.map((child: any) => {
+    const text = child.textContent?.trim() ?? '';
+    switch (child.tagName) {
+      case 'BACoid': {
+        const typeId = child.getAttribute('id') ?? '';
+        return typeId ? `Type ${typeId}${text ? ` · ${text}` : ''}` : text;
+      }
+      case 'enum':
+      case 'float':
+      case 'integer':
+      case 'int':
+      case 'unsignedByte':
+      case 'unsignedShort':
+      case 'unsignedLong':
+      case 'string':
+        return text;
+      default:
+        return text ? `${child.tagName}: ${text}` : child.tagName;
+    }
+  }).filter(Boolean);
+  return { value: parts.join(', '), valueType };
+}
+
+function collectProperties(propEls: any): ArchiveProperty[] {
+  const properties: ArchiveProperty[] = [];
+  for (const prop of Array.from(propEls as any[])) {
+    const pid = parseInt(prop.getAttribute('id') ?? '0', 10) || 0;
+    const dataEl = prop.getElementsByTagName('data')[0] ?? null;
+    if (!dataEl) continue;
+    const { value, valueType } = formatPropertyValue(dataEl);
+    properties.push({ id: pid, name: getPropertyName(prop, pid), value, valueType });
+  }
+  return properties.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id - b.id);
 }
 
 function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: string): ParsedCaf {
@@ -99,6 +157,7 @@ function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: s
         referringPath: `${ref}/${attrName}`,
       }));
     }
+    const properties = collectProperties(propEls);
 
     classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
 
@@ -110,6 +169,7 @@ function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: s
       unitsId,
       defaultValue,
       bacoidType, bacoidInstance,
+      properties,
     };
     objects.push(parsed);
 

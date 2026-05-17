@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { api } from '../api';
 import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '../api';
 import { buildReferenceIndex } from '@oct/shared';
@@ -6,6 +6,8 @@ import { parseArchiveFile } from '../archiveParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import { buildArchiveAudit } from './archiveAudit';
 import ObjectBrowser from './ObjectBrowser';
+import ObjectPropertiesTable from './ObjectPropertiesTable';
+import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -305,6 +307,12 @@ function ObjectDetail({
           ))}
         </tbody>
       </table>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
+          PROPERTIES
+        </div>
+        <ObjectPropertiesTable properties={obj.properties ?? []} />
+      </div>
       <div style={{ marginTop: 14 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
           CONTENTS
@@ -849,6 +857,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const [file, setFile] = useState<LoadedFile | null>(null);
   const [previewFile, setPreviewFile] = useState<LoadedFile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ViewTab>('tree');
   const [selected, setSelected] = useState<string | null>(null);
@@ -856,6 +865,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const [treeSearch, setTreeSearch] = useState('');
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
   const currentFile = previewFile ?? file;
+  const storeKey = mode === 'offline' ? 'oct:file-viewer:offline' : 'oct:file-viewer:online';
   const loadArchive = useCallback(async (f: File): Promise<LoadedFile> => {
     const lower = f.name.toLowerCase();
     if (!lower.endsWith('.caf') && !lower.endsWith('.dbexport')) {
@@ -872,6 +882,31 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     const data = await api.dbexport.upload(f);
     return { type: 'dbexport', data, name };
   }, [mode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRestoring(true);
+    loadStoredArchive(storeKey)
+      .then(saved => {
+        if (cancelled) return;
+        if (saved) {
+          setFile(saved);
+          setPreviewFile(null);
+          setSelected(null);
+          setTab('tree');
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setRestoring(false);
+      });
+    return () => { cancelled = true; };
+  }, [storeKey]);
+
+  useEffect(() => {
+    if (!currentFile) return;
+    saveStoredArchive(storeKey, currentFile).catch(() => {});
+  }, [currentFile, storeKey]);
 
   // Build maps for CAF tree
   const { objMap, childMap, cafRoots } = useMemo(() => {
@@ -940,6 +975,10 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
       setError(String(e));
     } finally { setLoading(false); }
   }, [loadArchive]);
+
+  if (restoring) {
+    return <div style={{ padding: 24, color: 'var(--text-dim)', textAlign: 'center' }}>Restoring last archive…</div>;
+  }
 
   if (!currentFile && !loading) {
     return (

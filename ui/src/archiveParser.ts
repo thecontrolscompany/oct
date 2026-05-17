@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
+import type { ArchiveProperty, CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
 import { CLASS_NAMES, UNIT_LABELS } from './data/jciDictionary';
 
 export type LoadedArchive =
@@ -33,6 +33,71 @@ function makeClassName(classid: number): string {
 function makeUnitLabel(unitId: number | null): string | null {
   if (unitId === null) return null;
   return UNIT_LABELS[unitId] ?? `unit${unitId}`;
+}
+
+const PROPERTY_NAMES: Record<number, string> = {
+  12: 'App Version',
+  28: 'Description',
+  31: 'Short Tag',
+  70: 'Model Name',
+  75: 'BACnet Object ID',
+  117: 'Units',
+  2390: 'Tag',
+  3113: 'Default Value',
+  1135: 'IP Address',
+};
+
+function getPropertyName(prop: Element, pid: number): string {
+  return prop.getAttribute('name')?.trim() || PROPERTY_NAMES[pid] || `Property ${pid}`;
+}
+
+function formatPropertyValue(dataEl: Element): { value: string; valueType: string } {
+  const children = Array.from(dataEl.children);
+  if (children.length === 0) {
+    const text = dataEl.textContent?.trim() ?? '';
+    return { value: text, valueType: dataEl.tagName || 'text' };
+  }
+
+  const valueType = children.length === 1 ? children[0].tagName : 'compound';
+  const parts = children.map(child => {
+    const text = child.textContent?.trim() ?? '';
+    switch (child.tagName) {
+      case 'BACoid': {
+        const typeId = child.getAttribute('id') ?? '';
+        return typeId ? `Type ${typeId}${text ? ` · ${text}` : ''}` : text;
+      }
+      case 'enum':
+      case 'float':
+      case 'integer':
+      case 'int':
+      case 'unsignedByte':
+      case 'unsignedShort':
+      case 'unsignedLong':
+      case 'string':
+        return text;
+      default:
+        return text ? `${child.tagName}: ${text}` : child.tagName;
+    }
+  }).filter(Boolean);
+
+  return { value: parts.join(', '), valueType };
+}
+
+function collectProperties(propEls: ArrayLike<Element> | Iterable<Element>): ArchiveProperty[] {
+  const properties: ArchiveProperty[] = [];
+  for (const prop of Array.from(propEls)) {
+    const pid = parseInt(prop.getAttribute('id') ?? '0', 10) || 0;
+    const dataEl = prop.getElementsByTagName('data')[0] ?? null;
+    if (!dataEl) continue;
+    const { value, valueType } = formatPropertyValue(dataEl);
+    properties.push({
+      id: pid,
+      name: getPropertyName(prop, pid),
+      value,
+      valueType,
+    });
+  }
+  return properties.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id - b.id);
 }
 
 function getOptionalAttr(el: Element, names: string[]): string | null {
@@ -145,6 +210,7 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
         referringPath: `${ref}/${attrName}`,
       }));
     }
+    const properties = collectProperties(propEls);
 
     objects.push({
       ref,
@@ -160,6 +226,7 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
       bacoidInstance,
       createdAt,
       modifiedAt,
+      properties,
       engineRef,
     });
   }
@@ -309,7 +376,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
         }
 
         const attrName = `Property ${pid}`;
-        references.push(...collectHitsFromNode(prop, {
+      references.push(...collectHitsFromNode(prop, {
           referringItem: ref,
           referringAttr: attrName,
           source: name,
@@ -317,6 +384,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           referringPath: `${ref}/${attrName}`,
         }));
       }
+      const properties = collectProperties(propEls);
 
       classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
       objects.push({
@@ -335,6 +403,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
         bacoidInstance,
         createdAt,
         modifiedAt,
+        properties,
       });
 
       if (classid === 862 && !controller) {
@@ -439,6 +508,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           referringPath: `${ref}/${attrName}`,
         }));
       }
+      const properties = collectProperties(propEls);
 
       classCounts.set(classid, (classCounts.get(classid) ?? 0) + 1);
       const parsed: CafObject = {
@@ -455,6 +525,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
         defaultValue,
         bacoidType,
         bacoidInstance,
+        properties,
       };
       objects.push(parsed);
 

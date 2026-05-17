@@ -77,7 +77,7 @@ export interface PackageDetail extends PackageSummary {
   }>;
 }
 
-export type { CafObject, DbexportObject, EnumSetDetail, EnumSetSummary, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
+export type { ArchiveProperty, CafObject, DbexportObject, EnumSetDetail, EnumSetSummary, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
 
 export interface PerspectiveSummary {
   name: string;

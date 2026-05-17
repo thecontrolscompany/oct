@@ -7,6 +7,13 @@ export interface ReferenceHit {
   referringPath?: string;
 }
 
+export interface ArchiveProperty {
+  id: number;
+  name: string;
+  value: string;
+  valueType: string;
+}
+
 export interface ArchiveObjectBase {
   ref: string;
   classid: number;
@@ -21,6 +28,7 @@ export interface ArchiveObjectBase {
   bacoidInstance: number | null;
   createdAt?: string | null;
   modifiedAt?: string | null;
+  properties: ArchiveProperty[];
 }
 
 export interface CafObject extends ArchiveObjectBase {

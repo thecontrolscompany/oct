@@ -438,6 +438,17 @@ function legacyNodeTarget(node: Element, objectMap: Map<string, AnyObject>): str
   return null;
 }
 
+function legacyNodeGraphicTarget(node: Element, graphicRefs: Set<string>): string | null {
+  const candidates = [
+    legacyAttr(node, 'hyperlinkText'),
+    legacyAttr(node, 'NavigateBinding'),
+  ].filter((v): v is string => Boolean(v));
+  for (const candidate of candidates) {
+    if (graphicRefs.has(candidate)) return candidate;
+  }
+  return null;
+}
+
 function legacyUiMatches(uiName: string, patterns: RegExp[]): boolean {
   return patterns.some(pattern => pattern.test(uiName));
 }
@@ -496,7 +507,9 @@ function legacyRenderNode(
   node: Element,
   key: string,
   objectMap: Map<string, AnyObject>,
+  graphicRefs: Set<string>,
   onSelectObject?: (ref: string) => void,
+  onSelectGraphic?: (ref: string) => void,
 ) {
   const classKey = legacyClassKey(node);
   const geometry = node.querySelector('geometry');
@@ -512,6 +525,7 @@ function legacyRenderNode(
   const clickable = Boolean(target && onSelectObject);
   const text = legacyTextContent(node, legacyAttr(node, 'bindingObjectNameText') ?? '');
   const textColor = legacyColor(legacyAttr(node.querySelector('ui'), 'textColor') ?? legacyAttr(node, 'textColor'), '#000');
+  const graphicTarget = legacyNodeGraphicTarget(node, graphicRefs);
   const isTextBox =
     legacyUiMatches(classKey, [
       /jcvaluedisplaynodeui$/i,
@@ -527,13 +541,19 @@ function legacyRenderNode(
     key,
     transform: `translate(${x}, ${y})`,
     opacity: hidden ? 0.75 : 1,
-    style: { cursor: clickable ? 'pointer' : 'default' },
+    style: { cursor: clickable || graphicTarget ? 'pointer' : 'default' },
     onClick: (e: React.MouseEvent) => {
+      if (graphicTarget && onSelectGraphic) {
+        e.stopPropagation();
+        onSelectGraphic(graphicTarget);
+        return;
+      }
       if (!clickable || !target || !onSelectObject) return;
       e.stopPropagation();
       onSelectObject(target);
     },
     'data-oct-target': target ?? undefined,
+    'data-oct-graphic-target': graphicTarget ?? undefined,
   } as const;
 
   if (isTextBox) {
@@ -697,18 +717,20 @@ function legacyRenderPrimitive(
   el: Element,
   key: string,
   objectMap: Map<string, AnyObject>,
+  graphicRefs: Set<string>,
   onSelectObject?: (ref: string) => void,
+  onSelectGraphic?: (ref: string) => void,
 ): React.ReactNode[] {
   const local = legacyLocalName(el);
   const children = Array.from(el.children);
-  const renderedChildren = children.flatMap((child, index) => legacyRenderPrimitive(child, `${key}-${legacyLocalName(child)}-${index}`, objectMap, onSelectObject));
+  const renderedChildren = children.flatMap((child, index) => legacyRenderPrimitive(child, `${key}-${legacyLocalName(child)}-${index}`, objectMap, graphicRefs, onSelectObject, onSelectGraphic));
 
   if (local === 'backgroundImageData' || local === 'backgroundImageType' || local === 'comment' || local === 'version') {
     return [];
   }
 
   if (local === 'node') {
-    return [legacyRenderNode(el, key, objectMap, onSelectObject)];
+    return [legacyRenderNode(el, key, objectMap, graphicRefs, onSelectObject, onSelectGraphic)];
   }
 
   if (local === 'TextBlock') {
@@ -842,11 +864,15 @@ function legacyRenderPrimitive(
 function LegacyGraphicStage({
   model,
   objectMap,
+  graphicRefs,
   onSelectObject,
+  onSelectGraphic,
 }: {
   model: LegacyGraphicModel;
   objectMap: Map<string, AnyObject>;
+  graphicRefs: Set<string>;
   onSelectObject?: (ref: string) => void;
+  onSelectGraphic?: (ref: string) => void;
 }) {
   const graphEl = model.document.querySelector('graph');
   const topologyEl = graphEl?.querySelector('topology');
@@ -857,16 +883,16 @@ function LegacyGraphicStage({
       if (local === 'backgroundImageData' || local === 'backgroundImageType' || local === 'topology' || local === 'ui' || local === 'comment') {
         return [];
       }
-      return legacyRenderPrimitive(child, `graph-${local}-${index}`, objectMap, onSelectObject);
+      return legacyRenderPrimitive(child, `graph-${local}-${index}`, objectMap, graphicRefs, onSelectObject, onSelectGraphic);
     });
-  }, [graphEl, objectMap, onSelectObject]);
+  }, [graphEl, objectMap, graphicRefs, onSelectObject, onSelectGraphic]);
 
   const topologyNodes = useMemo(() => {
     if (!topologyEl) return [];
     return Array.from(topologyEl.children)
       .filter(child => legacyLocalName(child) === 'node')
-      .flatMap((node, index) => legacyRenderPrimitive(node, `node-${index}`, objectMap, onSelectObject));
-  }, [topologyEl, objectMap, onSelectObject]);
+      .flatMap((node, index) => legacyRenderPrimitive(node, `node-${index}`, objectMap, graphicRefs, onSelectObject, onSelectGraphic));
+  }, [topologyEl, objectMap, graphicRefs, onSelectObject, onSelectGraphic]);
 
   return (
     <div style={{ position: 'relative', width: model.width, height: model.height }}>
@@ -897,12 +923,16 @@ export function GraphicViewer({
   graphicResolver,
   objectMap,
   onSelectObject,
+  onSelectGraphic,
+  graphicRefs,
 }: {
   graphic: AnyObject;
   bindings: ReferenceHit[];
   graphicResolver?: GraphicResolver;
   objectMap: Map<string, AnyObject>;
   onSelectObject?: (ref: string) => void;
+  onSelectGraphic?: (ref: string) => void;
+  graphicRefs?: Set<string>;
 }) {
   const [graphicText, setGraphicText] = useState<string | null>(null);
   const [graphicKind, setGraphicKind] = useState<'svg' | 'legacy' | null>(null);
@@ -929,6 +959,7 @@ export function GraphicViewer({
     }
     return map;
   }, [bindings]);
+  const effectiveGraphicRefs = graphicRefs ?? new Set<string>();
 
   const svgFilename = getBindingFileName(graphic);
   const graphicFamily = getGraphicFamily(graphic);
@@ -1069,13 +1100,20 @@ export function GraphicViewer({
 
   const handleGraphicClick = (e: React.MouseEvent) => {
     const target = e.target as Element | null;
-    const boundEl = target?.closest?.('[data-oct-bound-target], [data-oct-target]') as HTMLElement | null;
+    const boundEl = target?.closest?.('[data-oct-bound-target], [data-oct-target], [data-oct-graphic-target]') as HTMLElement | null;
     if (!boundEl) return;
     const hitTarget =
+      boundEl.dataset.octGraphicTarget?.trim() ??
       boundEl.dataset.octBoundTarget?.split('|')[0]?.trim() ??
       boundEl.dataset.octTarget?.trim() ??
       null;
     if (!hitTarget) return;
+    if (boundEl.dataset.octGraphicTarget) {
+      if (!onSelectGraphic) return;
+      e.stopPropagation();
+      onSelectGraphic(hitTarget);
+      return;
+    }
     if (!onSelectObject || !objectMap.has(hitTarget)) return;
     e.stopPropagation();
     onSelectObject(hitTarget);
@@ -1280,7 +1318,9 @@ export function GraphicViewer({
             <LegacyGraphicStage
               model={legacyModel}
               objectMap={objectMap}
+              graphicRefs={effectiveGraphicRefs}
               onSelectObject={onSelectObject}
+              onSelectGraphic={onSelectGraphic}
             />
           ) : (
             <div dangerouslySetInnerHTML={{ __html: graphicText }} />
@@ -1388,12 +1428,14 @@ export default function GraphicsBrowser({
   referenceIndex,
   onSelectObject,
   graphicResolver,
+  onSelectGraphic,
 }: {
   objects: AnyObject[];
   references: ReferenceHit[];
   referenceIndex: ReferenceIndex;
   onSelectObject?: (ref: string) => void;
   graphicResolver?: GraphicResolver;
+  onSelectGraphic?: (ref: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
@@ -1423,6 +1465,7 @@ export default function GraphicsBrowser({
       }))
       .sort((a, b) => displayName(a.graphic).localeCompare(displayName(b.graphic)));
   }, [objects, objectMap]);
+  const graphicRefs = useMemo(() => new Set(graphicEntries.map(entry => entry.graphic.ref)), [graphicEntries]);
 
   const selectedEntry = useMemo(
     () => (selected ? graphicEntries.find(e => e.graphic.ref === selected) ?? null : null),
@@ -1558,6 +1601,11 @@ export default function GraphicsBrowser({
               graphicResolver={graphicResolver}
               objectMap={objectMap}
               onSelectObject={onSelectObject}
+              onSelectGraphic={ref => {
+                if (graphicRefs.has(ref)) setSelected(ref);
+                else onSelectGraphic?.(ref);
+              }}
+              graphicRefs={graphicRefs}
             />
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', fontSize: 13, padding: 24, textAlign: 'center' }}>

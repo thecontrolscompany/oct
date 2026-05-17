@@ -261,16 +261,21 @@ function SectionCard({
   collapsed,
   onToggle,
   children,
+  flex,
 }: {
   title: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
   children: ReactNode;
+  flex?: number;
 }) {
   return (
-    <div className="commission-panel commission-panel-side" style={{ minHeight: 0, flex: 1 }}>
-      <div className="commission-panel-header" style={{ cursor: 'pointer' }} onClick={onToggle}>
+    <div
+      className="commission-panel commission-panel-side"
+      style={{ minHeight: 0, flex: flex ?? 1, display: 'flex', flexDirection: 'column' }}
+    >
+      <div className="commission-panel-header" style={{ cursor: 'pointer', flexShrink: 0 }} onClick={onToggle}>
         <span>{title}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <span className="commission-panel-count">{count}</span>
@@ -278,7 +283,7 @@ function SectionCard({
         </span>
       </div>
       {!collapsed && (
-        <div className="commission-panel-list" style={{ maxHeight: 'none', flex: 1 }}>
+        <div className="commission-panel-list ws-section-list">
           {children}
         </div>
       )}
@@ -377,12 +382,17 @@ export default function CafWorkspacePane({
     'misc-outputs': false,
   });
   const [weights, setWeights] = useState([1.2, 0.95, 1, 0.95, 1.2]);
-  const dragRef = useRef<{
-    index: number;
-    startX: number;
-    startWeights: number[];
-    width: number;
-  } | null>(null);
+  const [layoutHeight, setLayoutHeight] = useState(580);
+  const [sectionWeights, setSectionWeights] = useState<Record<number, number[]>>({
+    0: [1, 1, 1],
+    4: [1, 1, 1],
+  });
+  const dragRef = useRef<
+    | { kind: 'col'; index: number; startX: number; startWeights: number[]; totalW: number }
+    | { kind: 'sec'; col: number; sec: number; startY: number; startWeights: number[]; totalH: number }
+    | { kind: 'h'; startY: number; startH: number }
+    | null
+  >(null);
   const layoutRef = useRef<HTMLDivElement | null>(null);
 
   const objMap = useMemo(() => new Map(caf.objects.map(obj => [obj.ref, obj])), [caf.objects]);
@@ -496,42 +506,61 @@ export default function CafWorkspacePane({
 
   const handlePointerDown = useCallback((index: number) => (event: ReactPointerEvent<HTMLDivElement>) => {
     if (index < 0 || index >= weights.length - 1) return;
-    const width = layoutRef.current?.clientWidth ?? 1;
-    dragRef.current = {
-      index,
-      startX: event.clientX,
-      startWeights: [...weights],
-      width,
-    };
+    const totalW = layoutRef.current?.clientWidth ?? 1;
+    dragRef.current = { kind: 'col', index, startX: event.clientX, startWeights: [...weights], totalW };
     event.currentTarget.setPointerCapture(event.pointerId);
   }, [weights]);
 
+  const handleSectionPointerDown = useCallback(
+    (col: number, sec: number) => (event: ReactPointerEvent<HTMLDivElement>) => {
+      const totalH = layoutRef.current?.clientHeight ?? layoutHeight;
+      dragRef.current = {
+        kind: 'sec', col, sec,
+        startY: event.clientY,
+        startWeights: [...(sectionWeights[col] ?? [1, 1, 1])],
+        totalH,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [sectionWeights, layoutHeight],
+  );
+
+  const handleHeightPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = { kind: 'h', startY: event.clientY, startH: layoutHeight };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [layoutHeight]);
+
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const { index, startX, startWeights, width } = dragRef.current;
-      const total = startWeights.reduce((sum, value) => sum + value, 0);
-      const delta = ((event.clientX - startX) / Math.max(width, 1)) * total;
-      const next = [...startWeights];
-      const min = 0.55;
-      const left = Math.max(min, next[index] + delta);
-      const right = Math.max(min, next[index + 1] - delta);
-      const applied = left - next[index];
-      next[index] = left;
-      next[index + 1] = right;
-
-      const nextTotal = next.reduce((sum, value) => sum + value, 0);
-      const scale = total / nextTotal;
-      setWeights(next.map(value => Math.max(min, value * scale)));
-      if (Math.abs(applied) > 0.0001) {
-        event.preventDefault();
+      const op = dragRef.current;
+      if (!op) return;
+      if (op.kind === 'col') {
+        const { index, startX, startWeights, totalW } = op;
+        const total = startWeights.reduce((s, v) => s + v, 0);
+        const delta = ((event.clientX - startX) / Math.max(totalW, 1)) * total;
+        const next = [...startWeights];
+        const min = 0.55;
+        next[index] = Math.max(min, next[index] + delta);
+        next[index + 1] = Math.max(min, next[index + 1] - delta);
+        const scale = total / next.reduce((s, v) => s + v, 0);
+        setWeights(next.map(v => Math.max(min, v * scale)));
+      } else if (op.kind === 'sec') {
+        const { col, sec, startY, startWeights, totalH } = op;
+        const total = startWeights.reduce((s, v) => s + v, 0);
+        const delta = ((event.clientY - startY) / Math.max(totalH, 1)) * total;
+        const next = [...startWeights];
+        const min = 0.2;
+        next[sec] = Math.max(min, next[sec] + delta);
+        next[sec + 1] = Math.max(min, next[sec + 1] - delta);
+        const scale = total / next.reduce((s, v) => s + v, 0);
+        setSectionWeights(prev => ({ ...prev, [col]: next.map(v => Math.max(min, v * scale)) }));
+      } else if (op.kind === 'h') {
+        setLayoutHeight(Math.max(240, op.startH + (event.clientY - op.startY)));
       }
+      event.preventDefault();
     };
 
-    const onUp = () => {
-      dragRef.current = null;
-    };
-
+    const onUp = () => { dragRef.current = null; };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
@@ -632,7 +661,7 @@ export default function CafWorkspacePane({
             ref={layoutRef}
             style={{
               display: 'flex',
-              minHeight: 560,
+              height: layoutHeight,
               overflow: 'hidden',
               background: 'linear-gradient(180deg, #f1f5f9 0%, #dbe7f7 100%)',
               borderTop: '1px solid #a6b8d3',
@@ -644,6 +673,7 @@ export default function CafWorkspacePane({
                 columnIndex={columnIndex}
                 columnSections={columnSections}
                 weights={weights}
+                sectionWeights={sectionWeights}
                 collapsed={collapsed}
                 sections={sections}
                 activeObject={activeObject}
@@ -653,9 +683,22 @@ export default function CafWorkspacePane({
                 isFiltered={!!panelSearchQuery}
                 controllerRef={caf.controller.ref}
                 handlePointerDown={handlePointerDown}
+                handleSectionPointerDown={handleSectionPointerDown}
               />
             ))}
           </div>
+          <div
+            role="separator"
+            aria-label="Resize workspace height"
+            onPointerDown={handleHeightPointerDown}
+            style={{
+              height: 6,
+              cursor: 'ns-resize',
+              flexShrink: 0,
+              background: 'linear-gradient(90deg, rgba(154,176,207,0.25), rgba(154,176,207,0.6), rgba(154,176,207,0.25))',
+              borderTop: '1px solid #8ea6c7',
+            }}
+          />
         </div>
       </div>
 
@@ -891,8 +934,22 @@ export default function CafWorkspacePane({
           font: inherit;
           text-align: left;
         }
-        .link-button:hover {
-          text-decoration: underline;
+        .link-button:hover { text-decoration: underline; }
+        .ws-section-list {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          max-height: none;
+        }
+        .ws-section-list::-webkit-scrollbar { width: 4px; }
+        .ws-section-list::-webkit-scrollbar-track { background: transparent; }
+        .ws-section-list::-webkit-scrollbar-thumb {
+          background: rgba(100, 130, 160, 0.4);
+          border-radius: 2px;
+        }
+        .ws-section-list::-webkit-scrollbar-thumb:hover {
+          background: rgba(100, 130, 160, 0.75);
         }
       `}</style>
     </div>
@@ -903,6 +960,7 @@ function FragmentColumn({
   columnIndex,
   columnSections,
   weights,
+  sectionWeights,
   collapsed,
   sections,
   activeObject,
@@ -912,10 +970,12 @@ function FragmentColumn({
   isFiltered,
   controllerRef,
   handlePointerDown,
+  handleSectionPointerDown,
 }: {
   columnIndex: number;
   columnSections: Array<{ key: PanelKey; title: string }>;
   weights: number[];
+  sectionWeights: Record<number, number[]>;
   collapsed: Record<PanelKey, boolean>;
   sections: Record<PanelKey, CafObject[]>;
   activeObject: CafObject | null;
@@ -925,7 +985,9 @@ function FragmentColumn({
   isLast: boolean;
   isFiltered: boolean;
   handlePointerDown: (index: number) => (event: ReactPointerEvent<HTMLDivElement>) => void;
+  handleSectionPointerDown: (col: number, sec: number) => (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
+  const colWeights = sectionWeights[columnIndex];
   return (
     <>
       <div
@@ -934,16 +996,16 @@ function FragmentColumn({
           minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
-          gap: 10,
-          padding: 10,
+          padding: 8,
         }}
       >
-        {columnSections.map(section => (
+        {columnSections.flatMap((section, sectionIndex) => [
           <SectionCard
             key={section.key}
             title={section.title}
             count={sections[section.key].length}
             collapsed={collapsed[section.key]}
+            flex={colWeights?.[sectionIndex] ?? 1}
             onToggle={() => onToggleSection(section.key)}
           >
             {sections[section.key].length === 0 ? (
@@ -959,8 +1021,24 @@ function FragmentColumn({
                 controllerRef={controllerRef}
               />
             ))}
-          </SectionCard>
-        ))}
+          </SectionCard>,
+          ...(sectionIndex < columnSections.length - 1 ? [
+            <div
+              key={`sec-drag-${sectionIndex}`}
+              role="separator"
+              aria-label="Resize section"
+              onPointerDown={handleSectionPointerDown(columnIndex, sectionIndex)}
+              style={{
+                height: 5,
+                cursor: 'row-resize',
+                flexShrink: 0,
+                background: 'linear-gradient(90deg, rgba(154,176,207,0.25), rgba(154,176,207,0.6), rgba(154,176,207,0.25))',
+                borderTop: '1px solid #8ea6c7',
+                borderBottom: '1px solid #8ea6c7',
+              }}
+            />,
+          ] : []),
+        ])}
       </div>
       {!isLast && (
         <div

@@ -8,6 +8,8 @@ type AnyObject = CafObject | DbexportObject;
 
 export const GRAPHIC_CLASS_IDS = new Set([357, 717, 844]);
 
+type GraphicFamily = 'facility' | 'silverlight' | 'legacy';
+
 const CLASS_LABEL: Record<number, string> = {
   357: 'Graphic Binding',
   717: 'Graphic',
@@ -20,6 +22,25 @@ function displayName(o: AnyObject): string {
 
 function getBindingFileName(o: AnyObject): string | null {
   return 'bindingFileName' in o ? ((o as DbexportObject).bindingFileName ?? null) : null;
+}
+
+function getGraphicFamily(o: AnyObject): GraphicFamily {
+  const fileName = getBindingFileName(o)?.toLowerCase() ?? '';
+  const ref = o.ref.toLowerCase();
+  if (ref.includes('$facilitygraphics') || fileName.endsWith('.json')) return 'facility';
+  if (fileName.endsWith('.xaml') || ref.includes('.xaml')) return 'silverlight';
+  return 'legacy';
+}
+
+function graphicFamilyLabel(family: GraphicFamily): string {
+  switch (family) {
+    case 'facility':
+      return 'Facility Graphics';
+    case 'silverlight':
+      return 'Silverlight Graphics';
+    case 'legacy':
+      return 'Legacy Graphics';
+  }
 }
 
 export function buildGraphicTagMap(objects: AnyObject[]): Map<string, string> {
@@ -37,6 +58,7 @@ interface GraphicTreeNode {
   classid: number | null;
   className: string;
   graphic: AnyObject | null;
+  family?: GraphicFamily;
   children: GraphicTreeNode[];
 }
 
@@ -63,6 +85,9 @@ function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
     if (!GRAPHIC_CLASS_IDS.has(obj.classid)) continue;
     const { engine, segments } = parseGraphicRef(obj.ref);
     if (!engine) continue;
+    const family = getGraphicFamily(obj);
+    const familyKey = `${engine}#family#${family}`;
+    const familyLabel = graphicFamilyLabel(family);
 
     let node = roots.get(engine);
     if (!node) {
@@ -78,22 +103,42 @@ function buildGraphicHierarchy(objects: AnyObject[]): GraphicTreeNode[] {
       roots.set(engine, node);
     }
 
-    if (segments.length === 0) {
-      node.graphic = obj;
-      node.ref = obj.ref;
-      node.classid = obj.classid;
-      node.className = obj.className;
+    let familyNode = node.children.find(entry => entry.key === familyKey);
+    if (!familyNode) {
+      familyNode = {
+        key: familyKey,
+        label: familyLabel,
+        ref: null,
+        classid: null,
+        className: familyLabel,
+        graphic: null,
+        family,
+        children: [],
+      };
+      node.children.push(familyNode);
+    }
+
+    const segmentOffset =
+      family === 'facility'
+        ? (segments[0] === '$FacilityGraphics' ? 1 : 0)
+        : (segments[0] === 'Graphics' ? 1 : 0);
+
+    if (segments.length <= segmentOffset) {
+      familyNode.graphic = obj;
+      familyNode.ref = obj.ref;
+      familyNode.classid = obj.classid;
+      familyNode.className = obj.className;
       continue;
     }
 
-    let current = node;
-    let keyPath = engine;
-    for (let i = 0; i < segments.length; i += 1) {
+    let current = familyNode;
+    let keyPath = familyNode.key;
+    for (let i = segmentOffset; i < segments.length; i += 1) {
       const seg = segments[i];
       keyPath = `${keyPath}#${seg}`;
       let child = current.children.find(entry => entry.key === keyPath);
       if (!child) {
-        const cat = i === 0 ? categorizeGraphicSegment(seg) : null;
+        const cat = i === segmentOffset ? categorizeGraphicSegment(seg) : null;
         child = {
           key: keyPath,
           label: cat?.label ?? seg,
@@ -171,6 +216,7 @@ function GraphicTreeRow({
   const isOpen = expanded.has(node.key) || (query ? visibleChildren.length > 0 : false);
   const kind = graphicTreeKind(node);
   const incomingCount = node.ref ? (referenceIndex.counts.get(node.ref) ?? 0) : 0;
+  const familyBadge = node.family ? graphicFamilyLabel(node.family) : null;
   return (
     <div>
       <div
@@ -196,6 +242,11 @@ function GraphicTreeRow({
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.label}
         </span>
+        {familyBadge && (
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0, background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(175,199,226,0.65)', borderRadius: 999, padding: '1px 6px' }}>
+            {familyBadge}
+          </span>
+        )}
         {node.graphic && (
           <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0, background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(175,199,226,0.65)', borderRadius: 999, padding: '1px 6px' }}>
             {CLASS_LABEL[node.classid ?? 0] ?? 'graphic'}
@@ -283,6 +334,7 @@ export function GraphicViewer({
   }, [bindings]);
 
   const svgFilename = getBindingFileName(graphic);
+  const graphicFamily = getGraphicFamily(graphic);
 
   // Load SVG when graphic or resolver changes
   useEffect(() => {
@@ -464,6 +516,11 @@ export function GraphicViewer({
             Drop the .dbexport file again to render graphics, or open via the online viewer.<br />
             <span style={{ fontFamily: 'Consolas, monospace' }}>{svgFilename}</span>
           </div>
+          {graphicFamily === 'legacy' && (
+            <div style={{ marginTop: 12, fontSize: 11, color: 'var(--accent)' }}>
+              Legacy graphics family detected. Study target for the next renderer pass.
+            </div>
+          )}
         </div>
       </div>
     );

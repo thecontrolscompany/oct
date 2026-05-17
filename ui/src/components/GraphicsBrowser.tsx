@@ -433,20 +433,8 @@ function legacyUiMatches(uiName: string, patterns: RegExp[]): boolean {
   return patterns.some(pattern => pattern.test(uiName));
 }
 
-function ensureSvgNamespaces(root: Element): void {
-  const hasHref = Array.from(root.querySelectorAll('*')).some(el => el.hasAttribute('xlink:href') || el.hasAttribute('href'));
-  if (hasHref && !root.hasAttribute('xmlns:xlink')) {
-    root.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xlink', 'http://www.w3.org/1999/xlink');
-  }
-}
-
 function normalizeSvgExportText(svgText: string): string {
-  const needsXlink = /xlink:href\s*=/i.test(svgText);
-  if (!needsXlink || /xmlns:xlink\s*=/i.test(svgText)) return svgText;
-  return svgText.replace(
-    /<svg\b([^>]*)>/i,
-    (_match, attrs: string) => `<svg${attrs} xmlns:xlink="http://www.w3.org/1999/xlink">`,
-  );
+  return svgText.replace(/\bxlink:href\s*=/gi, 'href=');
 }
 
 function legacyRenderText(
@@ -1077,23 +1065,17 @@ export function GraphicViewer({
       const backgroundRoot = backgroundDoc.documentElement;
       const overlaySvg = svgContainerRef.current?.querySelector('svg.oct-legacy-overlay');
       if (backgroundRoot && overlaySvg) {
-        ensureSvgNamespaces(backgroundRoot);
         const importedNodes = Array.from(overlaySvg.childNodes).map(node => backgroundDoc.importNode(node, true));
         for (const node of importedNodes) backgroundRoot.appendChild(node);
         exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(backgroundDoc));
       } else {
         const fallbackDoc = parser.parseFromString(legacyModel.backgroundSvg, 'image/svg+xml');
-        if (fallbackDoc.documentElement) {
-          ensureSvgNamespaces(fallbackDoc.documentElement);
-          exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(fallbackDoc));
-        } else {
-          exportText = normalizeSvgExportText(legacyModel.backgroundSvg);
-        }
+        if (fallbackDoc.documentElement) exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(fallbackDoc));
+        else exportText = normalizeSvgExportText(legacyModel.backgroundSvg);
       }
     } else {
       const svgEl = svgContainerRef.current?.querySelector('svg');
       if (svgEl) {
-        ensureSvgNamespaces(svgEl);
         exportText = normalizeSvgExportText(new XMLSerializer().serializeToString(svgEl));
       }
     }

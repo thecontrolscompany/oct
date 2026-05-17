@@ -5,7 +5,9 @@ import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
 import { loadStoredArchive, saveStoredArchive } from '../archiveStore';
 import { HAS_API_HOST } from '../connection';
+import CafWorkspacePane from './CafWorkspacePane';
 import TreeGlyph from './TreeGlyph';
+import { buildGraphicTagMap } from './GraphicsBrowser';
 import {
   DEVICE_TABS,
   GROUP_TABS,
@@ -362,6 +364,7 @@ function DetailPane({
   children,
   onSelectChild,
   onSelectReference,
+  graphicTagMap,
 }: {
   archive: LoadedArchive;
   selectedNode: TreeNode | null;
@@ -370,6 +373,7 @@ function DetailPane({
   children: TreeNode[];
   onSelectChild: (node: TreeNode) => void;
   onSelectReference: (ref: string) => void;
+  graphicTagMap?: Map<string, string>;
 }) {
   const workspaceKind: 'device' | 'group' = inferWorkspaceKind(selectedNode, selectedObject);
   const tabs = workspaceKind === 'device' ? DEVICE_TABS : GROUP_TABS;
@@ -532,6 +536,40 @@ function DetailPane({
                 </table>
               )}
             </WorkspaceSection>
+            {graphicTagMap && graphicTagMap.size > 0 && (() => {
+              const graphicHits = incoming.filter(h => graphicTagMap.has(h.referringItem));
+              if (graphicHits.length === 0) return null;
+              return (
+                <WorkspaceSection title="Bound to Graphics">
+                  <table className="sct-table">
+                    <thead>
+                      <tr>
+                        <th>Graphic</th>
+                        <th>Binding type</th>
+                        <th>SVG element</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {graphicHits.slice(0, 20).map((hit, i) => {
+                        const graphicName = graphicTagMap.get(hit.referringItem) ?? hit.referringItem;
+                        const svgElement = hit.referringPath?.split('/').pop() ?? '';
+                        return (
+                          <tr
+                            key={i}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => onSelectReference(hit.referringItem)}
+                          >
+                            <td style={{ fontWeight: 600 }}>{graphicName}</td>
+                            <td style={{ color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
+                            <td style={{ fontFamily: 'Consolas, monospace', fontSize: 11, color: 'var(--text-dim)' }}>{svgElement}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </WorkspaceSection>
+              );
+            })()}
             <WorkspaceSection title="Referenced By">
               {incoming.length === 0 ? (
                 <div className="sct-empty-card" style={{ minHeight: 96 }}>
@@ -700,6 +738,7 @@ function FileDropZone({ onFile }: { onFile: (file: File) => void }) {
 
 export default function OfflineArchivePane() {
   const [archive, setArchive] = useState<LoadedArchive | null>(null);
+  const [view, setView] = useState<'browser' | 'workspace'>('browser');
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -720,6 +759,7 @@ export default function OfflineArchivePane() {
         if (cancelled) return;
         if (saved) {
           setArchive(saved);
+          setView(saved.type === 'caf' ? 'workspace' : 'browser');
           setSelectedKey(null);
           setSearch('');
           setExpanded(new Set());
@@ -785,6 +825,11 @@ export default function OfflineArchivePane() {
     return buildReferenceIndex(archive.data.references);
   }, [archive]);
 
+  const graphicTagMap = useMemo(
+    () => (archive ? buildGraphicTagMap(archive.data.objects) : new Map<string, string>()),
+    [archive],
+  );
+
   const selectedNode = selectedKey ? flatNodes.get(selectedKey) ?? null : null;
   const selectedObject = selectedNode?.object ?? null;
   const activeChildren = selectedNode?.children ?? [];
@@ -803,6 +848,7 @@ export default function OfflineArchivePane() {
       }
       const loaded = await parseArchiveFile(file);
       setArchive(loaded);
+      setView(loaded.type === 'caf' ? 'workspace' : 'browser');
       setSelectedKey(null);
       setSearch('');
       setExpanded(new Set());
@@ -860,6 +906,7 @@ export default function OfflineArchivePane() {
     );
   }
 
+  const canUseWorkspace = archive?.type === 'caf';
   const itemCount = archiveDbSummary?.tables.find(t => t.name === 'Item')?.rowCount ?? null;
   const valueCount = archiveDbSummary?.tables.find(t => t.name === 'Value')?.rowCount ?? null;
   const propertyCount = archiveDbSummary?.tables.find(t => t.name === 'Property')?.rowCount ?? null;
@@ -942,6 +989,24 @@ export default function OfflineArchivePane() {
           </div>
         </div>
         <div className="sct-banner-actions">
+          {canUseWorkspace && (
+            <div className="shell-tabs" style={{ padding: 0, borderBottom: 'none', background: 'transparent', marginRight: 8 }}>
+              <button
+                className={`tab${view === 'browser' ? ' active' : ''}`}
+                style={{ fontSize: 11, padding: '3px 10px' }}
+                onClick={() => setView('browser')}
+              >
+                Archive Browser
+              </button>
+              <button
+                className={`tab${view === 'workspace' ? ' active' : ''}`}
+                style={{ fontSize: 11, padding: '3px 10px' }}
+                onClick={() => setView('workspace')}
+              >
+                CAF Workspace
+              </button>
+            </div>
+          )}
           <input
             type="text"
             placeholder="Filter tree…"
@@ -988,7 +1053,31 @@ export default function OfflineArchivePane() {
         </div>
       )}
 
-      <div className="sct-workspace">
+      {archive.type === 'caf' && view === 'workspace' ? (
+        <div className="sct-panel" style={{ minHeight: 0, flex: 1 }}>
+          <div className="sct-panel-header">
+            <span>CAF Workspace</span>
+            <span className="meta">{selectedObject ? selectedObject.className : 'No selection'}</span>
+          </div>
+          <div className="sct-panel-body sct-panel-scroll" style={{ padding: 0, minHeight: 0 }}>
+            <CafWorkspacePane
+              caf={archive.data}
+              selected={selectedObject?.ref ?? null}
+              onSelect={ref => {
+                const node = flatNodes.get(ref);
+                if (node) {
+                  setSelectedKey(node.key);
+                  setExpanded(prev => new Set(prev).add(node.key));
+                } else {
+                  setSelectedKey(ref);
+                }
+              }}
+              referenceIndex={referenceIndex}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="sct-workspace">
         <aside className="sct-panel">
           <div className="sct-panel-header">
             <span>Archive Selector</span>
@@ -1043,10 +1132,12 @@ export default function OfflineArchivePane() {
                 setExpanded(prev => new Set(prev).add(node.key));
               }}
               onSelectReference={ref => setSelectedKey(ref)}
+              graphicTagMap={graphicTagMap}
             />
           </div>
         </section>
       </div>
+      )}
     </div>
   );
 }

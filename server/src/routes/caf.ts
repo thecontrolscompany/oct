@@ -7,6 +7,7 @@ import type { ArchiveProperty, CafObject, ParsedCaf, ReferenceHit } from '@oct/s
 import { getPropertyName as resolvePropertyName } from '@oct/shared';
 import { CLASS_NAMES, getUnitMap, stripBom } from './jciDictionary';
 import { collectReferenceHitsFromNode } from '../archiveAnalysis';
+import { getPool } from '../db';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -175,11 +176,49 @@ function parseCafXml(xml: string, unitMap: Record<number, string>, sourceName: s
   };
 }
 
+// Cache of FDB enum set 432 (block type names for classid 536 Control Activities)
+let _blockTypeNames: Map<number, string> | null = null;
+async function getBlockTypeNames(): Promise<Map<number, string>> {
+  if (_blockTypeNames) return _blockTypeNames;
+  try {
+    const pool = await getPool();
+    // Enum set 432 maps property 3670 values → human-readable Control Activity names
+    const result = await pool.request().query(
+      `SELECT m.EnumMemberId, m.Name
+       FROM [FDB_Control_10_8___Firmware_12_0].dbo.tblEnumMember m
+       WHERE m.EnumSetId = 432`,
+    );
+    _blockTypeNames = new Map(result.recordset.map((r: { EnumMemberId: number; Name: string }) => [r.EnumMemberId, r.Name]));
+  } catch {
+    _blockTypeNames = new Map(); // non-fatal — leave tags empty if FDB unavailable
+  }
+  return _blockTypeNames;
+}
+
+// Enrich unnamed classid=536 objects using property 3670 → FDB enum set 432 name lookup
+async function enrich536Names(objects: CafObject[]): Promise<void> {
+  const unnamed536 = objects.filter(o => o.classid === 536 && !o.tag);
+  if (unnamed536.length === 0) return;
+  const names = await getBlockTypeNames();
+  if (names.size === 0) return;
+  for (const obj of unnamed536) {
+    const p3670 = obj.properties.find(p => p.id === 3670);
+    if (!p3670) continue;
+    const enumId = parseInt(p3670.value, 10);
+    if (!isNaN(enumId)) {
+      const name = names.get(enumId);
+      if (name) obj.tag = name;
+    }
+  }
+}
+
 async function loadCaf(buffer: Buffer): Promise<ParsedCaf> {
   const zip = new AdmZip(buffer);
   const entry = zip.getEntries().find(e => e.entryName.endsWith('.xml'));
   if (!entry) throw new Error('No XML file found inside .caf');
-  return parseCafXml(zip.readAsText(entry), await getUnitMap(), entry.entryName);
+  const parsed = parseCafXml(zip.readAsText(entry), await getUnitMap(), entry.entryName);
+  await enrich536Names(parsed.objects);
+  return parsed;
 }
 
 // POST /api/caf/upload — multipart file upload

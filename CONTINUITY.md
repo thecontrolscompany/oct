@@ -22,6 +22,25 @@ The original CCT is a Java/Swing desktop app. This project does **not** use the 
 
 The online and offline experiences should match to the greatest extent possible. Reuse the same portal panes, shared components, and resources in both modes unless a backend dependency makes that impossible. When a difference is unavoidable, keep it limited to the data source or transport layer, not the layout or workflow.
 
+### Roadmap: WinPro / HVAC PRO recreation
+
+WinPro is the next legacy toolchain to bring into OCT after the current CAF/dbexport and graphics work. The goal is to make OCT able to browse, understand, and eventually recreate the legacy HVAC PRO / WinPro workflow in the same offline-first style as the rest of the project.
+
+Planned scope:
+- Parse `.cfg`, `.prn`, and `.asc` files side by side
+- Show WinPro applications with the same CAF-style layout and navigation patterns
+- Present the question-and-answer session as a first-class model, not just raw text
+- Expose I/O as `AI-1`, `BI-1`, `AO-1`, `BO-1` style lists
+- Track sideloops, symbols, and generated application logic explicitly
+- Correlate `.cfg`, `.prn`, and `.asc` records so they cross-link like CAF/dbexport objects
+- Recreate enough of the flow to export valid `.cfg` output from the model
+- Later, generate the companion report output as well
+
+Current status:
+- Parser/viewer support exists for browsing legacy WinPro files in OCT
+- The next step is to semantically model the Q&A session and output serializer
+- Long-term, this should become a reusable legacy-controller authoring path inside OCT, not a one-off viewer
+
 ---
 
 ## Environment

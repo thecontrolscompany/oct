@@ -1319,6 +1319,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     if (seededArchiveRef.current === currentFile.name) return;
     seededArchiveRef.current = currentFile.name;
     setTreeExpanded(new Set());
+    if (currentFile.type === 'caf') setTab('workspace');
   }, [currentFile, cafRoots]);
 
   const treeQuery = useMemo(() => normalizeTreeQuery(treeSearch), [treeSearch]);

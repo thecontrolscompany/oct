@@ -288,18 +288,6 @@ function TreeRow({
         <span style={{ width: 12, fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>
           {node.children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
-        <span style={{
-          fontSize: 10,
-          padding: '1px 5px',
-          borderRadius: 3,
-          flexShrink: 0,
-          fontFamily: 'Consolas, monospace',
-          color: 'var(--accent)',
-          background: 'var(--bg)',
-          border: '1px solid var(--border)',
-        }}>
-          {node.className}
-        </span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.label}
         </span>

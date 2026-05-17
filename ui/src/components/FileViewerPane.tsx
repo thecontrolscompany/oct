@@ -199,11 +199,6 @@ function NavTreeNode({ node, depth, selected, onSelect, expanded, onToggle, quer
         <span style={{ width: 14, fontSize: 10, color: isSelected ? '#fff' : 'var(--text-dim)', flexShrink: 0 }}>
           {node.children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
-        {node.className !== `Class${node.classid}` && node.className !== 'Class0' && (
-          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, flexShrink: 0, fontFamily: 'Consolas,monospace', color: isSelected ? '#fff' : 'var(--accent)', background: isSelected ? 'rgba(255,255,255,0.15)' : 'var(--bg)', border: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border)'}` }}>
-            {node.className}
-          </span>
-        )}
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isMatch ? 1 : 0.92 }}>
           {node.label || node.reference.split(/[/\\]/).pop()}
         </span>

@@ -555,38 +555,40 @@ function ReferencesTab({
 
 export default function FileViewerPane() {
   const [file, setFile] = useState<LoadedFile | null>(null);
+  const [previewFile, setPreviewFile] = useState<LoadedFile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ViewTab>('tree');
   const [selected, setSelected] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const currentFile = previewFile ?? file;
 
   // Build maps for CAF tree
   const { objMap, childMap, cafRoots } = useMemo(() => {
-    if (!file || file.type !== 'caf') return { objMap: new Map(), childMap: new Map(), cafRoots: [] };
-    const objMap = new Map(file.data.objects.map(o => [o.ref, o]));
+    if (!currentFile || currentFile.type !== 'caf') return { objMap: new Map(), childMap: new Map(), cafRoots: [] };
+    const objMap = new Map(currentFile.data.objects.map(o => [o.ref, o]));
     const childMap = new Map<string | null, CafObject[]>();
-    for (const o of file.data.objects) {
+    for (const o of currentFile.data.objects) {
       if (!childMap.has(o.parentRef)) childMap.set(o.parentRef, []);
       childMap.get(o.parentRef)!.push(o);
     }
     return { objMap, childMap, cafRoots: childMap.get(null) ?? [] };
-  }, [file]);
+  }, [currentFile]);
 
   const referenceIndex = useMemo(() => {
-    if (!file) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
-    return buildReferenceIndex(file.data.references);
-  }, [file]);
+    if (!currentFile) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
+    return buildReferenceIndex(currentFile.data.references);
+  }, [currentFile]);
 
   const referenceMap = referenceIndex.byTarget;
   const incomingCounts = referenceIndex.counts;
 
-  const selectedObj = selected && file
-    ? (file.type === 'caf' ? objMap.get(selected) : file.data.objects.find(o => o.ref === selected)) ?? null
+  const selectedObj = selected && currentFile
+    ? (currentFile.type === 'caf' ? objMap.get(selected) : currentFile.data.objects.find(o => o.ref === selected)) ?? null
     : null;
 
   const handleFile = useCallback(async (f: File) => {
-    setLoading(true); setError(null); setFile(null); setSelected(null); setTab('tree');
+    setLoading(true); setError(null); setFile(null); setPreviewFile(null); setSelected(null); setTab('tree');
     try {
       const name = f.name;
       if (f.name.toLowerCase().endsWith('.caf')) {
@@ -601,7 +603,7 @@ export default function FileViewerPane() {
     } catch (e) { setError(String(e)); } finally { setLoading(false); }
   }, []);
 
-  if (!file && !loading) {
+  if (!currentFile && !loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
         <div
@@ -630,9 +632,9 @@ export default function FileViewerPane() {
   }
 
   if (loading) return <div style={{ padding: 24, color: 'var(--text-dim)', textAlign: 'center' }}>Parsing file…</div>;
-  if (!file) return null;
+  if (!currentFile) return null;
 
-  const allObjects = getObjects(file);
+  const allObjects = getObjects(currentFile);
   const TABS: [ViewTab, string][] = [['tree', 'Tree'], ['objects', 'Objects'], ['io', 'I/O Points'], ['refs', 'References'], ['audit', 'Audit'], ['diff', 'Diff'], ['export', 'Export']];
 
   return (
@@ -640,17 +642,22 @@ export default function FileViewerPane() {
       {/* Toolbar */}
       <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
         <span style={{ fontWeight: 600, fontSize: 13 }}>
-          {file.type === 'caf' && file.data.controller.tag ? file.data.controller.tag : file.name}
+          {currentFile.type === 'caf' && currentFile.data.controller.tag ? currentFile.data.controller.tag : currentFile.name}
         </span>
-        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: file.type === 'caf' ? 'var(--accent)' : '#8a2be2', color: '#fff', fontFamily: 'Consolas,monospace' }}>
-          {file.type === 'caf' ? 'CAF' : 'dbexport'}
+        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: currentFile.type === 'caf' ? 'var(--accent)' : '#8a2be2', color: '#fff', fontFamily: 'Consolas,monospace' }}>
+          {currentFile.type === 'caf' ? 'CAF' : 'dbexport'}
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-          {file.type === 'caf'
-            ? `${file.data.controller.modelName} · fw ${file.data.controller.appVersion} · ${allObjects.length} objects · ${file.data.references.length} refs`
-            : `${file.data.engines.length} engine(s) · ${allObjects.length} objects · ${file.data.references.length} refs`
+          {currentFile.type === 'caf'
+            ? `${currentFile.data.controller.modelName} · fw ${currentFile.data.controller.appVersion} · ${allObjects.length} objects · ${currentFile.data.references.length} refs`
+            : `${currentFile.data.engines.length} engine(s) · ${allObjects.length} objects · ${currentFile.data.references.length} refs`
           }
         </span>
+        {previewFile && (
+          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--success)', color: '#fff', fontFamily: 'Consolas,monospace' }}>
+            PREVIEW
+          </span>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
           {TABS.map(([id, label]) => (
             <button key={id} className={`tab${tab === id ? ' active' : ''}`}
@@ -659,8 +666,14 @@ export default function FileViewerPane() {
               {label}
             </button>
           ))}
+          {previewFile && (
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => { setPreviewFile(null); setSelected(null); setTab('audit'); }}>
+              Reset preview
+            </button>
+          )}
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}
-            onClick={() => { setFile(null); setSelected(null); }}>
+            onClick={() => { setFile(null); setPreviewFile(null); setSelected(null); }}>
             Close
           </button>
         </div>
@@ -671,7 +684,7 @@ export default function FileViewerPane() {
       {tab === 'io' && <div style={{ flex: 1, overflow: 'hidden' }}><IoTable objects={allObjects} /></div>}
       {tab === 'refs' && (
         <ReferencesTab
-          file={file}
+          file={currentFile}
           referenceIndex={referenceIndex}
           selectedTarget={selected}
           onSelectTarget={setSelected}
@@ -679,22 +692,24 @@ export default function FileViewerPane() {
       )}
       {tab === 'audit' && (
         <ArchiveAuditTab
-          file={file}
+          file={currentFile}
           referenceIndex={referenceIndex}
           onSelectObject={setSelected}
           onOpenReferences={(target) => { setSelected(target); setTab('refs'); }}
+          onApplyRewrite={(nextFile) => { setPreviewFile(nextFile); setSelected(null); setTab('audit'); }}
+          onResetRewrite={() => { setPreviewFile(null); setSelected(null); }}
         />
       )}
-      {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={file} /></div>}
-      {tab === 'diff' && <DiffTab fileA={file} fileB={null} />}
+      {tab === 'export' && <div style={{ flex: 1, overflowY: 'auto' }}><ExportTab file={currentFile} /></div>}
+      {tab === 'diff' && <DiffTab fileA={previewFile ?? file} fileB={previewFile ? file : null} />}
 
       {tab === 'tree' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <div style={{ width: 420, borderRight: '1px solid var(--border)', overflowY: 'auto', flexShrink: 0 }}>
-            {file.type === 'caf'
+            {currentFile.type === 'caf'
               ? cafRoots.map(r => <CafTreeNode key={r.ref} obj={r} childMap={childMap} depth={0} selected={selected} onSelect={setSelected} />)
-              : file.data.site
-                ? <NavTreeNode node={file.data.site} depth={0} selected={selected} onSelect={setSelected} />
+              : currentFile.data.site
+                ? <NavTreeNode node={currentFile.data.site} depth={0} selected={selected} onSelect={setSelected} />
                 : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No navtree found — showing object list</div>
             }
           </div>

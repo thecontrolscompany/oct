@@ -82,6 +82,23 @@ export interface CleanupManifestEntry {
   findingId: string;
   findingTitle: string;
   source?: string;
+  action: 'repoint' | 'delete';
+}
+
+export interface RewriteChangeSummary {
+  changedReferences: number;
+  changedReferrers: number;
+  renamedObjects: number;
+  renamedParents: number;
+  renamedEngines: number;
+  deletedObjects: number;
+  deletedReferences: number;
+}
+
+export interface RewriteResult {
+  file: LoadedArchive;
+  summary: RewriteChangeSummary;
+  acceptedEntries: CleanupManifestEntry[];
 }
 
 const IO_CLASS_IDS = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
@@ -221,6 +238,82 @@ function summarizeRefs(refs: string[]): string {
   if (refs.length === 0) return 'No objects matched';
   const shown = refs.slice(0, 4).join(', ');
   return refs.length > 4 ? `${shown}, +${refs.length - 4} more` : shown;
+}
+
+function cloneFile<T extends LoadedArchive>(file: T): T {
+  return structuredClone(file);
+}
+
+function applyEntryToArchive(file: LoadedArchive, entry: CleanupManifestEntry, summary: RewriteChangeSummary): void {
+  const { target, replacement } = entry;
+  if (!target) return;
+
+  if (entry.action === 'delete') {
+    const objectTargets = new Set<string>([target]);
+    file.data.objects = file.data.objects.filter(obj => {
+      if (objectTargets.has(obj.ref)) {
+        summary.deletedObjects += 1;
+        return false;
+      }
+      return true;
+    }) as typeof file.data.objects;
+    const beforeRefs = file.data.references.length;
+    file.data.references = file.data.references.filter(hit => hit.target !== target && hit.referringItem !== target) as typeof file.data.references;
+    summary.deletedReferences += beforeRefs - file.data.references.length;
+    return;
+  }
+
+  if (!replacement || target === replacement) return;
+
+  for (const hit of file.data.references) {
+    if (hit.target === target) {
+      hit.target = replacement;
+      summary.changedReferences += 1;
+    }
+    if (hit.referringItem === target) {
+      hit.referringItem = replacement;
+      summary.changedReferrers += 1;
+    }
+    if (hit.sourcePath?.includes(target)) {
+      hit.sourcePath = hit.sourcePath.split(target).join(replacement);
+    }
+    if (hit.referringPath?.includes(target)) {
+      hit.referringPath = hit.referringPath.split(target).join(replacement);
+    }
+  }
+
+  for (const obj of file.data.objects) {
+    if (obj.ref === target) {
+      obj.ref = replacement;
+      summary.renamedObjects += 1;
+    }
+    if ('parentRef' in obj && obj.parentRef === target) {
+      obj.parentRef = replacement;
+      summary.renamedParents += 1;
+    }
+    if ('engineRef' in obj && obj.engineRef === target) {
+      obj.engineRef = replacement;
+      summary.renamedEngines += 1;
+    }
+  }
+
+  if ('controller' in file.data && file.data.controller.ref === target) {
+    file.data.controller.ref = replacement;
+  }
+  if ('site' in file.data && file.data.site && file.data.site.reference === target) {
+    file.data.site.reference = replacement;
+  }
+  if ('site' in file.data && file.data.site) {
+    const walk = (node: any) => {
+      if (!node) return;
+      if (node.reference === target) {
+        node.reference = replacement;
+        summary.renamedObjects += 1;
+      }
+      for (const child of node.children ?? []) walk(child);
+    };
+    walk(file.data.site);
+  }
 }
 
 export function buildArchiveAudit(file: LoadedArchive, referenceIndex: ReferenceIndex): AuditReport {
@@ -479,6 +572,98 @@ export function exportCleanupManifestJson(entries: CleanupManifestEntry[]): stri
     createdAt: new Date().toISOString(),
     entries,
   }, null, 2);
+}
+
+export function applyCleanupManifest(file: LoadedArchive, entries: CleanupManifestEntry[]): RewriteResult {
+  const next = cloneFile(file);
+  const summary: RewriteChangeSummary = {
+    changedReferences: 0,
+    changedReferrers: 0,
+    renamedObjects: 0,
+    renamedParents: 0,
+    renamedEngines: 0,
+    deletedObjects: 0,
+    deletedReferences: 0,
+  };
+
+  for (const entry of entries) {
+    applyEntryToArchive(next, entry, summary);
+  }
+
+  return {
+    file: next,
+    summary,
+    acceptedEntries: entries,
+  };
+}
+
+export function buildAsBuiltReport(file: LoadedArchive, audit: AuditReport, rewrite?: RewriteResult): string {
+  const lines: string[] = [];
+  const active = rewrite?.file ?? file;
+  lines.push('<!doctype html>');
+  lines.push('<html lang="en">');
+  lines.push('<head>');
+  lines.push('<meta charset="utf-8" />');
+  lines.push('<meta name="viewport" content="width=device-width, initial-scale=1" />');
+  lines.push(`<title>As-Built Report - ${active.name}</title>`);
+  lines.push('<style>');
+  lines.push('body{font-family:Arial,Helvetica,sans-serif;margin:32px;color:#1f2937;line-height:1.45;}');
+  lines.push('h1,h2,h3{margin:0 0 12px 0;}');
+  lines.push('section{margin:0 0 28px 0;padding:16px;border:1px solid #d1d5db;border-radius:10px;}');
+  lines.push('table{width:100%;border-collapse:collapse;font-size:12px;}');
+  lines.push('th,td{border-bottom:1px solid #e5e7eb;padding:6px 8px;text-align:left;vertical-align:top;}');
+  lines.push('.muted{color:#6b7280;font-size:12px;}');
+  lines.push('</style>');
+  lines.push('</head>');
+  lines.push('<body>');
+  lines.push(`<h1>As-Built Report</h1>`);
+  lines.push(`<div class="muted">${active.name}</div>`);
+  lines.push('<section>');
+  lines.push('<h2>Summary</h2>');
+  lines.push(`<div>Objects: ${active.data.objects.length.toLocaleString()}</div>`);
+  lines.push(`<div>References: ${active.data.references.length.toLocaleString()}</div>`);
+  lines.push(`<div>Findings: ${audit.summary.total.toLocaleString()}</div>`);
+  if (rewrite) {
+    lines.push(`<div>Applied cleanup entries: ${rewrite.acceptedEntries.length.toLocaleString()}</div>`);
+    lines.push(`<div>Repointed references: ${rewrite.summary.changedReferences.toLocaleString()} · Referrers renamed: ${rewrite.summary.changedReferrers.toLocaleString()}</div>`);
+    lines.push(`<div>Objects renamed: ${rewrite.summary.renamedObjects.toLocaleString()} · Parents renamed: ${rewrite.summary.renamedParents.toLocaleString()} · Engines renamed: ${rewrite.summary.renamedEngines.toLocaleString()}</div>`);
+    lines.push(`<div>Objects deleted: ${rewrite.summary.deletedObjects.toLocaleString()} · References deleted: ${rewrite.summary.deletedReferences.toLocaleString()}</div>`);
+  }
+  lines.push('</section>');
+  if (rewrite && rewrite.acceptedEntries.length > 0) {
+    lines.push('<section>');
+    lines.push('<h2>Applied Cleanup Manifest</h2>');
+    lines.push('<table><thead><tr><th>Action</th><th>Target</th><th>Replacement</th><th>Reason</th><th>Source</th></tr></thead><tbody>');
+    for (const entry of rewrite.acceptedEntries) {
+      lines.push(`<tr><td>${entry.action}</td><td>${entry.target}</td><td>${entry.replacement || '—'}</td><td>${entry.reason}</td><td>${entry.source ?? ''}</td></tr>`);
+    }
+    lines.push('</tbody></table>');
+    lines.push('</section>');
+  }
+  lines.push('<section>');
+  lines.push('<h2>Audit Overview</h2>');
+  lines.push(`<div>High: ${audit.summary.high} · Medium: ${audit.summary.medium} · Low: ${audit.summary.low}</div>`);
+  lines.push(`<div>Unbound: ${audit.summary.unbound} · Orphans: ${audit.summary.orphans} · Duplicates: ${audit.summary.duplicateDescriptions + audit.summary.duplicateTags}</div>`);
+  lines.push('</section>');
+  lines.push('<section>');
+  lines.push('<h2>Reference Hotspots</h2>');
+  lines.push('<table><thead><tr><th>Target</th><th>Count</th><th>Context</th></tr></thead><tbody>');
+  const hotspotFindings = audit.findings.filter(f => f.kind === 'reference-hotspot').slice(0, 20);
+  for (const finding of hotspotFindings) {
+    lines.push(`<tr><td>${finding.target ?? finding.refs[0] ?? ''}</td><td>${finding.count}</td><td>${finding.details ?? ''}</td></tr>`);
+  }
+  lines.push('</tbody></table>');
+  lines.push('</section>');
+  lines.push('<section>');
+  lines.push('<h2>Top Findings</h2>');
+  lines.push('<table><thead><tr><th>Severity</th><th>Kind</th><th>Title</th><th>Summary</th></tr></thead><tbody>');
+  for (const finding of audit.findings.slice(0, 40)) {
+    lines.push(`<tr><td>${finding.severity}</td><td>${finding.kind}</td><td>${finding.title}</td><td>${finding.summary}</td></tr>`);
+  }
+  lines.push('</tbody></table>');
+  lines.push('</section>');
+  lines.push('</body></html>');
+  return lines.join('');
 }
 
 export function suggestRepointCandidates(target: string, objects: AnyObject[]): CleanupSuggestion[] {

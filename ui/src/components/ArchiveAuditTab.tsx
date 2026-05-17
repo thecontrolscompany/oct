@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { exportCleanupCsv, exportCleanupManifestJson, exportFindingsCsv, buildArchiveAudit } from './archiveAudit';
+import { exportCleanupCsv, exportCleanupManifestJson, exportFindingsCsv, buildArchiveAudit, applyCleanupManifest, buildAsBuiltReport } from './archiveAudit';
 import type { LoadedArchive } from './archiveAudit';
 import type { ReferenceIndex } from '@oct/shared';
 
@@ -61,18 +61,22 @@ export default function ArchiveAuditTab({
   referenceIndex,
   onSelectObject,
   onOpenReferences,
+  onApplyRewrite,
+  onResetRewrite,
 }: {
   file: LoadedArchive;
   referenceIndex: ReferenceIndex;
   onSelectObject: (ref: string) => void;
   onOpenReferences: (target: string) => void;
+  onApplyRewrite: (nextFile: LoadedArchive) => void;
+  onResetRewrite: () => void;
 }) {
   const report = useMemo(() => buildArchiveAudit(file, referenceIndex), [file, referenceIndex]);
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState<'all' | 'info' | 'low' | 'medium' | 'high'>('all');
   const [kind, setKind] = useState<'all' | string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [accepted, setAccepted] = useState<Record<string, { target: string; replacement: string; reason: string; score: number; findingId: string; findingTitle: string; source?: string }>>({});
+  const [accepted, setAccepted] = useState<Record<string, { target: string; replacement: string; reason: string; score: number; findingId: string; findingTitle: string; source?: string; action: 'repoint' | 'delete' }>>({});
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -97,6 +101,8 @@ export default function ArchiveAuditTab({
   const findingsCsv = useMemo(() => exportFindingsCsv(report.findings), [report.findings]);
   const acceptedEntries = useMemo(() => Object.values(accepted).sort((a, b) => b.score - a.score || a.target.localeCompare(b.target)), [accepted]);
   const acceptedManifest = useMemo(() => exportCleanupManifestJson(acceptedEntries), [acceptedEntries]);
+  const rewritePreview = useMemo(() => applyCleanupManifest(file, acceptedEntries), [file, acceptedEntries]);
+  const asBuiltHtml = useMemo(() => buildAsBuiltReport(file, report, rewritePreview), [file, report, rewritePreview]);
 
   const acceptSuggestion = (findingId: string, findingTitle: string, suggestion: { ref: string; reason: string; score: number }, source?: string, target?: string) => {
     const resolvedTarget = target ?? selected?.target ?? '';
@@ -111,8 +117,32 @@ export default function ArchiveAuditTab({
         findingId,
         findingTitle,
         source,
+        action: 'repoint',
       },
     }));
+  };
+
+  const queueDelete = (findingId: string, findingTitle: string, target: string, source?: string, score = 0) => {
+    if (!target) return;
+    setAccepted(prev => ({
+      ...prev,
+      [target]: {
+        target,
+        replacement: '',
+        reason: 'delete candidate',
+        score,
+        findingId,
+        findingTitle,
+        source,
+        action: 'delete',
+      },
+    }));
+  };
+
+  const queueDeleteMany = (findingId: string, findingTitle: string, refs: string[], source?: string) => {
+    for (const ref of refs) {
+      queueDelete(findingId, findingTitle, ref, source, 0);
+    }
   };
 
   const removeAccepted = (target: string) => {
@@ -146,11 +176,20 @@ export default function ArchiveAuditTab({
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => downloadText(`${file.name.replace(/\.[^.]+$/, '')}.cleanup-manifest.json`, acceptedManifest, 'application/json')}>
               Export accepted
             </button>
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => downloadText(`${file.name.replace(/\.[^.]+$/, '')}.as-built.html`, asBuiltHtml, 'text/html')}>
+              Export as-built
+            </button>
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => copyText(acceptedManifest)}>
               Copy manifest
             </button>
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setAccepted({})} disabled={acceptedEntries.length === 0}>
               Clear accepted
+            </button>
+            <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => onApplyRewrite(rewritePreview.file)} disabled={acceptedEntries.length === 0}>
+              Apply preview
+            </button>
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={onResetRewrite}>
+              Reset preview
             </button>
           </div>
         </div>
@@ -173,6 +212,23 @@ export default function ArchiveAuditTab({
             <div style={{ fontSize: 18, fontWeight: 700 }}>{report.cleanupPlan.length.toLocaleString()}</div>
           </div>
         </div>
+
+        {acceptedEntries.length > 0 && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'rgba(100,160,255,0.06)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>DRY-RUN PREVIEW</div>
+            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+              {rewritePreview.summary.changedReferences.toLocaleString()} reference target(s) would be repointed, {' '}
+              {rewritePreview.summary.changedReferrers.toLocaleString()} referrer(s) would be renamed, {' '}
+              {rewritePreview.summary.renamedObjects.toLocaleString()} object ref(s) would change, {' '}
+              {rewritePreview.summary.renamedParents.toLocaleString()} parent link(s) would change, and {' '}
+              {rewritePreview.summary.renamedEngines.toLocaleString()} engine ref(s) would change.
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>
+              {rewritePreview.summary.deletedObjects.toLocaleString()} object(s) would be deleted and {' '}
+              {rewritePreview.summary.deletedReferences.toLocaleString()} reference hit(s) would be removed.
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
@@ -261,6 +317,24 @@ export default function ArchiveAuditTab({
                 <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{selected.title}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5 }}>{selected.summary}</div>
                 {selected.details && <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5 }}>{selected.details}</div>}
+                {selected.refs.length > 0 && selected.kind !== 'unbound-reference' && (
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={() => queueDeleteMany(selected.id, selected.title, selected.refs, selected.source)}
+                    >
+                      Queue delete
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={() => onSelectObject(selected.refs[0])}
+                    >
+                      Inspect first ref
+                    </button>
+                  </div>
+                )}
               </div>
 
               {selected.suggestions.length > 0 && (
@@ -309,6 +383,7 @@ export default function ArchiveAuditTab({
                       <tr style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
                         <th style={{ textAlign: 'left', padding: '4px 8px 4px 0' }}>Target</th>
                         <th style={{ textAlign: 'left', padding: '4px 8px' }}>Replacement</th>
+                        <th style={{ textAlign: 'left', padding: '4px 8px' }}>Action</th>
                         <th style={{ textAlign: 'left', padding: '4px 8px' }}>Source</th>
                         <th style={{ textAlign: 'right', padding: '4px 8px' }}>Score</th>
                         <th style={{ textAlign: 'left', padding: '4px 8px' }}></th>
@@ -318,7 +393,10 @@ export default function ArchiveAuditTab({
                       {acceptedEntries.map(entry => (
                         <tr key={entry.target} style={{ borderBottom: '1px solid var(--border)' }}>
                           <td style={{ padding: '4px 8px 4px 0', fontFamily: 'Consolas, monospace', wordBreak: 'break-all' }}>{entry.target}</td>
-                          <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace', wordBreak: 'break-all' }}>{entry.replacement}</td>
+                          <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace', wordBreak: 'break-all' }}>{entry.replacement || '—'}</td>
+                          <td style={{ padding: '4px 8px', textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.4, color: entry.action === 'delete' ? 'var(--error, #e55)' : 'var(--success)' }}>
+                            {entry.action}
+                          </td>
                           <td style={{ padding: '4px 8px', color: 'var(--text-dim)' }}>{entry.source ?? 'n/a'}</td>
                           <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'Consolas, monospace' }}>{entry.score}</td>
                           <td style={{ padding: '4px 8px', textAlign: 'right' }}>

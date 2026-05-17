@@ -169,14 +169,14 @@ function getHelpContext(view: View, onlineMode: boolean): HelpContext {
       return {
         title: 'File Viewer',
         intro: onlineMode
-          ? 'Open .caf or .dbexport files, explore the archive tree, and inspect graphics inline.'
-          : 'Drop a .caf or .dbexport file here to browse it offline. Graphics render when the archive is loaded in the viewer.',
+          ? 'Open .caf, .dbexport, or legacy WinPro files, explore the archive tree, and inspect graphics or program structure inline.'
+          : 'Drop a .caf, .dbexport, .cfg, .prn, or .asc file here to browse it offline. Graphics and WinPro parsing render when the archive is loaded in the viewer.',
         sections: [
           {
             title: 'What this view does',
             items: [
-              'Shows the archive tree, object details, graphics, references, audit, diff, and export tools.',
-              'Lets you inspect both CAF and dbexport archives with the same viewer shell.',
+              'Shows the archive tree, object details, graphics, references, audit, diff, export tools, and WinPro parsing views.',
+              'Lets you inspect CAF, dbexport, and WinPro archive families with the same viewer shell.',
             ],
           },
           {
@@ -185,6 +185,7 @@ function getHelpContext(view: View, onlineMode: boolean): HelpContext {
               'Facility graphics render inline.',
               'Legacy graphics are partially rendered and still being refined.',
               'Offline graphics require re-upload after refresh in the current build.',
+              'WinPro .cfg/.prn/.asc files are parsed locally and do not require a server upload.',
             ],
           },
         ],

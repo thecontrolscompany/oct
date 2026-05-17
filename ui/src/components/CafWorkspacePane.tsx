@@ -111,8 +111,9 @@ function isRenderableWorkspaceObject(obj: CafObject, _mode: WorkspaceMode, ctrl5
   if (obj.classid === 543) return ctrl536Refs ? (obj.parentRef !== null && ctrl536Refs.has(obj.parentRef)) : true;
   // Control Points (555) — always show
   if (obj.classid === 555) return true;
-  // Math (561), Comparison (560), State Selection (540) — always show
-  if (obj.classid === 560 || obj.classid === 561 || obj.classid === 540) return true;
+  // State Selection (540) — always show; Comparison/Math primitives (560/561) only if named
+  if (obj.classid === 540) return true;
+  if (obj.classid === 560 || obj.classid === 561) return hasFriendlyLabel(obj);
   // Constants, Last Value, Boolean/Mux primitives (538, 551, 559, 562, 568) — only if named
   if (SETPOINT_CLASSES.has(obj.classid) || obj.classid === 559 || obj.classid === 562) return hasFriendlyLabel(obj);
   // Fallback: any other named object that looks like logic/setpoint/output-control
@@ -121,13 +122,9 @@ function isRenderableWorkspaceObject(obj: CafObject, _mode: WorkspaceMode, ctrl5
 }
 
 function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
-  // Network interface first — signal blocks with friendly labels
+  // Network interface — signal blocks always stay in their respective I/O columns
   if (NETWORK_INPUT_CLASSES.has(obj.classid)) return 'network-inputs';
-  if (NETWORK_OUTPUT_CLASSES.has(obj.classid)) {
-    // Output blocks that look like a calculated setpoint belong in setpoint-misc
-    if (isSetpointLike(obj)) return 'setpoint-misc';
-    return 'network-outputs';
-  }
+  if (NETWORK_OUTPUT_CLASSES.has(obj.classid)) return 'network-outputs';
 
   // Physical hardware I/O
   if (HW_INPUT_CLASSES.has(obj.classid)) return 'inputs';
@@ -161,11 +158,10 @@ function classifyPanelKey(obj: CafObject, mode: WorkspaceMode): PanelKey {
     return 'state-generation';
   }
 
-  // Keyword-based fallback
+  // Keyword-based fallback — unclassified objects go to state-generation, not setpoint-misc
   if (isOutputControlLike(obj)) return 'output-control';
   if (isSetpointLike(obj)) return 'setpoint-misc';
-  if (isLogicLike(obj)) return 'state-generation';
-  return 'setpoint-misc';
+  return 'state-generation';
 }
 
 function sortObjects(objects: CafObject[]): CafObject[] {

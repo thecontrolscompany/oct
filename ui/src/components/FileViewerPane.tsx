@@ -4,6 +4,8 @@ import type { CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, Ref
 import { buildReferenceIndex } from '@oct/shared';
 import { parseArchiveFile } from '../archiveParser';
 import type { GraphicResolver } from '../archiveParser';
+import WinproViewer from './WinproViewer';
+import { parseWinproFile, type LoadedWinpro } from '../winproParser';
 import ArchiveAuditTab from './ArchiveAuditTab';
 import { buildArchiveAudit } from './archiveAudit';
 import CafWorkspacePane from './CafWorkspacePane';
@@ -20,7 +22,8 @@ import {
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
-type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string; graphicResolver?: GraphicResolver };
+type LoadedFile = { type: 'caf'; data: ParsedCaf; name: string } | { type: 'dbexport'; data: ParsedDbexport; name: string; graphicResolver?: GraphicResolver } | LoadedWinpro;
+type SupportedArchiveFile = Extract<LoadedFile, { type: 'caf' | 'dbexport' }>;
 type ViewMode = 'online' | 'offline';
 type AnyObject = CafObject | DbexportObject;
 type ViewTab = 'tree' | 'workspace' | 'objects' | 'io' | 'graphics' | 'refs' | 'audit' | 'diff' | 'export';
@@ -39,7 +42,11 @@ const HW_IO_CLASSES = new Set([239, 240, 241, 242, 243, 671, 672, 673, 674]);
 const BACNET_OBJ_CLASSES = new Set([163, 164, 165, 166, 167, 168, 141]);
 
 function getObjects(f: LoadedFile): AnyObject[] {
-  return f.type === 'caf' ? f.data.objects : f.data.objects;
+  return f.type === 'winpro' ? [] : f.data.objects;
+}
+
+function getReferences(f: LoadedFile): ReferenceHit[] {
+  return f.type === 'winpro' ? [] : f.data.references;
 }
 
 function displayName(o: AnyObject): string {
@@ -57,6 +64,17 @@ function isDbexportSection(ref: string, needle: string): boolean {
 }
 
 function summarizeArchive(file: LoadedFile): ArchiveSummary {
+  if (file.type === 'winpro') {
+    return {
+      objectCount: 0,
+      referenceCount: 0,
+      classCount: 0,
+      engineCount: 0,
+      scheduleCount: 0,
+      graphicsCount: 0,
+      programmingCount: 0,
+    };
+  }
   const objects = getObjects(file);
   const classCount = new Set(objects.map(o => o.classid)).size;
   const engineCount = file.type === 'dbexport' ? file.data.engines.length : 0;
@@ -65,7 +83,7 @@ function summarizeArchive(file: LoadedFile): ArchiveSummary {
   const programmingCount = objects.filter(o => isDbexportSection(o.ref, 'Programming')).length;
   return {
     objectCount: objects.length,
-    referenceCount: file.data.references.length,
+    referenceCount: getReferences(file).length,
     classCount,
     engineCount,
     scheduleCount,
@@ -128,7 +146,7 @@ function DropZone({ onFile, label }: { onFile: (f: File) => void; label?: string
       onDrop={onDrop}
       onClick={() => {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = '.caf,.dbexport';
+        input.type = 'file'; input.accept = '.caf,.dbexport,.cfg,.prn,.asc';
         input.onchange = () => { if (input.files?.[0]) onFile(input.files[0]); };
         input.click();
       }}
@@ -140,7 +158,7 @@ function DropZone({ onFile, label }: { onFile: (f: File) => void; label?: string
       }}
     >
       <div style={{ fontSize: 28, marginBottom: 6 }}>📂</div>
-      <div style={{ fontWeight: 600, marginBottom: 3 }}>{label ?? 'Drop a .caf or .dbexport file'}</div>
+      <div style={{ fontWeight: 600, marginBottom: 3 }}>{label ?? 'Drop a .caf, .dbexport, .cfg, .prn, or .asc file'}</div>
       <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>or click to browse</div>
     </div>
   );
@@ -1013,7 +1031,7 @@ function DiffTab({
 
 // ─── Export tab ──────────────────────────────────────────────────────────────
 
-function ExportTab({ file, referenceIndex }: { file: LoadedFile; referenceIndex: { byTarget: Map<string, ReferenceHit[]>; counts: Map<string, number>; totalHits: number } }) {
+function ExportTab({ file, referenceIndex }: { file: SupportedArchiveFile; referenceIndex: { byTarget: Map<string, ReferenceHit[]>; counts: Map<string, number>; totalHits: number } }) {
   const objects = getObjects(file);
   const summary = useMemo(() => summarizeArchive(file), [file]);
   const audit = useMemo(() => buildArchiveAudit(file, referenceIndex), [file, referenceIndex]);
@@ -1044,7 +1062,7 @@ function ExportTab({ file, referenceIndex }: { file: LoadedFile; referenceIndex:
     a.download = `${file.name.replace(/\.[^.]+$/, '')}.json`; a.click();
   };
 
-  const stats = file.type === 'caf' ? file.data.stats : file.data.stats;
+  const stats: Array<{ classid: number; className: string; count: number }> = file.data.stats;
   const validationRows: Array<[string, string, string]> = [
     ['Objects', summary.objectCount.toLocaleString(), 'Parsed objects available for export'],
     ['References', summary.referenceCount.toLocaleString(), 'Reference graph available for audit'],
@@ -1281,8 +1299,11 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const currentFile = previewFile ?? file;
   const loadArchive = useCallback(async (f: File): Promise<LoadedFile> => {
     const lower = f.name.toLowerCase();
-    if (!lower.endsWith('.caf') && !lower.endsWith('.dbexport')) {
-      throw new Error('Unsupported file type. Drop a .caf or .dbexport file.');
+    if (!lower.endsWith('.caf') && !lower.endsWith('.dbexport') && !lower.endsWith('.cfg') && !lower.endsWith('.prn') && !lower.endsWith('.asc')) {
+      throw new Error('Unsupported file type. Drop a .caf, .dbexport, .cfg, .prn, or .asc file.');
+    }
+    if (lower.endsWith('.cfg') || lower.endsWith('.prn') || lower.endsWith('.asc')) {
+      return parseWinproFile(f);
     }
     if (mode === 'offline') {
       return parseArchiveFile(f);
@@ -1326,7 +1347,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
 
   const referenceIndex = useMemo(() => {
     if (!currentFile) return { byTarget: new Map<string, ReferenceHit[]>(), counts: new Map<string, number>(), totalHits: 0 };
-    return buildReferenceIndex(currentFile.data.references);
+    return buildReferenceIndex(getReferences(currentFile));
   }, [currentFile]);
 
   const referenceMap = referenceIndex.byTarget;
@@ -1339,7 +1360,11 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   const incomingCounts = referenceIndex.counts;
 
   const selectedObj = selected && currentFile
-    ? (currentFile.type === 'caf' ? objMap.get(selected) : currentFile.data.objects.find(o => o.ref === selected)) ?? null
+    ? (currentFile.type === 'caf'
+      ? objMap.get(selected)
+      : currentFile.type === 'dbexport'
+        ? currentFile.data.objects.find(o => o.ref === selected)
+        : null) ?? null
     : null;
 
   const selectedNavNode = useMemo(() => {
@@ -1348,17 +1373,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
   }, [currentFile, selected]);
 
   const treeChildren = useMemo<TreeChildRow[]>(() => {
-    if (!currentFile || !selected) return [];
-    if (currentFile.type === 'caf') {
-      return (childMap.get(selected) ?? []).map((child: CafObject) => ({
-        ref: child.ref,
-        label: displayName(child),
-        classid: child.classid,
-        className: child.className,
-        units: child.units,
-        incomingCount: incomingCounts.get(child.ref) ?? 0,
-      }));
-    }
+    if (!currentFile || !selected || currentFile.type !== 'dbexport') return [];
     const node = selectedNavNode;
     if (!node) return [];
     return node.children.map((child: NavNode) => {
@@ -1390,8 +1405,11 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
       const visible = treeQuery ? cafRoots.filter(root => cafNodeHasMatch(root, treeQuery, childMap)).length : cafRoots.length;
       return { total: currentFile.data.objects.length, visible };
     }
-    const visible = treeQuery ? dbexportRoots.filter(r => dbexportTreeNodeMatches(r, treeQuery)).length : dbexportRoots.length;
-    return { total: currentFile.data.objects.length, visible };
+    if (currentFile.type === 'dbexport') {
+      const visible = treeQuery ? dbexportRoots.filter(r => dbexportTreeNodeMatches(r, treeQuery)).length : dbexportRoots.length;
+      return { total: currentFile.data.objects.length, visible };
+    }
+    return { total: currentFile.data.sections.length, visible: currentFile.data.sections.length };
   }, [currentFile, cafRoots, childMap, treeQuery, dbexportRoots]);
 
   const toggleTreeNode = useCallback((ref: string) => {
@@ -1421,7 +1439,7 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
           onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
           onClick={() => {
             const input = document.createElement('input');
-            input.type = 'file'; input.accept = '.caf,.dbexport';
+            input.type = 'file'; input.accept = '.caf,.dbexport,.cfg,.prn,.asc';
             input.onchange = () => { if (input.files?.[0]) handleFile(input.files[0]); };
             input.click();
           }}
@@ -1431,9 +1449,9 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
           }}
         >
           <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop a .caf or .dbexport file here</div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop a .caf, .dbexport, .cfg, .prn, or .asc file here</div>
           <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>or click to browse</div>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>.caf — CCT controller program · .dbexport — Metasys SCT archive</div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>.caf — CCT controller program · .dbexport — Metasys SCT archive · .cfg/.prn/.asc — HVAC PRO WinPro files</div>
         </div>
         {error && <div style={{ color: 'var(--error, #e55)', fontSize: 13 }}>{error}</div>}
       </div>
@@ -1442,6 +1460,12 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
 
   if (loading) return <div style={{ padding: 24, color: 'var(--text-dim)', textAlign: 'center' }}>Parsing file…</div>;
   if (!currentFile) return null;
+
+  if (currentFile.type === 'winpro') {
+    return (
+      <WinproViewer file={currentFile} onClose={() => { setFile(null); setPreviewFile(null); setSelected(null); }} />
+    );
+  }
 
   const allObjects = getObjects(currentFile);
   const hasGraphics = allObjects.some(o => GRAPHIC_CLASS_IDS.has(o.classid));

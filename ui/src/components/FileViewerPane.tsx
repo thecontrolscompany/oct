@@ -209,53 +209,175 @@ function CafTreeNode({ obj, childMap, depth, selected, onSelect, expanded, onTog
   );
 }
 
-// ─── NavNode tree (dbexport hierarchy) ─────────────────────────────────────
+// ─── Dbexport ref-based hierarchy tree ────────────────────────────────────────
+// Builds a deep tree from object refs (ADS-1:NAE/FC-1.AHU-1.zone_temp) so the
+// user can drill all the way down to individual points — not limited to the
+// shallow navtree.xml structure.
 
-function NavTreeNode({ node, depth, selected, onSelect, expanded, onToggle, query }: {
-  node: NavNode;
+interface DbexportTreeNode {
+  key: string;
+  label: string;
+  ref: string | null;
+  classid: number;
+  className: string;
+  children: DbexportTreeNode[];
+}
+
+interface HierNode {
+  label: string;
+  kind: string;
+  classid: number | string;
+  obj: AnyObject | null;
+  children: Map<string, HierNode>;
+  totalCount: number;
+  key: string;
+  _labelFromDescription?: boolean;
+}
+
+function parseDbexportRef(ref: string): { engine: string; segments: string[] } {
+  const colonIdx = ref.indexOf(':');
+  const after = colonIdx >= 0 ? ref.slice(colonIdx + 1) : ref;
+  const slashIdx = after.indexOf('/');
+  if (slashIdx < 0) return { engine: after, segments: [] };
+  return { engine: after.slice(0, slashIdx), segments: after.slice(slashIdx + 1).split('.').filter(Boolean) };
+}
+
+function categorizeDbexportSegment(seg: string): { label: string; kind: string } {
+  if (/^FC-\d+$/i.test(seg)) return { label: `Field Bus ${seg}`, kind: 'fieldbus' };
+  if (/^FCB$/i.test(seg)) return { label: 'Field Bus (FCB)', kind: 'fieldbus' };
+  if (/^Field\s*Bus/i.test(seg)) return { label: seg, kind: 'fieldbus' };
+  if (/^N2(\s|-)/i.test(seg)) return { label: seg, kind: 'n2trunk' };
+  if (/^BACnet\s*Trunk/i.test(seg)) return { label: seg, kind: 'bacnettrunk' };
+  if (seg === 'Programming') return { label: 'Programming', kind: 'programming' };
+  if (seg === 'System Programs') return { label: 'System Programs', kind: 'sysprograms' };
+  if (seg === 'Schedule') return { label: 'Schedules', kind: 'schedules' };
+  if (seg === 'Graphics') return { label: 'Graphics', kind: 'graphics' };
+  if (seg.startsWith('$site')) return { label: 'Site Configuration', kind: 'site' };
+  if (seg.startsWith('$Generic')) return { label: 'Generic Archive', kind: 'generic' };
+  return { label: seg, kind: 'category' };
+}
+
+function buildDbexportHierarchy(objects: AnyObject[]): Map<string, HierNode> {
+  const engines = new Map<string, HierNode>();
+  for (const obj of objects) {
+    const { engine: engineName, segments } = parseDbexportRef(obj.ref);
+    if (!engineName) continue;
+    let engine = engines.get(engineName);
+    if (!engine) {
+      engine = { label: engineName, kind: 'engine', classid: '', obj: null, children: new Map(), totalCount: 0, key: engineName };
+      engines.set(engineName, engine);
+    }
+    if (segments.length === 0) { engine.classid = obj.classid; engine.obj = obj; continue; }
+    let node = engine;
+    let keyPath = engineName;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      keyPath = `${keyPath}#${seg}`;
+      if (!node.children.has(seg)) {
+        let label = seg;
+        let kind = i === segments.length - 1 ? 'point' : 'equipment';
+        if (i === 0) { const cat = categorizeDbexportSegment(seg); label = cat.label; kind = cat.kind; }
+        node.children.set(seg, { label, kind, classid: '', obj: null, children: new Map(), totalCount: 0, key: keyPath });
+      }
+      node = node.children.get(seg)!;
+      if (i === segments.length - 1) { node.classid = obj.classid; node.obj = obj; }
+    }
+  }
+  const computeCounts = (n: HierNode): number => {
+    let count = n.obj ? 1 : 0;
+    for (const child of n.children.values()) count += computeCounts(child);
+    n.totalCount = count;
+    if (n.obj && !n._labelFromDescription && /^\d+([_\-.]\d+)?$/.test(n.label)) {
+      const desc = n.obj.description || n.obj.tag;
+      if (desc) { n.label = desc; n._labelFromDescription = true; }
+    }
+    return count;
+  };
+  for (const e of engines.values()) computeCounts(e);
+  return engines;
+}
+
+function hierToTreeNode(node: HierNode): DbexportTreeNode {
+  return {
+    key: node.key,
+    label: node.label,
+    ref: node.obj?.ref ?? null,
+    classid: typeof node.classid === 'number' ? node.classid : 0,
+    className: node.obj?.className ?? (node.kind === 'engine' ? 'Engine' : node.kind),
+    children: [...node.children.values()]
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
+      .map(hierToTreeNode),
+  };
+}
+
+function buildDbexportTreeRoots(objects: AnyObject[]): DbexportTreeNode[] {
+  const hier = buildDbexportHierarchy(objects);
+  return [...hier.values()]
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
+    .map(hierToTreeNode);
+}
+
+function dbexportTreeNodeMatches(node: DbexportTreeNode, query: string): boolean {
+  if (!query) return true;
+  if ([node.label, node.ref ?? '', node.className].some(v => v.toLowerCase().includes(query))) return true;
+  return node.children.some(child => dbexportTreeNodeMatches(child, query));
+}
+
+function DbexportTreeRow({ node, depth, selectedKey, expanded, onSelect, onToggle, query }: {
+  node: DbexportTreeNode;
   depth: number;
-  selected: string | null;
-  onSelect: (r: string) => void;
+  selectedKey: string | null;
   expanded: Set<string>;
-  onToggle: (r: string) => void;
+  onSelect: (node: DbexportTreeNode) => void;
+  onToggle: (key: string) => void;
   query: string;
 }) {
-  const isSelected = selected === node.reference;
-  const isMatch = navNodeMatches(node, query);
-  const visibleChildren = query ? node.children.filter(child => navNodeHasMatch(child, query)) : node.children;
-  const hasDescendantMatch = query ? node.children.some(child => navNodeHasMatch(child, query)) : false;
-  const isOpen = expanded.has(node.reference) || (query ? (isMatch || hasDescendantMatch) : false);
+  const isSelected = selectedKey === node.key || (!!node.ref && selectedKey === node.ref);
+  const visibleChildren = query ? node.children.filter(c => dbexportTreeNodeMatches(c, query)) : node.children;
+  const isOpen = expanded.has(node.key) || (query ? dbexportTreeNodeMatches(node, query) && node.children.some(c => dbexportTreeNodeMatches(c, query)) : false);
   return (
     <div>
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
+          display: 'flex', alignItems: 'center', gap: 8,
           padding: `4px 10px 4px ${8 + depth * 14}px`,
           cursor: 'pointer',
           background: isSelected ? 'var(--accent)' : 'transparent',
           color: isSelected ? '#fff' : 'var(--text)',
           borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
         }}
-        onClick={() => { onSelect(node.reference); if (node.children.length) onToggle(node.reference); }}
+        onClick={() => { onSelect(node); if (node.children.length) onToggle(node.key); }}
         onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--hover)'; }}
         onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
-        <span style={{ width: 14, fontSize: 10, color: isSelected ? '#fff' : 'var(--text-dim)', flexShrink: 0 }}>
+        <span style={{ width: 14, fontSize: 10, flexShrink: 0, color: isSelected ? '#fff' : 'var(--text-dim)' }}>
           {node.children.length ? (isOpen ? '▾' : '▸') : ''}
         </span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isMatch ? 1 : 0.92 }}>
-          {node.label || node.reference.split(/[/\\]/).pop()}
+        {node.classid > 0 && (
+          <span style={{ fontSize: 10, padding: '1px 4px', borderRadius: 3, flexShrink: 0, fontFamily: 'Consolas,monospace', color: isSelected ? '#fff' : 'var(--accent)', background: isSelected ? 'rgba(255,255,255,0.15)' : 'var(--bg)', border: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border)'}` }}>
+            {node.className}
+          </span>
+        )}
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {node.label}
         </span>
-        {node.children.length > 0 && (
-          <span style={{ marginLeft: 4, fontSize: 11, color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-dim)', flexShrink: 0 }}>
+        {visibleChildren.length > 0 && (
+          <span style={{ fontSize: 11, color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-dim)', flexShrink: 0 }}>
             {visibleChildren.length}
           </span>
         )}
       </div>
-      {isOpen && visibleChildren.map((c, i) => (
-        <NavTreeNode key={i} node={c} depth={depth + 1} selected={selected} onSelect={onSelect} expanded={expanded} onToggle={onToggle} query={query} />
+      {isOpen && visibleChildren.map(child => (
+        <DbexportTreeRow
+          key={child.key}
+          node={child}
+          depth={depth + 1}
+          selectedKey={selectedKey}
+          expanded={expanded}
+          onSelect={onSelect}
+          onToggle={onToggle}
+          query={query}
+        />
       ))}
     </div>
   );
@@ -1038,20 +1160,20 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
     [currentFile],
   );
 
+  const dbexportRoots = useMemo(() => {
+    if (!currentFile || currentFile.type !== 'dbexport') return [] as DbexportTreeNode[];
+    return buildDbexportTreeRoots(getObjects(currentFile));
+  }, [currentFile]);
+
   const treeStats = useMemo(() => {
     if (!currentFile) return { total: 0, visible: 0 };
     if (currentFile.type === 'caf') {
-      const roots = cafRoots;
-      const visible = treeQuery ? roots.filter(root => cafNodeHasMatch(root, treeQuery, childMap)).length : roots.length;
+      const visible = treeQuery ? cafRoots.filter(root => cafNodeHasMatch(root, treeQuery, childMap)).length : cafRoots.length;
       return { total: currentFile.data.objects.length, visible };
     }
-    const site = currentFile.data.site;
-    if (!site) return { total: 0, visible: 0 };
-    return {
-      total: currentFile.data.objects.length,
-      visible: treeQuery ? (navNodeHasMatch(site, treeQuery) ? 1 : 0) : 1,
-    };
-  }, [currentFile, cafRoots, childMap, treeQuery]);
+    const visible = treeQuery ? dbexportRoots.filter(r => dbexportTreeNodeMatches(r, treeQuery)).length : dbexportRoots.length;
+    return { total: currentFile.data.objects.length, visible };
+  }, [currentFile, cafRoots, childMap, treeQuery, dbexportRoots]);
 
   const toggleTreeNode = useCallback((ref: string) => {
     setTreeExpanded(prev => {
@@ -1249,19 +1371,26 @@ export default function FileViewerPane({ mode = 'online' }: { mode?: ViewMode })
                       />
                     ))
                   : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No CAF objects match the current filter.</div>
-                : currentFile.data.site
-                  ? navNodeHasMatch(currentFile.data.site, treeQuery)
-                    ? <NavTreeNode
-                        node={currentFile.data.site}
+                : (() => {
+                    const visible = treeQuery ? dbexportRoots.filter(r => dbexportTreeNodeMatches(r, treeQuery)) : dbexportRoots;
+                    if (visible.length === 0) return (
+                      <div style={{ padding: 16, color: 'var(--text-dim)' }}>
+                        {treeQuery ? 'No objects match the current filter.' : 'No objects found in archive.'}
+                      </div>
+                    );
+                    return <>{visible.map(r => (
+                      <DbexportTreeRow
+                        key={r.key}
+                        node={r}
                         depth={0}
-                        selected={selected}
-                        onSelect={setSelected}
+                        selectedKey={selected}
                         expanded={treeExpanded}
+                        onSelect={node => setSelected(node.ref ?? node.key)}
                         onToggle={toggleTreeNode}
                         query={treeQuery}
                       />
-                    : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No navtree matches the current filter.</div>
-                  : <div style={{ padding: 16, color: 'var(--text-dim)' }}>No navtree found — showing object list</div>
+                    ))}</>;
+                  })()
               }
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>

@@ -105,3 +105,12 @@ export declare function buildReferenceMap(
 export declare function buildReferenceIndex(
   references: ReferenceHit[]
 ): ReferenceIndex;
+
+export declare const PROPERTY_NAMES: Record<number, string>;
+
+export declare function getPropertyName(
+  propertyId: number,
+  explicitName?: string | null
+): string;
+
+export declare function isGenericPropertyName(name: string | null | undefined): boolean;

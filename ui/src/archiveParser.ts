@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import type { ArchiveProperty, CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
+import { getPropertyName as resolvePropertyName } from '@oct/shared';
 import { CLASS_NAMES, UNIT_LABELS } from './data/jciDictionary';
 
 export type LoadedArchive =
@@ -33,22 +34,6 @@ function makeClassName(classid: number): string {
 function makeUnitLabel(unitId: number | null): string | null {
   if (unitId === null) return null;
   return UNIT_LABELS[unitId] ?? `unit${unitId}`;
-}
-
-const PROPERTY_NAMES: Record<number, string> = {
-  12: 'App Version',
-  28: 'Description',
-  31: 'Short Tag',
-  70: 'Model Name',
-  75: 'BACnet Object ID',
-  117: 'Units',
-  2390: 'Tag',
-  3113: 'Default Value',
-  1135: 'IP Address',
-};
-
-function getPropertyName(prop: Element, pid: number): string {
-  return prop.getAttribute('name')?.trim() || PROPERTY_NAMES[pid] || `Property ${pid}`;
 }
 
 function formatPropertyValue(dataEl: Element): { value: string; valueType: string } {
@@ -92,7 +77,7 @@ function collectProperties(propEls: ArrayLike<Element> | Iterable<Element>): Arc
     const { value, valueType } = formatPropertyValue(dataEl);
     properties.push({
       id: pid,
-      name: getPropertyName(prop, pid),
+      name: resolvePropertyName(pid, prop.getAttribute('name')),
       value,
       valueType,
     });
@@ -201,7 +186,7 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
         }
       }
 
-      const attrName = `Property ${pid}`;
+      const attrName = resolvePropertyName(pid, prop.getAttribute('name'));
       references.push(...collectHitsFromNode(prop, {
         referringItem: ref,
         referringAttr: attrName,
@@ -375,7 +360,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           }
         }
 
-        const attrName = `Property ${pid}`;
+        const attrName = resolvePropertyName(pid, prop.getAttribute('name'));
       references.push(...collectHitsFromNode(prop, {
           referringItem: ref,
           referringAttr: attrName,
@@ -499,7 +484,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
           }
         }
 
-        const attrName = `Property ${pid}`;
+        const attrName = resolvePropertyName(pid, prop.getAttribute('name'));
         references.push(...collectHitsFromNode(prop, {
           referringItem: ref,
           referringAttr: attrName,

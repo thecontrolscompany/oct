@@ -51,7 +51,6 @@ export default function ObjectPropertiesTable({ properties = [] }: { properties?
               <tr key={`${prop.id}:${prop.name}`} style={{ borderBottom: '1px solid var(--border)' }}>
                 <td style={{ padding: '4px 8px 4px 0', whiteSpace: 'nowrap' }}>
                   <div style={{ fontWeight: 500 }}>{prop.name}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'Consolas, monospace' }}>#{prop.id}</div>
                 </td>
                 <td style={{ padding: '4px 8px', wordBreak: 'break-all' }}>{prop.value || '—'}</td>
                 <td style={{ padding: '4px 8px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{prop.valueType}</td>

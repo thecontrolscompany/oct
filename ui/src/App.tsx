@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import Sidebar from './components/Sidebar';
 import DetailPane from './components/DetailPane';
@@ -45,6 +45,10 @@ function AppShell() {
   const [mode, setMode]             = useState<Mode>(HAS_API_HOST ? 'online' : 'offline');
   const qc = useQueryClient();
   const onlineMode = mode === 'online';
+
+  useEffect(() => {
+    document.title = 'Open Configuration Tool';
+  }, []);
 
   const handleSetMode = useCallback((m: Mode) => {
     setMode(m);
@@ -130,14 +134,17 @@ function AppShell() {
     <div className="layout">
       {onlineMode && (
         <aside className="sidebar">
-          <div className="sidebar-header">OCT — Controller Library</div>
+          <div className="sidebar-header">Open Configuration Tool</div>
           <Sidebar onSelect={item => { setSelected(item); setView('library'); }} selected={selected} />
         </aside>
       )}
 
       <div className="main">
         <header className="topbar">
-          <span className="logo">OCT</span>
+          <div className="brand-lockup">
+            <span className="logo">OCT</span>
+            <span className="topbar-title">Open Configuration Tool</span>
+          </div>
           {renderModeToggle()}
           {renderTopbarStatus()}
         </header>

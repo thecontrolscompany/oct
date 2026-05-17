@@ -197,6 +197,12 @@ html, body, #root {
   border-radius: 3px;
   padding: 1px 8px;
 }
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 .topbar-title { font-weight: 600; font-size: 13px; color: rgba(255,255,255,0.9); }
 .topbar-sep { color: var(--border); }
 

@@ -17,7 +17,6 @@ const BACNET_TYPE: Record<number, string> = {
 
 const COLS: Array<{ key: SortCol; label: string; width?: number; mono?: boolean }> = [
   { key: 'className',      label: 'Class',       width: 160 },
-  { key: 'classid',        label: 'ID',          width: 55,  mono: true },
   { key: 'tag',            label: 'Tag',         width: 160 },
   { key: 'description',    label: 'Description'            },
   { key: 'units',          label: 'Units',       width: 80  },
@@ -199,9 +198,9 @@ export default function ObjectBrowser({
 
   // Export filtered data as CSV
   const exportCsv = () => {
-    const header = 'Class,ClassID,Tag,Description,Units,BACnet Type,Instance,Refs,Ref\n';
+    const header = 'Class,Tag,Description,Units,BACnet Type,Instance,Refs,Ref\n';
     const rows = sorted.map(o =>
-      `"${o.className}",${o.classid},"${o.tag}","${o.description}","${o.units ?? ''}","${o.bacoidType !== null ? (BACNET_TYPE[o.bacoidType] ?? o.bacoidType) : ''}",${o.bacoidInstance ?? ''},${incomingCounts?.get(o.ref) ?? 0},"${o.ref}"`
+      `"${o.className}","${o.tag}","${o.description}","${o.units ?? ''}","${o.bacoidType !== null ? (BACNET_TYPE[o.bacoidType] ?? o.bacoidType) : ''}",${o.bacoidInstance ?? ''},${incomingCounts?.get(o.ref) ?? 0},"${o.ref}"`
     ).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -329,9 +328,6 @@ export default function ObjectBrowser({
                   }}>
                     {o.className}
                   </span>
-                </td>
-                <td style={{ padding: '4px 8px', fontFamily: 'Consolas, monospace', fontSize: 11, color: 'var(--text-dim)' }}>
-                  {o.classid}
                 </td>
                 <td style={{ padding: '4px 8px', fontWeight: 500, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {o.tag}

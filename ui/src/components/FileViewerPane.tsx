@@ -281,7 +281,7 @@ function ObjectDetail({
   if (obj.defaultValue !== null) rows.push(['Default', String(obj.defaultValue)]);
   if (obj.createdAt) rows.push(['Created', obj.createdAt]);
   if (obj.modifiedAt) rows.push(['Modified', obj.modifiedAt]);
-  rows.push(['Class', `${obj.className} (${obj.classid})`]);
+  rows.push(['Class', obj.className]);
   rows.push(['Ref', obj.ref]);
   const filteredChildren = useMemo(() => {
     const q = childSearch.trim().toLowerCase();
@@ -598,9 +598,9 @@ function ExportTab({ file, referenceIndex }: { file: LoadedFile; referenceIndex:
   const audit = useMemo(() => buildArchiveAudit(file, referenceIndex), [file, referenceIndex]);
 
   const exportCsv = () => {
-    const header = 'ref,classid,className,tag,description,units,defaultValue,bacoidType,bacoidInstance,createdAt,modifiedAt\n';
+    const header = 'ref,className,tag,description,units,defaultValue,bacoidType,bacoidInstance,createdAt,modifiedAt\n';
     const rows = objects.map(o =>
-      exportCsvRow([o.ref, o.classid, o.className, o.tag, o.description, o.units ?? '', o.defaultValue ?? '', o.bacoidType ?? '', o.bacoidInstance ?? '', o.createdAt ?? '', o.modifiedAt ?? ''])
+      exportCsvRow([o.ref, o.className, o.tag, o.description, o.units ?? '', o.defaultValue ?? '', o.bacoidType ?? '', o.bacoidInstance ?? '', o.createdAt ?? '', o.modifiedAt ?? ''])
     ).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);

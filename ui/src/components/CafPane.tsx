@@ -100,7 +100,7 @@ function DetailPanel({ obj }: { obj: CafObject }) {
   if (obj.bacoidInstance !== null) rows.push(['Instance', String(obj.bacoidInstance)]);
   if (obj.units)        rows.push(['Units', obj.units]);
   if (obj.defaultValue !== null) rows.push(['Default', String(obj.defaultValue)]);
-  rows.push(['Class', `${obj.className} (${obj.classid})`]);
+  rows.push(['Class', obj.className]);
   rows.push(['Object ID', String(obj.objectid)]);
   rows.push(['Ref', obj.ref]);
 

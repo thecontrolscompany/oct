@@ -191,7 +191,7 @@ function mapHierarchyToTree(nodes: Map<string, HierNode>): TreeNode[] {
     label: node.label,
     ref: node.obj?.ref ?? null,
     classid: typeof node.classid === 'number' ? node.classid : 0,
-    className: typeof node.classid === 'number' && node.classid ? `Class ${node.classid}` : (node.kind === 'engine' ? 'Engine' : node.kind),
+    className: node.obj?.className ?? (node.kind === 'engine' ? 'Engine' : node.kind),
     object: node.obj,
     kind: node.children.size > 0 ? 'group' : 'object',
     children: [...node.children.values()]
@@ -341,7 +341,7 @@ function DetailPane({
   const lines: Array<[string, string]> = [
     ['Archive', archive.name],
     ['Node', selectedNode.label],
-    ['Class', `${selectedNode.className} (${selectedNode.classid})`],
+    ['Class', selectedNode.className],
   ];
   if (selectedObject) {
     if (selectedObject.tag) lines.push(['Tag', selectedObject.tag]);

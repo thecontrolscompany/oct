@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
-import { wsUrl } from '../connection';
+import { HAS_API_HOST, wsUrl } from '../connection';
 import type {
   BacnetDevice,
   BacnetObject,
@@ -310,18 +310,19 @@ function LiveCommissioningTab({ device, trendManager }: { device: BacnetDevice; 
   const { data: perspectives = [] } = useQuery({
     queryKey: ['perspectives'],
     queryFn: api.perspectives.list,
+    enabled: HAS_API_HOST,
   });
 
   const { data: referenceCaf, isLoading: loadingCaf, error: cafError } = useQuery({
     queryKey: ['caf', 'path', cafPath],
     queryFn: () => api.caf.parsePath(cafPath),
-    enabled: !!cafPath.trim(),
+    enabled: HAS_API_HOST && !!cafPath.trim(),
   });
 
   const { data: perspectiveDetail, isLoading: loadingPerspective, error: perspectiveError } = useQuery({
     queryKey: ['perspective', selectedPerspective],
     queryFn: () => api.perspectives.detail(selectedPerspective),
-    enabled: !!selectedPerspective,
+    enabled: HAS_API_HOST && !!selectedPerspective,
   });
 
   const appLayout = referenceCaf && perspectiveDetail
@@ -399,9 +400,14 @@ function LiveCommissioningTab({ device, trendManager }: { device: BacnetDevice; 
             </select>
           </div>
         </div>
+        {!HAS_API_HOST && (
+          <div className="card-body" style={{ color: 'var(--text-dim)', lineHeight: 1.6 }}>
+            Commissioning preview is disabled here because this deployment does not have a configured backend API.
+          </div>
+        )}
         {(loadingCaf || loadingPerspective) && <div className="card-body" style={{ color: 'var(--text-dim)' }}>Loading reference layout…</div>}
-        {cafError && <div className="card-body" style={{ color: 'var(--danger)' }}>CAF error: {String(cafError)}</div>}
-        {perspectiveError && <div className="card-body" style={{ color: 'var(--danger)' }}>Perspective error: {String(perspectiveError)}</div>}
+        {HAS_API_HOST && cafError && <div className="card-body" style={{ color: 'var(--danger)' }}>CAF error: {String(cafError)}</div>}
+        {HAS_API_HOST && perspectiveError && <div className="card-body" style={{ color: 'var(--danger)' }}>Perspective error: {String(perspectiveError)}</div>}
       </div>
 
       {appLayout && (

@@ -9,6 +9,7 @@
 const API_HOST = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
 export const API_BASE = API_HOST + '/api';
+export const HAS_API_HOST = API_HOST.length > 0;
 
 export function wsUrl(path = '/ws'): string {
   if (!API_HOST) {

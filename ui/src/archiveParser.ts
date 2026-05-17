@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { XMLSerializer } from '@xmldom/xmldom';
 import type { ArchiveProperty, CafObject, DbexportObject, NavNode, ParsedCaf, ParsedDbexport, ReferenceHit } from '@oct/shared';
 import { getPropertyName as resolvePropertyName } from '@oct/shared';
 import { CLASS_NAMES, UNIT_LABELS } from './data/jciDictionary';
@@ -10,6 +11,7 @@ export type LoadedArchive =
 const REF_ATTR_RE = /\b(?:ref|reference|target|source|objectref|objectRef)\s*=\s*"([^"]+)"/gi;
 const REF_TAG_RE = /<(?:ref|reference|target|source|objectref|objectRef)>([^<]+)<\/(?:ref|reference|target|source|objectref|objectRef)>/gi;
 const REF_TOKEN_RE = /(?:[A-Za-z][A-Za-z0-9._-]*:)?[A-Za-z0-9_$-]+(?:[\/.][A-Za-z0-9_$-]+)+/g;
+const XML_SERIALIZER = new XMLSerializer();
 
 function stripBom(text: string): string {
   return text.replace(/^\uFEFF/, '');
@@ -116,12 +118,131 @@ function buildReferenceHits(xml: string, referringItem: string, referringAttr: s
   return hits;
 }
 
-function collectHitsFromNode(node: Node, context: { referringItem: string; referringAttr: string; source: string; sourcePath: string; referringPath: string }): ReferenceHit[] {
+function looksLikeXml(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.startsWith('<') && trimmed.includes('>');
+}
+
+function looksLikeBase64(text: string): boolean {
+  const compact = text.replace(/\s+/g, '');
+  if (compact.length < 64 || compact.length % 4 === 1) return false;
+  return /^[A-Za-z0-9+/=]+$/.test(compact);
+}
+
+function decodeBase64(text: string): Uint8Array | null {
+  try {
+    const compact = text.replace(/\s+/g, '');
+    const binary = atob(compact);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function isZipBuffer(buffer: Uint8Array): boolean {
+  return buffer.length >= 4 &&
+    buffer[0] === 0x50 &&
+    buffer[1] === 0x4b &&
+    (buffer[2] === 0x03 || buffer[2] === 0x05 || buffer[2] === 0x07) &&
+    (buffer[3] === 0x04 || buffer[3] === 0x06 || buffer[3] === 0x08);
+}
+
+function buildContextPath(base: string, addition: string): string {
+  if (!addition) return base;
+  return base ? `${base}/${addition}` : addition;
+}
+
+function inferNodeSegment(node: any): string {
+  const tag = String((node as Element | null)?.tagName ?? node.nodeName ?? 'node');
+  if (tag === 'property') {
+    const pid = (node as Element | null)?.getAttribute?.('id');
+    return pid ? `property[${pid}]` : 'property';
+  }
+  if (tag === '#text' || tag === '#cdata-section') return tag;
+  return tag;
+}
+
+async function collectTextPayloadHits(
+  text: string,
+  context: { referringItem: string; referringAttr: string; source: string; sourcePath: string; referringPath: string },
+  pathSuffix: string,
+  hits: ReferenceHit[],
+  seen: Set<string>,
+): Promise<void> {
+  const refPath = buildContextPath(context.referringPath, pathSuffix);
+  const sourcePath = buildContextPath(context.sourcePath, pathSuffix);
+  const textKey = `${text.length}|${sourcePath}|${refPath}`;
+
+  if (looksLikeXml(text)) {
+    for (const hit of buildReferenceHits(text, context.referringItem, context.referringAttr, context.source, sourcePath, refPath)) {
+      const key = `${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.source}|${hit.sourcePath ?? ''}|${hit.referringPath ?? ''}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        hits.push(hit);
+      }
+    }
+  }
+
+  if (!looksLikeBase64(text)) return;
+
+  const decoded = decodeBase64(text);
+  if (!decoded || decoded.length === 0) return;
+
+  if (isZipBuffer(decoded)) {
+    try {
+      const zip = await JSZip.loadAsync(decoded);
+      for (const entry of Object.values(zip.files)) {
+        const lower = entry.name.toLowerCase();
+        if (!lower.endsWith('.xml') && !lower.endsWith('.txt') && !lower.endsWith('.json')) continue;
+        const entryText = await entry.async('string');
+        const entryPath = buildContextPath(pathSuffix, entry.name);
+        for (const hit of buildReferenceHits(
+          entryText,
+          context.referringItem,
+          context.referringAttr,
+          `${context.source} :: ${entry.name}`,
+          buildContextPath(context.sourcePath, entry.name),
+          buildContextPath(context.referringPath, entryPath),
+        )) {
+          const key = `${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.source}|${hit.sourcePath ?? ''}|${hit.referringPath ?? ''}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            hits.push(hit);
+          }
+        }
+      }
+    } catch {
+      // Ignore malformed nested archives.
+    }
+    return;
+  }
+
+  const decodedText = new TextDecoder('utf-8').decode(decoded);
+  if (looksLikeXml(decodedText) || (textKey && decodedText.includes('<'))) {
+    for (const hit of buildReferenceHits(
+      decodedText,
+      context.referringItem,
+      context.referringAttr,
+      `${context.source} :: decoded`,
+      `${sourcePath}::decoded`,
+      `${refPath}::decoded`,
+    )) {
+      const key = `${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.source}|${hit.sourcePath ?? ''}|${hit.referringPath ?? ''}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        hits.push(hit);
+      }
+    }
+  }
+}
+
+async function collectHitsFromNode(node: any, context: { referringItem: string; referringAttr: string; source: string; sourcePath: string; referringPath: string }): Promise<ReferenceHit[]> {
   const hits: ReferenceHit[] = [];
   const seen = new Set<string>();
-  const serializer = new XMLSerializer();
 
-  const xml = serializer.serializeToString(node);
+  const xml = XML_SERIALIZER.serializeToString(node);
   for (const hit of buildReferenceHits(xml, context.referringItem, context.referringAttr, context.source, context.sourcePath, context.referringPath)) {
     const key = `${hit.target}|${hit.referringItem}|${hit.referringAttr}|${hit.source}|${hit.sourcePath ?? ''}|${hit.referringPath ?? ''}`;
     if (!seen.has(key)) {
@@ -129,10 +250,25 @@ function collectHitsFromNode(node: Node, context: { referringItem: string; refer
       hits.push(hit);
     }
   }
+
+  const walk = async (current: any, pathParts: string[]): Promise<void> => {
+    const nodeType = current.nodeType;
+    if (nodeType === 3 || nodeType === 4) {
+      const text = String(current.nodeValue ?? '').trim();
+      if (text) await collectTextPayloadHits(text, context, pathParts.join('/'), hits, seen);
+      return;
+    }
+
+    const nextParts = [...pathParts, inferNodeSegment(current)];
+    const children = Array.from(current.childNodes ?? []);
+    for (const child of children) await walk(child, nextParts);
+  };
+
+  await walk(node, []);
   return hits;
 }
 
-function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { objects: DbexportObject[]; references: ReferenceHit[] } {
+async function parseArchiveXml(xml: string, engineRef: string, sourceName: string): Promise<{ objects: DbexportObject[]; references: ReferenceHit[] }> {
   const doc = new DOMParser().parseFromString(stripBom(xml), 'text/xml');
   const objectEls = Array.from(doc.getElementsByTagName('object'));
   const objects: DbexportObject[] = [];
@@ -187,7 +323,7 @@ function parseArchiveXml(xml: string, engineRef: string, sourceName: string): { 
       }
 
       const attrName = resolvePropertyName(pid, prop.getAttribute('name'), classid);
-      references.push(...collectHitsFromNode(prop, {
+      references.push(...await collectHitsFromNode(prop, {
         referringItem: ref,
         referringAttr: attrName,
         source: sourceName,
@@ -263,7 +399,7 @@ async function loadText(file: File): Promise<string> {
   return file.text();
 }
 
-function isZipBuffer(buffer: ArrayBuffer): boolean {
+function isZipArrayBuffer(buffer: ArrayBuffer): boolean {
   const bytes = new Uint8Array(buffer);
   return bytes.length >= 4 &&
     bytes[0] === 0x50 &&
@@ -285,7 +421,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
   const lower = name.toLowerCase();
   const buffer = await file.arrayBuffer();
 
-  if (!isZipBuffer(buffer)) {
+  if (!isZipArrayBuffer(buffer)) {
     const text = await loadText(file);
     if (!text.trim()) throw new Error('File is empty.');
     if (!lower.endsWith('.caf')) {
@@ -361,7 +497,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
         }
 
         const attrName = resolvePropertyName(pid, prop.getAttribute('name'), classid);
-      references.push(...collectHitsFromNode(prop, {
+      references.push(...await collectHitsFromNode(prop, {
           referringItem: ref,
           referringAttr: attrName,
           source: name,
@@ -485,7 +621,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
         }
 
         const attrName = resolvePropertyName(pid, prop.getAttribute('name'), classid);
-        references.push(...collectHitsFromNode(prop, {
+        references.push(...await collectHitsFromNode(prop, {
           referringItem: ref,
           referringAttr: attrName,
           source: entry.name,
@@ -558,7 +694,7 @@ export async function parseArchiveFile(file: File): Promise<LoadedArchive> {
 
     for (const entry of archiveEntries) {
       const zipFolder = entry.name.replace(/[/\\][^/\\]+$/, '');
-      const parsed = parseArchiveXml(await entry.async('string'), zipFolder, entry.name);
+      const parsed = await parseArchiveXml(await entry.async('string'), zipFolder, entry.name);
       objects.push(...parsed.objects);
       references.push(...parsed.references);
 

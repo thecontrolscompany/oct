@@ -25,6 +25,9 @@ Acceptance criteria:
 - A user can select an object and see every graphic that depends on it
 - Graphics-related payloads can be inspected without leaving the viewer
 
+Status:
+- Deferred for now while graphics work is handled separately.
+
 ### 2. Nested Payload Decoding
 
 - Recursively scan nested XML-bearing payloads
@@ -91,14 +94,14 @@ Acceptance criteria:
 ## Suggested Order
 
 1. Nested payload decoding
-2. Graphics and binding inspection
-3. Bulk repoint and cleanup
-4. Audit coverage expansion
-5. Safe delete / rewrite operations
-6. Consultant-ready reporting
-7. Parity polishing
+2. Bulk repoint and cleanup
+3. Audit coverage expansion
+4. Safe delete / rewrite operations
+5. Consultant-ready reporting
+6. Parity polishing
 
 ## Notes
 
 - OCT already goes beyond dbexport-viewer in live BACnet, MS/TP, commissioning, and package workflows.
 - The remaining work is mostly about deep archive analysis and cleanup automation.
+- Graphics and binding inspection is being tracked separately for the moment.

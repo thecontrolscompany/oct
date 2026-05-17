@@ -32,7 +32,12 @@ type Mode = 'online' | 'offline';
 
 type HelpContext = {
   title: string;
-  body: string;
+  intro: string;
+  sections: Array<{
+    title: string;
+    items: string[];
+  }>;
+  footer?: string;
 };
 
 const CIDR_OPTIONS = [8, 16, 24, 28, 30];
@@ -45,51 +50,175 @@ function getHelpContext(view: View, onlineMode: boolean): HelpContext {
     case 'library':
       return {
         title: 'Library',
-        body: onlineMode
+        intro: onlineMode
           ? 'Browse controllers and selected items. Use the left sidebar to pick a device, then inspect details on the right.'
-          : 'The library view is only available in online mode. Switch to File Viewer or use the archive browser instead.',
+          : 'The Library is disabled offline because it depends on the live controller index.',
+        sections: [
+          {
+            title: 'What to do here',
+            items: [
+              'Pick a controller from the sidebar.',
+              'Open the tree or detail cards to inspect properties.',
+              'Use tabs in the detail pane to jump between related workspaces.',
+            ],
+          },
+          {
+            title: 'Best for',
+            items: [
+              'Finding devices, points, and relationships in the live system.',
+              'Checking configuration and diagnostic properties.',
+            ],
+          },
+        ],
+        footer: onlineMode
+          ? 'If you are working from a file, switch to File Viewer for offline browsing.'
+          : 'Switch to File Viewer to work with .caf and .dbexport archives.',
       };
     case 'live':
       return {
         title: 'Live Devices',
-        body: 'Monitor connected BACnet devices, read live values, and open a device to inspect points and properties.',
+        intro: 'Monitor connected BACnet devices, read live values, and open a device to inspect points and properties.',
+        sections: [
+          {
+            title: 'Use it for',
+            items: [
+              'Watching live values update on connected controllers.',
+              'Opening a device to inspect points, I/O, and properties.',
+              'Validating that the network connection is healthy.',
+            ],
+          },
+          {
+            title: 'Tip',
+            items: [
+              'If the tree looks stale, reconnect the BACnet router and refresh the device list.',
+            ],
+          },
+        ],
       };
     case 'quick-trend':
       return {
         title: 'Quick Trend',
-        body: 'Choose a point to start a lightweight trend view. Use it for quick spot checks without opening the full trend workflow.',
+        intro: 'Choose a point to start a lightweight trend view. Use it for quick spot checks without opening the full trend workflow.',
+        sections: [
+          {
+            title: 'Good for',
+            items: [
+              'A fast look at whether a point is moving as expected.',
+              'Sanity-checking a sensor before you open the full trends workflow.',
+            ],
+          },
+          {
+            title: 'Tip',
+            items: [
+              'Use a point with known activity so you can verify the chart updates quickly.',
+            ],
+          },
+        ],
       };
     case 'preview':
       return {
         title: 'Preview',
-        body: 'Open a commissioning preview layout without a live controller connection. Useful for checking point placement and bindings.',
+        intro: 'Open a commissioning preview layout without a live controller connection. Useful for checking point placement and bindings.',
+        sections: [
+          {
+            title: 'What to verify',
+            items: [
+              'Point ordering and grouping.',
+              'Which controls are visible and where they land.',
+              'Whether the layout still matches the intended application structure.',
+            ],
+          },
+        ],
       };
     case 'serial':
       return {
         title: 'MS/TP Serial',
-        body: 'Inspect serial bus frames, node activity, and token rotation details. Helpful when troubleshooting RS-485 networks.',
+        intro: 'Inspect serial bus frames, node activity, and token rotation details. Helpful when troubleshooting RS-485 networks.',
+        sections: [
+          {
+            title: 'What you can inspect',
+            items: [
+              'Frame type and CRC validity.',
+              'Node participation on the bus.',
+              'Token rotation and raw BACnet payload details.',
+            ],
+          },
+          {
+            title: 'Tip',
+            items: [
+              'Use the serial pane when the router is connected but a device is not responding the way you expect.',
+            ],
+          },
+        ],
       };
     case 'packages':
       return {
         title: 'Packages',
-        body: 'Browse controller package metadata and supported capabilities for the selected device or archive.',
+        intro: 'Browse controller package metadata and supported capabilities for the selected device or archive.',
+        sections: [
+          {
+            title: 'Use it for',
+            items: [
+              'Checking controller package contents.',
+              'Verifying supported primitives and firmware-related metadata.',
+            ],
+          },
+        ],
       };
     case 'caf':
       return {
         title: 'File Viewer',
-        body: onlineMode
+        intro: onlineMode
           ? 'Open .caf or .dbexport files, explore the archive tree, and inspect graphics inline.'
           : 'Drop a .caf or .dbexport file here to browse it offline. Graphics render when the archive is loaded in the viewer.',
+        sections: [
+          {
+            title: 'What this view does',
+            items: [
+              'Shows the archive tree, object details, graphics, references, audit, diff, and export tools.',
+              'Lets you inspect both CAF and dbexport archives with the same viewer shell.',
+            ],
+          },
+          {
+            title: 'Graphics',
+            items: [
+              'Facility graphics render inline.',
+              'Legacy graphics are partially rendered and still being refined.',
+              'Offline graphics require re-upload after refresh in the current build.',
+            ],
+          },
+        ],
+        footer: onlineMode
+          ? 'When you need controller context, jump back to Library or Live Devices.'
+          : 'If the viewer is empty, load a file again to start browsing.',
       };
     case 'dictionary':
       return {
         title: 'Dictionary',
-        body: 'Look up BACnet and CCT terms, property names, and model mappings used throughout OCT.',
+        intro: 'Look up BACnet and CCT terms, property names, and model mappings used throughout OCT.',
+        sections: [
+          {
+            title: 'How to use it',
+            items: [
+              'Search terms that appear in archives, property tables, or commissioning layouts.',
+              'Use it when a label or object name needs a normalized definition.',
+            ],
+          },
+        ],
       };
     case 'enums':
       return {
         title: 'Enums',
-        body: 'Inspect the enum tables and raw identifiers that OCT uses for class, property, and type mapping.',
+        intro: 'Inspect the enum tables and raw identifiers that OCT uses for class, property, and type mapping.',
+        sections: [
+          {
+            title: 'Use it for',
+            items: [
+              'Checking class and property identifiers.',
+              'Tracing raw numeric values back to readable names.',
+            ],
+          },
+        ],
       };
   }
 }
@@ -103,6 +232,7 @@ function AppShell() {
   const [view, setView]             = useState<View>(HAS_API_HOST ? 'library' : 'caf');
   const [mode, setMode]             = useState<Mode>(HAS_API_HOST ? 'online' : 'offline');
   const [helpOpen, setHelpOpen]     = useState(false);
+  const [helpPinned, setHelpPinned] = useState(false);
   const qc = useQueryClient();
   const onlineMode = mode === 'online';
   const help = getHelpContext(view, onlineMode);
@@ -115,6 +245,7 @@ function AppShell() {
     setMode(m);
     if (m === 'offline') setView('caf');
     setHelpOpen(false);
+    setHelpPinned(false);
   }, []);
 
   const { data: health } = useQuery({
@@ -149,8 +280,30 @@ function AppShell() {
   }, [qc]);
 
   useEffect(() => {
-    setHelpOpen(false);
+    if (!helpPinned) setHelpOpen(false);
   }, [view, mode]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setHelpOpen(false);
+        setHelpPinned(false);
+      }
+    };
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('.topbar-help, .topbar-help-popover')) {
+        setHelpOpen(false);
+        setHelpPinned(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, []);
 
   const renderModeToggle = () => (
     <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
@@ -198,14 +351,46 @@ function AppShell() {
         type="button"
         aria-label={`Help for ${help.title}`}
         title={help.title}
-        onClick={() => setHelpOpen(open => !open)}
+        onClick={() => {
+          setHelpOpen(open => {
+            const next = !open;
+            setHelpPinned(next);
+            return next;
+          });
+        }}
       >
         ?
       </button>
       {helpOpen && (
         <div className="topbar-help-popover" role="dialog" aria-label={`${help.title} help`}>
-          <div className="topbar-help-popover-title">{help.title}</div>
-          <div className="topbar-help-popover-body">{help.body}</div>
+          <div className="topbar-help-popover-header">
+            <div>
+              <div className="topbar-help-popover-title">{help.title}</div>
+              <div className="topbar-help-popover-body">{help.intro}</div>
+            </div>
+            <button
+              className="topbar-help-close"
+              type="button"
+              aria-label="Close help"
+              onClick={() => {
+                setHelpOpen(false);
+                setHelpPinned(false);
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div className="topbar-help-popover-sections">
+            {help.sections.map(section => (
+              <div key={section.title} className="topbar-help-section">
+                <div className="topbar-help-section-title">{section.title}</div>
+                <ul className="topbar-help-list">
+                  {section.items.map(item => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+          {help.footer && <div className="topbar-help-footer">{help.footer}</div>}
         </div>
       )}
     </div>

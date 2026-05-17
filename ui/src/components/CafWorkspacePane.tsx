@@ -136,6 +136,18 @@ function filterPropertiesForSection(obj: CafObject, sectionId: string): CafObjec
   return filtered.length > 0 ? filtered : obj.properties;
 }
 
+// Extract connected object refs from prop 3184 (connection port array: attrref elements)
+// and from direct attrref/ref values in other props — gives a quick "wired to" list
+function extractWiredRefs(obj: CafObject): { portId: number; targetRef: string }[] {
+  const results: { portId: number; targetRef: string }[] = [];
+  for (const prop of obj.properties) {
+    if (prop.value && /^8-1[/.]/.test(prop.value.trim())) {
+      results.push({ portId: prop.id, targetRef: prop.value.trim() });
+    }
+  }
+  return results;
+}
+
 function buildReferenceRows(referenceIndex: ReferenceIndex, selectedRef: string): ReferenceHit[] {
   return [...(referenceIndex.byTarget.get(selectedRef) ?? [])].sort((a, b) => {
     const sourceA = `${a.sourcePath ?? a.source}:${a.referringItem}:${a.referringAttr}`;
@@ -270,6 +282,8 @@ export default function CafWorkspacePane({
   referenceIndex: ReferenceIndex;
 }) {
   const [mode, setMode] = useState<WorkspaceMode>('control');
+  const [activeAppIndex, setActiveAppIndex] = useState(0);
+  const [panelSearch, setPanelSearch] = useState('');
   const [featureTab, setFeatureTab] = useState<FeatureTab>('parameters');
   const [featureSection, setFeatureSection] = useState('setpoint-misc');
   const [collapsed, setCollapsed] = useState<Record<PanelKey, boolean>>({
@@ -321,16 +335,27 @@ export default function CafWorkspacePane({
     return roots;
   }, [byParent, caf.controller.ref]);
 
-  const activeApplicationRoot = applicationRoots[0]?.obj ?? caf.objects.find(obj => obj.parentRef === caf.controller.ref && obj.classid === 575) ?? caf.objects.find(obj => obj.parentRef === caf.controller.ref && (byParent.get(obj.ref)?.length ?? 0) > 0) ?? caf.controller;
+  const activeApplicationRoot = applicationRoots[activeAppIndex]?.obj
+    ?? applicationRoots[0]?.obj
+    ?? caf.objects.find(obj => obj.parentRef === caf.controller.ref && obj.classid === 575)
+    ?? caf.objects.find(obj => obj.parentRef === caf.controller.ref && (byParent.get(obj.ref)?.length ?? 0) > 0)
+    ?? caf.controller;
   const activeApplicationLabel = displayName(activeApplicationRoot);
+
+  // Reset app index when CAF changes
+  useEffect(() => { setActiveAppIndex(0); setPanelSearch(''); }, [caf]);
+
   const workspaceObjects = useMemo(() => {
     const subtree = collectDescendants(activeApplicationRoot.ref, byParent);
     return [activeApplicationRoot, ...subtree];
   }, [activeApplicationRoot, byParent]);
-  const renderedWorkspaceObjects = useMemo(
-    () => workspaceObjects.filter(obj => isRenderableWorkspaceObject(obj, mode)),
-    [mode, workspaceObjects],
-  );
+
+  const panelSearchQuery = panelSearch.trim().toLowerCase();
+  const renderedWorkspaceObjects = useMemo(() => {
+    const base = workspaceObjects.filter(obj => isRenderableWorkspaceObject(obj, mode));
+    if (!panelSearchQuery) return base;
+    return base.filter(obj => buildSearchText(obj).includes(panelSearchQuery));
+  }, [mode, workspaceObjects, panelSearchQuery]);
   const workspaceRefSet = useMemo(() => new Set(renderedWorkspaceObjects.map(obj => obj.ref)), [renderedWorkspaceObjects]);
 
   const selectedObject = selected ? objMap.get(selected) ?? null : null;
@@ -452,7 +477,7 @@ export default function CafWorkspacePane({
         <div className="card-header">
           CAF Workspace
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)' }}>
-            {activeApplicationLabel} · {renderedWorkspaceObjects.length} rendered object(s)
+            {activeApplicationLabel} · {renderedWorkspaceObjects.length}{panelSearchQuery ? ' matching' : ''} object(s)
           </span>
         </div>
         <div className="card-body" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -471,14 +496,40 @@ export default function CafWorkspacePane({
           >
             Logic
           </button>
+
           {applicationRoots.length > 1 && (
-              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-dim)' }}>
-              Applications: {applicationRoots.length}
-            </span>
+            <>
+              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-dim)' }}>Application</span>
+              <select
+                value={activeAppIndex}
+                onChange={e => { setActiveAppIndex(parseInt(e.target.value)); setPanelSearch(''); }}
+                style={{
+                  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4,
+                  padding: '3px 8px', color: 'var(--text)', fontSize: 12,
+                }}
+              >
+                {applicationRoots.map((root, i) => (
+                  <option key={root.obj.ref} value={i}>
+                    {displayName(root.obj)} ({root.descendantCount} objects)
+                  </option>
+                ))}
+              </select>
+            </>
           )}
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)' }}>
-            Select a block to inspect parameters and references
-          </span>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="Filter panels…"
+              value={panelSearch}
+              onChange={e => setPanelSearch(e.target.value)}
+              style={{ width: 180, fontSize: 12 }}
+            />
+            {panelSearch && (
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }}
+                onClick={() => setPanelSearch('')}>Clear</button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -512,6 +563,7 @@ export default function CafWorkspacePane({
                 onSelect={onSelect}
                 onToggleSection={(key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))}
                 isLast={columnIndex === sectionsByColumn.length - 1}
+                isFiltered={!!panelSearchQuery}
                 handlePointerDown={handlePointerDown}
               />
             ))}
@@ -604,35 +656,64 @@ export default function CafWorkspacePane({
               </div>
             </div>
           ) : featureTab === 'connections' ? (
-            <div>
-              <div style={{ marginBottom: 12, color: 'var(--text-dim)', fontSize: 12 }}>
-                Incoming references for <strong>{displayName(activeObject)}</strong>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Wired connections (from property values that are object refs) */}
+              {(() => {
+                const wired = extractWiredRefs(activeObject);
+                if (wired.length === 0) return null;
+                return (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>WIRED CONNECTIONS</div>
+                    <table className="sct-table">
+                      <thead><tr><th>Connected object</th><th>Label</th><th>Property</th></tr></thead>
+                      <tbody>
+                        {wired.map(({ portId, targetRef }) => {
+                          const target = objMap.get(targetRef);
+                          return (
+                            <tr key={`${portId}:${targetRef}`}>
+                              <td>
+                                <button className="link-button" onClick={() => onSelect(targetRef)}>{targetRef}</button>
+                              </td>
+                              <td style={{ color: 'var(--text-dim)' }}>{target ? displayName(target) : '—'}</td>
+                              <td style={{ color: 'var(--text-dim)', fontSize: 11 }}>Prop {portId}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+
+              {/* Incoming references from the reference index */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6 }}>
+                  INCOMING REFERENCES ({selectedIncoming.length})
+                </div>
+                {selectedIncoming.length === 0 ? (
+                  <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>No incoming references found.</div>
+                ) : (
+                  <table className="sct-table">
+                    <thead>
+                      <tr><th>Source</th><th>Attribute</th><th>Path</th></tr>
+                    </thead>
+                    <tbody>
+                      {selectedIncoming.map(hit => (
+                        <tr key={`${hit.sourcePath ?? hit.source}:${hit.referringItem}:${hit.referringAttr}:${hit.referringPath ?? ''}`}>
+                          <td>
+                            <button className="link-button" onClick={() => onSelect(hit.referringItem)}>
+                              {(() => { const o = objMap.get(hit.referringItem); return o ? displayName(o) : hit.referringItem; })()}
+                            </button>
+                            <div style={{ color: 'var(--text-dim)', fontSize: 11 }}>{hit.referringItem}</div>
+                          </td>
+                          <td style={{ color: 'var(--text-dim)' }}>{hit.referringAttr}</td>
+                          <td style={{ wordBreak: 'break-word', fontSize: 11, color: 'var(--text-dim)' }}>{hit.referringPath ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
-              {selectedIncoming.length === 0 ? (
-                <div style={{ color: 'var(--text-dim)' }}>No incoming references found.</div>
-              ) : (
-                <table className="sct-table">
-                  <thead>
-                    <tr>
-                      <th>Source</th>
-                      <th>Attribute</th>
-                      <th>Path</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedIncoming.map(hit => (
-                      <tr key={`${hit.sourcePath ?? hit.source}:${hit.referringItem}:${hit.referringAttr}:${hit.referringPath ?? ''}`}>
-                        <td>
-                          <button className="link-button" onClick={() => onSelect(hit.referringItem)}>{hit.referringItem}</button>
-                          <div style={{ color: 'var(--text-dim)', fontSize: 11 }}>{hit.sourcePath ?? hit.source}</div>
-                        </td>
-                        <td>{hit.referringAttr}</td>
-                        <td style={{ wordBreak: 'break-word' }}>{hit.referringPath ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
             </div>
           ) : featureTab === 'state-tables' ? (
             <div>
@@ -740,6 +821,7 @@ function FragmentColumn({
   onSelect,
   onToggleSection,
   isLast,
+  isFiltered,
   handlePointerDown,
 }: {
   columnIndex: number;
@@ -751,6 +833,7 @@ function FragmentColumn({
   onSelect: (ref: string) => void;
   onToggleSection: (key: PanelKey) => void;
   isLast: boolean;
+  isFiltered: boolean;
   handlePointerDown: (index: number) => (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
   return (
@@ -774,7 +857,9 @@ function FragmentColumn({
             onToggle={() => onToggleSection(section.key)}
           >
             {sections[section.key].length === 0 ? (
-              <div style={{ padding: 12, color: '#6d7f96', fontSize: 12 }}>No mapped objects</div>
+              <div style={{ padding: 12, color: '#6d7f96', fontSize: 12 }}>
+                {isFiltered ? 'No matches' : 'No mapped objects'}
+              </div>
             ) : sections[section.key].map(object => (
               <PanelItem
                 key={object.ref}

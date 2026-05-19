@@ -36,6 +36,13 @@ export default function LivePane() {
     refetchInterval: 15_000,
   });
 
+  const { data: cwcvtMstp } = useQuery({
+    queryKey: ['bacnet', 'cwcvt', 'mstp-diag'],
+    queryFn: () => api.bacnet.cwcvtGroup('mstp-diag'),
+    enabled: status?.connected ?? false,
+    refetchInterval: 10_000,
+  });
+
   useEffect(() => {
     window.__cctDevices = devices;
   }, [devices]);
@@ -94,6 +101,14 @@ export default function LivePane() {
                 {discoverMutation.isPending ? 'Scanning…' : '🔍 Subnet'}
               </button>
             </div>
+
+            {cwcvtMstp && (
+              <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-dim)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--text)' }}>CWCVT MS/TP</div>
+                <div>Count: {String(cwcvtMstp.content.find(x => x.key === 'mstp-dev-cnt')?.value ?? '—')}</div>
+                <div>List: {String(cwcvtMstp.content.find(x => x.key === 'mstp-dev-list')?.value ?? '—')}</div>
+              </div>
+            )}
 
             <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, alignItems: 'center' }}>
               <input

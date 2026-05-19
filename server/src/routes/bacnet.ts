@@ -45,6 +45,43 @@ router.get('/status', (_req: Request, res: Response) => {
   });
 });
 
+// GET /api/bacnet/cwcvt/group/:group — fetch a CWCVT diagnostics group using the
+// converter's same-origin headers. Useful for reading mstp-dev-list directly.
+router.get('/cwcvt/group/:group', async (req: Request, res: Response) => {
+  const group = routeParam(req, 'group');
+  const ip = svc.getConverterIp();
+  if (!svc.isConnected() || !ip) {
+    res.status(400).json({ error: 'Not connected. POST /api/bacnet/connect first.' });
+    return;
+  }
+
+  try {
+    const cwcvtRes = await fetch(`http://${ip}/data/group/${encodeURIComponent(group)}`, {
+      headers: {
+        Origin: `http://${ip}`,
+        Referer: `http://${ip}/`,
+      },
+    });
+
+    const text = await cwcvtRes.text();
+    if (!cwcvtRes.ok) {
+      res.status(cwcvtRes.status).json({ error: text });
+      return;
+    }
+
+    const parsed = JSON.parse(text) as {
+      content?: Array<{ key: string; value: unknown }>;
+    };
+
+    res.json({
+      group,
+      content: parsed.content ?? [],
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // POST /api/bacnet/discover — subnet broadcast WHO-IS, returns devices after timeout
 // Body: { timeoutMs?: number }  (default 5000; use 10000 for larger subnets)
 router.post('/discover', async (req: Request, res: Response) => {

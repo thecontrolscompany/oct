@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { HAS_API_HOST, wsUrl } from '../connection';
@@ -19,6 +19,7 @@ export default function LivePane() {
   const [liveTab, setLiveTab] = useState<'devices' | 'mstp'>('devices');
   const [selectedDevice, setSelectedDevice] = useState<BacnetDevice | null>(null);
   const [selectedObj, setSelectedObj] = useState<BacnetObject | null>(null);
+  const [selectedDownstreamNode, setSelectedDownstreamNode] = useState<number | null>(null);
   const [directIp, setDirectIp] = useState('');
   const [directError, setDirectError] = useState('');
   const qc = useQueryClient();
@@ -43,6 +44,12 @@ export default function LivePane() {
     refetchInterval: 10_000,
   });
 
+  const downstreamNodes = useMemo(
+    () => parseDownstreamNodes(cwcvtMstp?.content.find(x => x.key === 'mstp-dev-list')?.value),
+    [cwcvtMstp]
+  );
+  const downstreamCount = downstreamNodes.length;
+
   useEffect(() => {
     window.__cctDevices = devices;
   }, [devices]);
@@ -59,6 +66,7 @@ export default function LivePane() {
       setDirectIp('');
       setDirectError('');
       setSelectedDevice(device);
+      setSelectedDownstreamNode(null);
     },
     onError: (err) => setDirectError(String(err)),
   });
@@ -107,6 +115,45 @@ export default function LivePane() {
                 <div style={{ fontWeight: 600, color: 'var(--text)' }}>CWCVT MS/TP</div>
                 <div>Count: {String(cwcvtMstp.content.find(x => x.key === 'mstp-dev-cnt')?.value ?? '—')}</div>
                 <div>List: {String(cwcvtMstp.content.find(x => x.key === 'mstp-dev-list')?.value ?? '—')}</div>
+                {downstreamCount > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Behind CWCVT</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {downstreamNodes.map(node => {
+                        const liveDevice = devices.find(d => d.deviceId === node);
+                        const active = selectedDownstreamNode === node;
+                        return (
+                          <button
+                            key={node}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDownstreamNode(node);
+                              if (liveDevice) {
+                                setSelectedDevice(liveDevice);
+                                setSelectedObj(null);
+                              } else {
+                                setSelectedDevice(null);
+                                setSelectedObj(null);
+                              }
+                            }}
+                            style={{
+                              border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                              background: active ? 'var(--surface2)' : 'var(--bg)',
+                              color: 'var(--text)',
+                              borderRadius: 999,
+                              padding: '3px 8px',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                            title={liveDevice ? `${liveDevice.name ?? `Device ${node}`}` : `Downstream node ${node}`}
+                          >
+                            Node {node}{liveDevice ? ' · live' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -148,7 +195,11 @@ export default function LivePane() {
                 <div
                   key={d.deviceId}
                   className={`tree-node${selectedDevice?.deviceId === d.deviceId ? ' selected' : ''}`}
-                  onClick={() => { setSelectedDevice(d); setSelectedObj(null); }}
+                  onClick={() => {
+                    setSelectedDevice(d);
+                    setSelectedDownstreamNode(downstreamNodes.includes(d.deviceId) ? d.deviceId : null);
+                    setSelectedObj(null);
+                  }}
                 >
                   <span className="node-icon">🎛️</span>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -163,6 +214,17 @@ export default function LivePane() {
 
           {selectedDevice ? (
             <DeviceDetail device={selectedDevice} selectedObj={selectedObj} onSelectObj={setSelectedObj} />
+          ) : selectedDownstreamNode !== null ? (
+            <div className="content" style={{ flex: 1 }}>
+              <div className="empty-state">
+                <div className="icon">🌿</div>
+                <p>Downstream node {selectedDownstreamNode} is visible behind CWCVT, but OCT does not yet have a routed BACnet identity for it.</p>
+                <p style={{ fontSize: 11, color: 'var(--text-dim)', maxWidth: 520, lineHeight: 1.5 }}>
+                  That means the converter is reporting the node on its bus, but the node has not been promoted into the flat BACnet device list yet.
+                  We can still track it here and use it as the next target for routed discovery.
+                </p>
+              </div>
+            </div>
           ) : (
             <div className="content" style={{ flex: 1 }}>
               <div className="empty-state"><div className="icon">🔌</div><p>Select a device</p></div>
@@ -172,6 +234,25 @@ export default function LivePane() {
       )}
     </div>
   );
+}
+
+function parseDownstreamNodes(value: unknown): number[] {
+  if (Array.isArray(value)) {
+    return value
+      .map(v => Number(v))
+      .filter(v => Number.isFinite(v) && v >= 0);
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? [value] : [];
+  }
+
+  if (typeof value !== 'string') return [];
+
+  return value
+    .split(/[,\s]+/)
+    .map(v => Number(v.trim()))
+    .filter(v => Number.isFinite(v) && v >= 0);
 }
 
 const PROP = { PRESENT_VALUE: 85, STATUS_FLAGS: 111, UNITS: 117, DESCRIPTION: 28 };

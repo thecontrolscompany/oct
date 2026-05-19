@@ -320,6 +320,7 @@ function DeviceDetail({
   selectedObj: BacnetObject | null;
   onSelectObj: (o: BacnetObject) => void;
 }) {
+  const isCwcvt = /cwcvt/i.test(`${device.name ?? ''} ${device.modelName ?? ''}`) || device.deviceId >= 39000;
   const [detailTab, setDetailTab] = useState<'objects' | 'commissioning' | 'io'>('objects');
   const [filterType, setFilterType] = useState('');
   const trendManager = useTrendManager(device);
@@ -327,6 +328,7 @@ function DeviceDetail({
   const { data: objects = [], isLoading } = useQuery({
     queryKey: ['bacnet', 'objects', device.deviceId],
     queryFn: () => api.bacnet.objects(device.deviceId),
+    enabled: !isCwcvt,
   });
 
   const filtered = filterType ? objects.filter(o => o.typeName === filterType) : objects;
@@ -345,6 +347,28 @@ function DeviceDetail({
           Inputs / Outputs
         </div>
       </div>
+
+      {detailTab === 'objects' && isCwcvt && (
+        <div className="content" style={{ flex: 1, overflow: 'auto' }}>
+          <div className="card">
+            <div className="card-header">CWCVT Overview</div>
+            <div className="card-body" style={{ lineHeight: 1.6 }}>
+              <p style={{ marginTop: 0 }}>
+                This is the converter, not the controller beneath it.
+              </p>
+              <p>
+                Use the <strong>Behind CWCVT</strong> nodes to promote downstream devices into the live list.
+                The converter itself only gives us the bridge and diagnostics layer.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
+                <MiniStat label="Converter" value={device.name ?? 'TL-CWCVT-0'} />
+                <MiniStat label="Device ID" value={device.deviceId} />
+                <MiniStat label="Address" value={device.address} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {detailTab === 'objects' && (
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

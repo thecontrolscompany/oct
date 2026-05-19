@@ -73,6 +73,20 @@ start.bat
 
 Opens `http://localhost:3001` in your browser. Close the window to stop the server.
 
+### Background helper for `oct.trimrespond.com`
+
+If you want the API to stay available in the background without opening a console window, run:
+
+```bat
+scripts\install-oct-helper.bat
+```
+
+This adds a per-user startup entry that launches the OCT server hidden at logon and keeps it listening on `localhost:3001`. To remove it:
+
+```bat
+scripts\uninstall-oct-helper.bat
+```
+
 ### Dev mode (hot-reload server)
 
 ```bat

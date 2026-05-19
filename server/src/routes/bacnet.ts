@@ -82,6 +82,51 @@ router.get('/cwcvt/group/:group', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/bacnet/cwcvt/node/:node/resolve — try to promote a downstream CWCVT
+// node into a concrete BACnet device using common JCI device-ID patterns.
+router.get('/cwcvt/node/:node/resolve', async (req: Request, res: Response) => {
+  const node = parseInt(routeParam(req, 'node'), 10);
+  const ip = svc.getConverterIp();
+  if (!svc.isConnected() || !ip) {
+    res.status(400).json({ error: 'Not connected. POST /api/bacnet/connect first.' });
+    return;
+  }
+  if (!Number.isFinite(node) || node < 0) {
+    res.status(400).json({ error: 'Invalid node' });
+    return;
+  }
+
+  const suffix = String(node).padStart(3, '0');
+  const candidates = Array.from(new Set<number>([
+    node,
+    Number(`72${suffix}`),
+    Number(`73${suffix}`),
+    Number(`76${suffix}`),
+  ])).filter(n => Number.isFinite(n) && n >= 0);
+
+  try {
+    for (const candidate of candidates) {
+      const found = await svc.discoverRange(candidate, candidate, 2500).then(devices => devices[0] ?? null);
+      if (found) {
+        res.json({
+          node,
+          candidateDeviceIds: candidates,
+          device: found,
+        });
+        return;
+      }
+    }
+
+    res.json({
+      node,
+      candidateDeviceIds: candidates,
+      device: null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // POST /api/bacnet/discover — subnet broadcast WHO-IS, returns devices after timeout
 // Body: { timeoutMs?: number }  (default 5000; use 10000 for larger subnets)
 router.post('/discover', async (req: Request, res: Response) => {

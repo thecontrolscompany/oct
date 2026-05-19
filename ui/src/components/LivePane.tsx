@@ -20,6 +20,7 @@ export default function LivePane() {
   const [selectedDevice, setSelectedDevice] = useState<BacnetDevice | null>(null);
   const [selectedObj, setSelectedObj] = useState<BacnetObject | null>(null);
   const [selectedDownstreamNode, setSelectedDownstreamNode] = useState<number | null>(null);
+  const [downstreamResolveError, setDownstreamResolveError] = useState('');
   const [directIp, setDirectIp] = useState('');
   const [directError, setDirectError] = useState('');
   const qc = useQueryClient();
@@ -69,6 +70,24 @@ export default function LivePane() {
       setSelectedDownstreamNode(null);
     },
     onError: (err) => setDirectError(String(err)),
+  });
+
+  const resolveDownstreamMutation = useMutation({
+    mutationFn: (node: number) => api.bacnet.resolveCwcvtNode(node),
+    onSuccess: result => {
+      setDownstreamResolveError('');
+      if (result.device) {
+        setSelectedDevice(result.device);
+        setSelectedObj(null);
+        setSelectedDownstreamNode(result.node);
+        return;
+      }
+      setSelectedDevice(null);
+      setSelectedObj(null);
+      setSelectedDownstreamNode(result.node);
+      setDownstreamResolveError(`Node ${result.node} is visible, but OCT could not resolve it to a BACnet device.`);
+    },
+    onError: err => setDownstreamResolveError(String(err)),
   });
 
   if (!status?.connected) {
@@ -126,16 +145,7 @@ export default function LivePane() {
                           <button
                             key={node}
                             type="button"
-                            onClick={() => {
-                              setSelectedDownstreamNode(node);
-                              if (liveDevice) {
-                                setSelectedDevice(liveDevice);
-                                setSelectedObj(null);
-                              } else {
-                                setSelectedDevice(null);
-                                setSelectedObj(null);
-                              }
-                            }}
+                            onClick={() => resolveDownstreamMutation.mutate(node)}
                             style={{
                               border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
                               background: active ? 'var(--surface2)' : 'var(--bg)',
@@ -147,11 +157,16 @@ export default function LivePane() {
                             }}
                             title={liveDevice ? `${liveDevice.name ?? `Device ${node}`}` : `Downstream node ${node}`}
                           >
-                            Node {node}{liveDevice ? ' · live' : ''}
+                            {resolveDownstreamMutation.isPending && active ? 'Resolving…' : `Node ${node}${liveDevice ? ' · live' : ''}`}
                           </button>
                         );
                       })}
                     </div>
+                  </div>
+                )}
+                {downstreamResolveError && (
+                  <div style={{ marginTop: 8, color: 'var(--danger)', fontSize: 11 }}>
+                    {downstreamResolveError}
                   </div>
                 )}
               </div>
@@ -197,7 +212,7 @@ export default function LivePane() {
                   className={`tree-node${selectedDevice?.deviceId === d.deviceId ? ' selected' : ''}`}
                   onClick={() => {
                     setSelectedDevice(d);
-                    setSelectedDownstreamNode(downstreamNodes.includes(d.deviceId) ? d.deviceId : null);
+                    setSelectedDownstreamNode(null);
                     setSelectedObj(null);
                   }}
                 >

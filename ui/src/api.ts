@@ -206,6 +206,12 @@ export interface CwcvtGroupDetail {
   content: CwcvtGroupEntry[];
 }
 
+export interface CwcvtNodeResolution {
+  node: number;
+  candidateDeviceIds: number[];
+  device: BacnetDevice | null;
+}
+
 export interface ArchiveTableCount {
   name: string;
   rowCount: number;
@@ -319,6 +325,7 @@ export const api = {
   bacnet: {
     status: () => get<BacnetStatus>('/bacnet/status'),
     cwcvtGroup: (group: string) => get<CwcvtGroupDetail>(`/bacnet/cwcvt/group/${encodeURIComponent(group)}`),
+    resolveCwcvtNode: (node: number) => get<CwcvtNodeResolution>(`/bacnet/cwcvt/node/${encodeURIComponent(node)}/resolve`),
     connect: (ip: string, prefix?: number, networkNumber?: number) =>
       post<{ status: string; ip: string; subnetBroadcast: string; networkNumber: number }>(
         '/bacnet/connect', { ip, prefix, networkNumber }

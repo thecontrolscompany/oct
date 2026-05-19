@@ -6,6 +6,7 @@ import LivePane from './components/LivePane';
 import MstpSerialPane from './components/MstpSerialPane';
 import PackagesPane from './components/PackagesPane';
 import FileViewerPane from './components/FileViewerPane';
+import OscvtPane from './components/OscvtPane';
 
 import CommissioningPreviewPane from './components/CommissioningPreviewPane';
 import DictionaryPane from './components/DictionaryPane';
@@ -27,7 +28,7 @@ export default function App() {
   );
 }
 
-type View = 'library' | 'live' | 'quick-trend' | 'preview' | 'serial' | 'packages' | 'caf' | 'dictionary' | 'enums';
+type View = 'library' | 'live' | 'quick-trend' | 'preview' | 'serial' | 'packages' | 'caf' | 'dictionary' | 'enums' | 'oscvt';
 type Mode = 'online' | 'offline';
 
 type HelpContext = {
@@ -220,6 +221,28 @@ function getHelpContext(view: View, onlineMode: boolean): HelpContext {
           },
         ],
       };
+    case 'oscvt':
+      return {
+        title: 'OSCVT',
+        intro: 'Explore the Open Source Converter section for the CWCVT-derived web console, hidden modes, diagnostics, and firmware behavior.',
+        sections: [
+          {
+            title: 'What you can inspect',
+            items: [
+              'BACnet and Wi-Fi settings surfaced from the documented UI schemas.',
+              'Diagnostics, hidden modes, and OTA update behavior from the firmware.',
+              'The naming and route map for the current OSCVT workstream.',
+            ],
+          },
+          {
+            title: 'Use it for',
+            items: [
+              'Keeping the OSCVT UI aligned with the firmware research.',
+              'Providing a dedicated landing section for the converter work.',
+            ],
+          },
+        ],
+      };
   }
 }
 
@@ -243,7 +266,7 @@ function AppShell() {
 
   const handleSetMode = useCallback((m: Mode) => {
     setMode(m);
-    if (m === 'offline') setView('caf');
+    setView(current => (m === 'offline' && current !== 'oscvt' ? 'caf' : current));
     setHelpOpen(false);
     setHelpPinned(false);
   }, []);
@@ -306,32 +329,27 @@ function AppShell() {
   }, []);
 
   const renderModeToggle = () => (
-    <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
+    <div className="topbar-mode-group">
       <button
-        className="btn"
-        style={{
-          padding: '3px 10px',
-          fontSize: 11,
-          background: onlineMode ? '#fff' : 'rgba(255,255,255,0.08)',
-          color: onlineMode ? 'var(--shell-blue-ink)' : 'rgba(255,255,255,0.9)',
-          borderColor: onlineMode ? '#fff' : 'rgba(255,255,255,0.2)',
-        }}
+        className={`topbar-mode-pill${onlineMode ? ' active' : ''}`}
         onClick={() => handleSetMode('online')}
+        aria-pressed={onlineMode}
       >
         Online
       </button>
       <button
-        className="btn"
-        style={{
-          padding: '3px 10px',
-          fontSize: 11,
-          background: !onlineMode ? '#fff' : 'rgba(255,255,255,0.08)',
-          color: !onlineMode ? 'var(--shell-blue-ink)' : 'rgba(255,255,255,0.9)',
-          borderColor: !onlineMode ? '#fff' : 'rgba(255,255,255,0.2)',
-        }}
+        className={`topbar-mode-pill${!onlineMode ? ' active' : ''}`}
         onClick={() => handleSetMode('offline')}
+        aria-pressed={!onlineMode}
       >
         Offline
+      </button>
+      <button
+        className={`topbar-mode-pill${view === 'oscvt' ? ' active' : ''}`}
+        onClick={() => setView('oscvt')}
+        aria-pressed={view === 'oscvt'}
+      >
+        OSCVT
       </button>
     </div>
   );
@@ -520,6 +538,7 @@ function AppShell() {
           {view === 'preview'  && <CommissioningPreviewPane />}
           {view === 'serial'   && <MstpSerialPane />}
           {view === 'packages'    && <PackagesPane />}
+          {view === 'oscvt'       && <OscvtPane />}
           {view === 'caf'         && <FileViewerPane mode={mode} />}
           {view === 'dictionary'  && <DictionaryPane />}
           {view === 'enums'       && <EnumsPane />}

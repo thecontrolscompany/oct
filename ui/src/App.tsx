@@ -6,7 +6,6 @@ import LivePane from './components/LivePane';
 import MstpSerialPane from './components/MstpSerialPane';
 import PackagesPane from './components/PackagesPane';
 import FileViewerPane from './components/FileViewerPane';
-import OscvtPane from './components/OscvtPane';
 
 import CommissioningPreviewPane from './components/CommissioningPreviewPane';
 import DictionaryPane from './components/DictionaryPane';
@@ -346,9 +345,8 @@ function AppShell() {
         Offline
       </button>
       <button
-        className={`topbar-mode-pill${view === 'oscvt' ? ' active' : ''}`}
-        onClick={() => setView('oscvt')}
-        aria-pressed={view === 'oscvt'}
+        className="topbar-mode-pill"
+        onClick={() => { window.location.href = '/oscvt'; }}
       >
         OSCVT
       </button>
@@ -537,7 +535,6 @@ function AppShell() {
           {view === 'preview'  && <CommissioningPreviewPane />}
           {view === 'serial'   && <MstpSerialPane />}
           {view === 'packages'    && <PackagesPane />}
-          {view === 'oscvt'       && <OscvtPane />}
           {view === 'caf'         && <FileViewerPane mode={mode} />}
           {view === 'dictionary'  && <DictionaryPane />}
           {view === 'enums'       && <EnumsPane />}

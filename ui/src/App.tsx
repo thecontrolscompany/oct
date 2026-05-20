@@ -451,7 +451,7 @@ function AppShell() {
             <button
               key={id}
               className={`tab${view === id ? ' active' : ''}`}
-              onClick={() => setView(id)}
+              onClick={() => id === 'oscvt' ? window.location.href = '/oscvt' : setView(id)}
             >
               {label}
               {badge && (

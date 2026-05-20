@@ -826,3 +826,78 @@ If continuing No-DLL gap items (logic diagram is the highest value):
 - Verify the exact upload request shape for firmware update, including content type and whether the path is always `/upload/<filename>`.
 - Confirm whether APSTA is merely implemented or also the actual default mode at boot.
 - Check whether the SA bus claim holds for any older controller families that are not represented in the current package set.
+
+---
+
+## Session Log — 2026-05-19–20: OSCVT Project, Router-First OCT, Device UI
+
+### What changed
+
+#### OCT — Router-first architecture (commit 62fa55c, b9ca58c, 8ee1cec)
+- Added `server/src/routes/router.ts`: HTTP proxy to the OSCVT/CWCVT device at its own IP
+  - `GET /api/router/status` — pings `/ui_views/ui_info.json`
+  - `GET /api/router/diagnostics` — proxies `/ui_views/diagnostics.json`
+  - `GET /api/router/settings/bacnet|wifi|ble` — proxies corresponding view endpoints
+  - `POST /api/router/upload` — re-posts firmware binary to `/upload/<filename>`
+  - All routes accept optional `?ip=` query param to target device directly without BACnet connection
+- Mounted at `app.use('/api/router', routerRouter)` in `server/src/index.ts`
+- Added typed `api.router.*` client calls in `ui/src/api.ts`
+- Language cleanup in `ui/src/App.tsx`, `LivePane.tsx`, `Sidebar.tsx`: removed "backend unavailable", "offline archive browser" → "No router connected", "File browser"
+- Mode toggle now says Online/Offline with an added OSCVT pill that navigates to `/oscvt`
+
+#### OCT — OSCVT standalone app (commits 392db27 → e41408c)
+- `/oscvt` route: second Vite entry point at `ui/oscvt/index.html`
+  - Separate React app, own `QueryClientProvider`, own CSS
+  - Five tabs: Overview, Hardware, Operation, Firmware, Live Device
+  - All JCI/CWCVT/brand references removed from public pages
+  - Platform compatibility table: only Waveshare ESP32-S3-Touch-LCD-4.3B (Pro) and ESP32-S3-RS485-CAN (Mini) are known supported
+- `server/src/index.ts`: serves `dist/oscvt/index.html` for `/oscvt` and `/oscvt/*` before OCT catch-all
+- App.tsx OSCVT tab + mode-toggle pill both navigate to `/oscvt` (no inline OscvtPane)
+
+#### OCT — Device UI preview (`ui/public/device-preview.html` → served at `/device-preview.html`)
+- Full 6-screen clickable prototype of the OSCVT Pro 800×480 touchscreen UI
+- Screens: Protocol selector, Devices list, Stats/diagnostics, PCAP Capture, Field Reports, Settings
+- Clickable bottom nav, live clock, animated capture timer, device row → detail panel
+- Standalone HTML — no nav link in OCT, browse directly to URL
+- Design decisions for reference:
+  - Only the active/selected protocol card is highlighted (not all with data)
+  - WiFi AP status dot is blue (healthy), not yellow (warning)
+  - SSID shown in topbar so tech knows what network to join
+  - N2 Bus card says "N2 Bus (Legacy)" — no brand names
+  - ARC156 says "BACnet ARC156, ASHRAE 135" — no brand names
+  - Polarity icon uses Unicode ↔ not emoji ↔️ (LVGL compatibility)
+
+#### OSCVT Firmware project (`C:\Users\TimothyCollins\dev\oscvt-firmware\`)
+- New repo, ESP-IDF 5.x project targeting ESP32-S3-WROOM-1-N16R8V
+- `components/bacnet-stack/` — git submodule (Steve Karg)
+- `docs/waveshare-demo/` — git submodule (Waveshare official ESP-IDF examples)
+- `docs/ESP32-S3-Touch-LCD-4.3B-Sch.pdf` — board schematic
+- Confirmed GPIO assignments from Waveshare ESP-IDF source:
+  - RS-485: UART2, TX=GPIO44, RX=GPIO43, auto-direction (no DE GPIO)
+  - I2C: SDA=8, SCL=9 (GT911 touch + PCF85063A RTC share this bus)
+  - LCD: ST7262, 16-bit RGB parallel, DE=5, PCLK=7, VSYNC=3, HSYNC=46
+- Turnkey scripts: `install.bat`, `build.bat`, `flash.bat`, `flash-test.bat`
+  - `install.bat` auto-installs ESP-IDF v5.2.4 if not found, runs full setup
+  - `flash-test.bat` menu-driven flash of Waveshare pre-built test binaries
+- VS Code workspace: `.vscode/settings.json`, `tasks.json`, `extensions.json`, `c_cpp_properties.json`
+- `CONTINUITY.md` in firmware repo with full context, GPIO table, risk list, first-session plan
+
+### Current state
+
+| Area | Status |
+|------|--------|
+| OCT router proxy (`/api/router/*`) | Live on oct.trimrespond.com |
+| OCT OSCVT app (`/oscvt`) | Live on oct.trimrespond.com |
+| OCT device preview (`/device-preview.html`) | Live on oct.trimrespond.com |
+| OSCVT firmware project | Scaffolded, awaiting hardware |
+| OSCVT Pro board (Waveshare 4.3B) | Ordered, not yet received |
+| ESP-IDF 5.2.x | Extension installed, configure wizard not yet run |
+
+### Immediate next steps (when board arrives)
+
+1. Run `flash-test.bat` → option 2 (RS-485 loopback) to confirm hardware
+2. Run `flash-test.bat` → option 6 (LVGL display) to confirm display
+3. Run `flash-test.bat` → option 1 (I2C scan) to confirm GT911 + RTC addresses
+4. **Validate USB OTG CDC-ECM Ethernet dongle** (HIGH RISK — blocks BACnet/IP trunk scan)
+5. Build and flash OSCVT scaffold (`build.bat` + `flash.bat`) — confirm boot banner
+6. Begin 1a: RS-485 passive listen, detect 0x55 0xFF preamble on a live bus

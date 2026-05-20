@@ -237,8 +237,7 @@ export interface ArchiveNameMapRefreshResult {
   globalPath: string;
 }
 
-import { API_BASE } from './connection';
-const BASE = API_BASE;
+import { apiBaseCandidates } from './connection';
 
 async function safeJson<T>(res: Response): Promise<T> {
   const ct = res.headers.get('content-type') ?? '';
@@ -260,45 +259,62 @@ function extractError(body: unknown, fallback: string): string {
   return fallback;
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path);
-  if (!res.ok) {
-    const body = await safeJson<unknown>(res).catch(() => null);
-    throw new Error(extractError(body, `HTTP ${res.status}`));
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const candidates = apiBaseCandidates();
+  let lastError: Error | null = null;
+
+  for (const base of candidates) {
+    try {
+      const res = await fetch(base + path, init);
+      if (!res.ok) {
+        const body = await safeJson<unknown>(res).catch(() => null);
+        const err = new Error(extractError(body, `HTTP ${res.status}`));
+        lastError = err;
+        if (base !== candidates[candidates.length - 1]) continue;
+        throw err;
+      }
+
+      const ct = res.headers.get('content-type') ?? '';
+      if (!ct.includes('json')) {
+        if (base !== candidates[candidates.length - 1]) {
+          lastError = new Error(`Backend unreachable (HTTP ${res.status})`);
+          continue;
+        }
+        throw new Error(`Backend unreachable (HTTP ${res.status})`);
+      }
+
+      return res.json();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (base === candidates[candidates.length - 1]) break;
+    }
   }
-  return safeJson<T>(res);
+
+  throw lastError ?? new Error('Backend unreachable');
+}
+
+async function get<T>(path: string): Promise<T> {
+  return request<T>(path);
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
+  return request<T>(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const b = await safeJson<unknown>(res).catch(() => null);
-    throw new Error(extractError(b, `HTTP ${res.status}`));
-  }
-  return safeJson<T>(res);
 }
 
 async function put<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
+  return request<T>(path, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const b = await safeJson<unknown>(res).catch(() => null);
-    throw new Error(extractError(b, `HTTP ${res.status}`));
-  }
-  return safeJson<T>(res);
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path, { method: 'DELETE' });
-  if (!res.ok) throw new Error(res.statusText);
-  return safeJson<T>(res);
+  return request<T>(path, { method: 'DELETE' });
 }
 
 export const api = {
@@ -346,12 +362,23 @@ export const api = {
     upload: async (file: File): Promise<ParsedCaf> => {
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch(BASE + '/caf/upload', { method: 'POST', body: form });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error((err as { error: string }).error ?? res.statusText);
+      let lastError: Error | null = null;
+      for (const base of apiBaseCandidates()) {
+        try {
+          const res = await fetch(base + '/caf/upload', { method: 'POST', body: form });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: res.statusText }));
+            lastError = new Error((err as { error: string }).error ?? res.statusText);
+            if (base !== apiBaseCandidates()[apiBaseCandidates().length - 1]) continue;
+            throw lastError;
+          }
+          return res.json();
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          if (base === apiBaseCandidates()[apiBaseCandidates().length - 1]) break;
+        }
       }
-      return res.json();
+      throw lastError ?? new Error('Backend unreachable');
     },
     parsePath: (path: string) => get<ParsedCaf>(`/caf/parse?path=${encodeURIComponent(path)}`),
   },
@@ -360,18 +387,42 @@ export const api = {
     upload: async (file: File): Promise<ParsedDbexport> => {
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch(BASE + '/dbexport/upload', { method: 'POST', body: form });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error((err as { error: string }).error ?? res.statusText);
+      let lastError: Error | null = null;
+      for (const base of apiBaseCandidates()) {
+        try {
+          const res = await fetch(base + '/dbexport/upload', { method: 'POST', body: form });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: res.statusText }));
+            lastError = new Error((err as { error: string }).error ?? res.statusText);
+            if (base !== apiBaseCandidates()[apiBaseCandidates().length - 1]) continue;
+            throw lastError;
+          }
+          return res.json();
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          if (base === apiBaseCandidates()[apiBaseCandidates().length - 1]) break;
+        }
       }
-      return res.json();
+      throw lastError ?? new Error('Backend unreachable');
     },
     parsePath: (path: string) => get<ParsedDbexport>(`/dbexport/parse?path=${encodeURIComponent(path)}`),
     graphic: async (filename: string): Promise<string> => {
-      const res = await fetch(`${BASE}/dbexport/graphic?filename=${encodeURIComponent(filename)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.text();
+      let lastError: Error | null = null;
+      for (const base of apiBaseCandidates()) {
+        try {
+          const res = await fetch(`${base}/dbexport/graphic?filename=${encodeURIComponent(filename)}`);
+          if (!res.ok) {
+            lastError = new Error(`HTTP ${res.status}`);
+            if (base !== apiBaseCandidates()[apiBaseCandidates().length - 1]) continue;
+            throw lastError;
+          }
+          return res.text();
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          if (base === apiBaseCandidates()[apiBaseCandidates().length - 1]) break;
+        }
+      }
+      throw lastError ?? new Error('Backend unreachable');
     },
   },
 

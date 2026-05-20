@@ -9,19 +9,26 @@
 const API_HOST = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 const isLocalPage = typeof window !== 'undefined'
   && /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/.test(window.location.hostname);
-const FALLBACK_HOST = isLocalPage ? '' : 'http://localhost:3001';
-const RESOLVED_HOST = API_HOST || FALLBACK_HOST;
 
-export const API_BASE = RESOLVED_HOST + '/api';
-export const HAS_API_HOST = RESOLVED_HOST.length > 0;
+const LOCAL_HELPER_HOST = isLocalPage ? '' : 'http://localhost:3001';
+const DEFAULT_HOST = API_HOST || LOCAL_HELPER_HOST;
+
+export const API_BASE = DEFAULT_HOST + '/api';
+export const HAS_API_HOST = DEFAULT_HOST.length > 0;
+
+export function apiBaseCandidates(): string[] {
+  const candidates = [DEFAULT_HOST];
+  if (!candidates.includes('http://localhost:3001') && !isLocalPage) {
+    candidates.push('http://localhost:3001');
+  }
+  return candidates;
+}
 
 export function wsUrl(path = '/ws'): string {
-  if (!RESOLVED_HOST) {
-    // Dev: derive from current page host so Vite proxy handles it.
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${proto}://${window.location.host}${path}`;
-  }
-  const wsProto = RESOLVED_HOST.startsWith('https') ? 'wss' : 'ws';
-  const host = RESOLVED_HOST.replace(/^https?:\/\//, '');
-  return `${wsProto}://${host}${path}`;
+  const browserOrigin = typeof window !== 'undefined' ? window.location.origin.replace(/\/$/, '') : '';
+  const host = (!isLocalPage && DEFAULT_HOST && DEFAULT_HOST === browserOrigin)
+    ? 'http://localhost:3001'
+    : (DEFAULT_HOST || browserOrigin);
+  const wsProto = host.startsWith('https') ? 'wss' : 'ws';
+  return `${wsProto}://${host.replace(/^https?:\/\//, '')}${path}`;
 }

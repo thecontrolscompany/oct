@@ -605,6 +605,34 @@ These features exist in CCT and are achievable with direct BACnet — no DLL wor
 | **Multi-controller bulk operations** | Multi-select devices, apply attribute changes to all |
 | **Database ↔ controller compare** | Diff live BACnet values against `tblValue1` stored values |
 
+### Deferred — AI integration (depends on OSCVT 1b being complete)
+
+AI analysis features for both the OCT web app and as a proxy layer for the OSCVT device.
+The implementation lives in OCT's server so the API key never touches device flash and the
+provider can be switched without a firmware update.
+
+**Design requirements:**
+- Provider-agnostic abstraction — not Claude/Anthropic-specific
+- User supplies their own API key in OCT settings (stored server-side, never in device)
+- First supported provider: Anthropic; others (OpenAI, Gemini, local Ollama) addable later
+- All calls async with graceful offline fallback
+- Token-efficient prompts — summarize data before sending, never send raw binary or PCAP
+
+**Planned server endpoints (`server/src/routes/ai.ts`):**
+- `POST /api/ai/query` — natural language query against current device data
+- `POST /api/ai/analyze-bus` — bus health anomaly analysis from trend data
+- `POST /api/ai/report` — generate plain-English commissioning report from scan JSON
+- `POST /api/ai/analyze-pcap` — PCAP frame summary → AI interpretation
+- `POST /api/ai/compare` — historical scan comparison narrative
+- `POST /api/ai/topology` — infer physical wiring order with confidence levels
+- `POST /api/ai/projecthub-narrative` — populate ProjectHub report fields from scan
+
+**Outstanding decisions before implementing:**
+- Authentication: how does OCT verify the caller is authorized to use the API key
+- Rate limiting and cost controls (per-session token budget?)
+- Whether OSCVT device calls OCT's `/api/ai/*` endpoints, or OCT polls and pushes
+- Privacy consent flow — what exactly triggers the "first use" acknowledgment
+
 ## SCT / DaytonaState Findings
 
 The imported SCT archive on this machine is the best new source for the remaining archive-name gaps.

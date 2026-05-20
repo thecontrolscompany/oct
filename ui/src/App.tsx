@@ -287,8 +287,9 @@ function AppShell() {
     setConnecting(true);
     try {
       await api.bacnet.connect(deviceIp, cidr, netNum);
-      await qc.invalidateQueries({ queryKey: ['health'] });
       setView('live');
+      qc.invalidateQueries({ queryKey: ['health'] }).catch(() => null);
+      qc.invalidateQueries({ queryKey: ['bacnet'] }).catch(() => null);
     } catch (err) {
       alert(`Connection failed: ${err}`);
     } finally {

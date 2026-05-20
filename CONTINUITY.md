@@ -751,3 +751,78 @@ If continuing No-DLL gap items (logic diagram is the highest value):
 
 8. `server/src/routes/caf.ts` — already parses prop `3184` connection arrays; extend to also extract `3138` wire matrix
 9. `ui/src/components/CafPane.tsx` — add a "Diagram" tab alongside the existing Tree/I/O/Stats tabs
+
+---
+
+## Session Log — 2026-05-19: CWCVT Firmware / Hidden Mode Research
+
+### What was verified locally
+
+- `hardware/cwcvt_json_views.txt` contains the embedded UI schemas for the CWCVT web UI.
+- `hardware/cwcvt_main_from_cwa.bin` contains the firmware strings for the web server, OTA flow, Wi-Fi modes, and diagnostic subsystems.
+- `hardware/1.1.0.371/cwcvt-1.1.0.371-rel-ota.bin` is the packaged OTA image for release `1.1.0.371`.
+- `hardware/ns8000_device-info.xml` confirms the NS8000 family is modeled as `SensorActuatorBus -> BACnetMSTP`.
+- `hardware/jcpkg_contents.txt` shows the installed JCI device interface bundles for NS8000, NSA7000, SmartAct, VP3000, Danfoss FC-102, and related images.
+
+### CWCVT UI schema findings
+
+- The BACnet settings block exposes:
+  - `b-mac` range `0..254`
+  - `mstp-net` range `0..65535`
+  - `bip-port` range `0..65535`
+  - `bip-net` range `0..65535`
+  - `dev-num` range `0..65535`
+  - `ble-net` range `0..65535`
+- The diagnostics schema includes:
+  - `mstp-dev-cnt`, `mstp-dev-list`, `frame-err`, `mstp-rx-cnt`
+  - `mstp-msgs`, `mstp-bcasts`, `mstp-m2w`, `mstp-w2m`
+  - `mstp-loop-time`, `mstp-drop-cnt`, `mstp-tx-f`, `bip-tx-f`
+  - capture controls for `sd_f_name`, `sd_m_log`, and `pcap_html`
+- The hidden mode block includes:
+  - `btcvt_mode` with `Disabled` / `Enabled`
+  - note text saying BTCVT is unsupported but can be enabled for legacy use cases
+- The firmware update block uses a file input named `fw_update`
+
+### Firmware string evidence
+
+- The binary contains the static UI path strings:
+  - `/ui_framework/index.html`
+  - `/ui_framework/main.bundle.js`
+  - `/ui_views/diagnostics.json`
+  - `/ui_views/wifi_settings.json`
+- The OTA path is present in strings and error logs:
+  - `/upload/*`
+  - `ota_server`
+  - `ota_update_init`
+  - `esp_ota_begin`
+  - `esp_ota_end`
+  - `esp_ota_set_boot_partition`
+- Wi-Fi mode support is compiled in with:
+  - `esp_wifi_set_mode(WIFI_MODE_AP)`
+  - `esp_wifi_set_mode(WIFI_MODE_STA)`
+  - `esp_wifi_set_mode(WIFI_MODE_APSTA)`
+- Other strings confirm the firmware knows about:
+  - `BTCVT`
+  - `wifi_settings`
+  - `mstp-force-baud`
+  - `mstp-clear-stats`
+  - `pcap` / `mstp_captures`
+
+### Live probe result
+
+- The probe script reached the device, but the CWCVT did not obtain a DHCP lease during the first pass, so most HTTP and BACnet probes timed out.
+- A later probe got a root response of a tiny HTML shell with a `main.bundle.js` script tag, but the guessed bundle paths under `/` did not resolve.
+- That matches the firmware strings better than the initial guess: the UI appears to live under `/ui_framework/`, not at the web root.
+
+### SA bus / device package conclusion
+
+- The NS8000 device definition explicitly uses `BACnetMSTP`.
+- The installed JCI device interface bundles for NS8000, NSA7000, SmartAct, VP3000, and Danfoss FC-102 all point toward standard BACnet MS/TP field devices rather than a proprietary SA-bus protocol.
+- This supports the working assumption that OCT's BACnet MS/TP support covers the current SA bus ecosystem natively, while N2 remains a legacy-only concern.
+
+### Remaining gaps
+
+- Confirm the actual browser route for the CWCVT UI assets and whether `/ui_framework/main.bundle.js` is fetchable directly from the live device.
+- Verify the exact upload request shape for firmware update, including content type and whether the path is always `/upload/<filename>`.
+- Confirm whether APSTA is merely implemented or also the actual default mode at boot.
+- Check whether the SA bus claim holds for any older controller families that are not represented in the current package set.

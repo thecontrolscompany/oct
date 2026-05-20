@@ -203,43 +203,43 @@ export default function OscvtPane() {
     : 'Router diagnostics unavailable - connect through a reachable router bridge';
 
   return (
-    <div className="content osccvt-page">
-      <div className="osccvt-shell">
-        <section className="osccvt-hero card">
-          <div className="osccvt-hero-copy">
-            <div className="osccvt-kicker">OSCVT</div>
+    <div className="content oscvt-page">
+      <div className="oscvt-shell">
+        <section className="oscvt-hero card">
+          <div className="oscvt-hero-copy">
+            <div className="oscvt-kicker">OSCVT</div>
             <h1>Open Source Converter</h1>
             <p>
               A live UI for the connected BACnet router console: settings, diagnostics, hidden modes, and firmware upload.
             </p>
-            <div className="osccvt-chip-row">
-              <span className="osccvt-chip">{routerBanner}</span>
-              <span className="osccvt-chip">APSTA / router mode</span>
-              <span className="osccvt-chip">BTCVT hidden</span>
-              <span className="osccvt-chip">Multipart OTA</span>
+            <div className="oscvt-chip-row">
+              <span className="oscvt-chip">{routerBanner}</span>
+              <span className="oscvt-chip">APSTA / router mode</span>
+              <span className="oscvt-chip">BTCVT hidden</span>
+              <span className="oscvt-chip">Multipart OTA</span>
             </div>
           </div>
 
-          <div className="osccvt-hero-panel">
-            <div className="osccvt-panel-label">Live Router</div>
-            <div className="osccvt-route-list">
-              <div className="osccvt-route-row">
+          <div className="oscvt-hero-panel">
+            <div className="oscvt-panel-label">Live Router</div>
+            <div className="oscvt-route-list">
+              <div className="oscvt-route-row">
                 <span>Status</span>
-                <span className={`osccvt-route-pill ${routerReachable ? 'ready' : 'warn'}`}>{routerReachable ? 'reachable' : 'unavailable'}</span>
+                <span className={`oscvt-route-pill ${routerReachable ? 'ready' : 'warn'}`}>{routerReachable ? 'reachable' : 'unavailable'}</span>
               </div>
-              <div className="osccvt-route-row">
+              <div className="oscvt-route-row">
                 <span>IP</span>
-                <span className="osccvt-route-pill">{routerStatus?.converterIp ?? draft.ip}</span>
+                <span className="oscvt-route-pill">{routerStatus?.converterIp ?? draft.ip}</span>
               </div>
-              <div className="osccvt-route-row">
+              <div className="oscvt-route-row">
                 <span>Diagnostics</span>
-                <span className="osccvt-route-pill">{diagnostics ? 'loaded' : 'pending'}</span>
+                <span className="oscvt-route-pill">{diagnostics ? 'loaded' : 'pending'}</span>
               </div>
             </div>
           </div>
         </section>
 
-        <div className="osccvt-tabs tabs">
+        <div className="oscvt-tabs tabs">
           {PAGES.map(item => (
             <div
               key={item.id}
@@ -251,12 +251,12 @@ export default function OscvtPane() {
           ))}
         </div>
 
-        <div className="osccvt-grid">
-          <main className="osccvt-main">
+        <div className="oscvt-grid">
+          <main className="oscvt-main">
             {page === 'overview' && (
               <>
                 {!routerReachable && (
-                  <section className="card osccvt-card">
+                  <section className="card oscvt-card">
                     <div className="card-header">Router Diagnostics</div>
                     <div className="card-body" style={{ color: 'var(--text-dim)', lineHeight: 1.6 }}>
                       Router diagnostics unavailable - connect through a reachable router bridge.
@@ -264,9 +264,9 @@ export default function OscvtPane() {
                   </section>
                 )}
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">What OSCVT is showing</div>
-                  <div className="card-body osccvt-overview-grid">
+                  <div className="card-body oscvt-overview-grid">
                     <StatCard label="Router" value={routerReachable ? 'Reachable' : 'Unavailable'} detail={routerBanner} />
                     <StatCard label="BACnet" value="Live" detail="BACnet settings come from the router proxy." />
                     <StatCard label="Diagnostics" value={diagnostics ? 'Loaded' : 'Waiting'} detail="Live router diagnostics surface from /api/router/diagnostics." />
@@ -274,27 +274,27 @@ export default function OscvtPane() {
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Live Router Snapshot</div>
                   <div className="card-body">
-                    <pre className="osccvt-json">{JSON.stringify(routerStatus?.raw ?? { reachable: false }, null, 2)}</pre>
+                    <pre className="oscvt-json">{JSON.stringify(routerStatus?.raw ?? { reachable: false }, null, 2)}</pre>
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Documented Routes</div>
                   <div className="card-body">
-                    <div className="osccvt-pill-list">
+                    <div className="oscvt-pill-list">
                       {ROUTES.map(route => (
-                        <span key={route} className="osccvt-mini-pill">{route}</span>
+                        <span key={route} className="oscvt-mini-pill">{route}</span>
                       ))}
                     </div>
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Documented Surface</div>
-                  <div className="card-body osccvt-schema-grid">
+                  <div className="card-body oscvt-schema-grid">
                     <SchemaBlock title="BACnet Settings" subtitle="Core network and addressing controls" rows={BACNET_KEYS} accent="blue" />
                     <SchemaBlock title="Wi-Fi Settings" subtitle="Hosted AP and client connectivity" rows={WIFI_KEYS} accent="green" />
                     <SchemaBlock
@@ -311,16 +311,16 @@ export default function OscvtPane() {
 
             {page === 'settings' && (
               <>
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">BACnet Settings</div>
                   <div className="card-body">
-                    <pre className="osccvt-json">{JSON.stringify(bacnetSettings ?? { reachable: false }, null, 2)}</pre>
+                    <pre className="oscvt-json">{JSON.stringify(bacnetSettings ?? { reachable: false }, null, 2)}</pre>
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">BACnet Settings Draft</div>
-                  <div className="card-body osccvt-settings-grid">
+                  <div className="card-body oscvt-settings-grid">
                     <SettingInput label="IP Address" keyName="ip" value={draft.ip} onChange={value => setDraft(prev => ({ ...prev, ip: value }))} />
                     <SettingInput label="CIDR Prefix" keyName="prefix" value={draft.prefix} onChange={value => setDraft(prev => ({ ...prev, prefix: value }))} />
                     <SettingInput label="Network Number" keyName="networkNumber" value={draft.networkNumber} onChange={value => setDraft(prev => ({ ...prev, networkNumber: value }))} />
@@ -333,23 +333,23 @@ export default function OscvtPane() {
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Wi-Fi Settings</div>
                   <div className="card-body">
-                    <pre className="osccvt-json">{JSON.stringify(wifiSettings ?? { reachable: false }, null, 2)}</pre>
+                    <pre className="oscvt-json">{JSON.stringify(wifiSettings ?? { reachable: false }, null, 2)}</pre>
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">BLE Settings</div>
                   <div className="card-body">
-                    <pre className="osccvt-json">{JSON.stringify(bleSettings ?? { reachable: false }, null, 2)}</pre>
+                    <pre className="oscvt-json">{JSON.stringify(bleSettings ?? { reachable: false }, null, 2)}</pre>
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Wi-Fi + Legacy Draft</div>
-                  <div className="card-body osccvt-settings-grid">
+                  <div className="card-body oscvt-settings-grid">
                     <SettingInput label="AP SSID" keyName="wifiSsid" value={draft.wifiSsid} onChange={value => setDraft(prev => ({ ...prev, wifiSsid: value }))} />
                     <SettingInput label="AP Password" keyName="wifiPassword" value={draft.wifiPassword} onChange={value => setDraft(prev => ({ ...prev, wifiPassword: value }))} helper="10–64 characters, mixed complexity." />
                     <SettingInput label="Wi-Fi Channel" keyName="wifiChannel" value={draft.wifiChannel} onChange={value => setDraft(prev => ({ ...prev, wifiChannel: value }))} />
@@ -368,9 +368,9 @@ export default function OscvtPane() {
 
             {page === 'diagnostics' && (
               <>
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Diagnostics Surface</div>
-                  <div className="card-body osccvt-diagnostic-strip">
+                  <div className="card-body oscvt-diagnostic-strip">
                     <StatCard label="MS/TP bus" value="Active" detail="Device count, token loop time, frame errors, and tx failures." />
                     <StatCard label="Wi-Fi" value="Ready" detail="RSSI, current channel, and station list live here." />
                     <StatCard label="BLE" value="Ready" detail="Connection count, MTU, packet stats, and pairing failures." />
@@ -378,24 +378,24 @@ export default function OscvtPane() {
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Live Diagnostics</div>
                   <div className="card-body">
-                    <pre className="osccvt-json">{JSON.stringify(diagnostics ?? { reachable: false }, null, 2)}</pre>
+                    <pre className="oscvt-json">{JSON.stringify(diagnostics ?? { reachable: false }, null, 2)}</pre>
                   </div>
                 </section>
 
-                <section className="card osccvt-card">
+                <section className="card oscvt-card">
                   <div className="card-header">Telemetry Rows</div>
                   <div className="card-body">
-                    <div className="osccvt-diagnostic-list">
+                    <div className="oscvt-diagnostic-list">
                       {DIAG_KEYS.map(row => (
-                        <div key={row.key} className="osccvt-diagnostic-row">
+                        <div key={row.key} className="oscvt-diagnostic-row">
                           <div>
-                            <div className="osccvt-row-label">{row.label}</div>
-                            <div className="osccvt-row-key">{row.key}</div>
+                            <div className="oscvt-row-label">{row.label}</div>
+                            <div className="oscvt-row-key">{row.key}</div>
                           </div>
-                          <span className="osccvt-row-pill">read-only</span>
+                          <span className="oscvt-row-pill">read-only</span>
                         </div>
                       ))}
                     </div>
@@ -405,14 +405,14 @@ export default function OscvtPane() {
             )}
 
             {page === 'modes' && (
-              <section className="card osccvt-card">
+              <section className="card oscvt-card">
                 <div className="card-header">App Modes</div>
-                <div className="card-body osccvt-mode-grid">
+                <div className="card-body oscvt-mode-grid">
                   {MODES.map(mode => (
-                    <div key={mode.name} className={`osccvt-mode-card${mode.documented ? ' documented' : ' hidden'}`}>
-                      <div className="osccvt-mode-top">
-                        <span className="osccvt-mode-name">{mode.name}</span>
-                        <span className="osccvt-mode-tag">{mode.tag}</span>
+                    <div key={mode.name} className={`oscvt-mode-card${mode.documented ? ' documented' : ' hidden'}`}>
+                      <div className="oscvt-mode-top">
+                        <span className="oscvt-mode-name">{mode.name}</span>
+                        <span className="oscvt-mode-tag">{mode.tag}</span>
                       </div>
                       <p>{mode.description}</p>
                     </div>
@@ -422,14 +422,14 @@ export default function OscvtPane() {
             )}
 
             {page === 'update' && (
-              <section className="card osccvt-card">
+              <section className="card oscvt-card">
                 <div className="card-header">Firmware Update</div>
-                <div className="card-body osccvt-update-shell">
-                  <div className="osccvt-upload-drop">
-                    <div className="osccvt-upload-icon">⬆</div>
-                    <div className="osccvt-upload-copy">
-                      <div className="osccvt-upload-title">Drop a firmware file</div>
-                      <div className="osccvt-upload-subtitle">The firmware update endpoint accepts a file POST and maps it to <code>fw_update</code>.</div>
+                <div className="card-body oscvt-update-shell">
+                  <div className="oscvt-upload-drop">
+                    <div className="oscvt-upload-icon">⬆</div>
+                    <div className="oscvt-upload-copy">
+                      <div className="oscvt-upload-title">Drop a firmware file</div>
+                      <div className="oscvt-upload-subtitle">The firmware update endpoint accepts a file POST and maps it to <code>fw_update</code>.</div>
                     </div>
                     <input
                       type="file"
@@ -444,33 +444,33 @@ export default function OscvtPane() {
                     </button>
                   </div>
 
-                  <div className="osccvt-update-notes">
-                    <div className="osccvt-panel-label">Request Shape</div>
+                  <div className="oscvt-update-notes">
+                    <div className="oscvt-panel-label">Request Shape</div>
                     <pre>{`POST /upload/<filename>\nContent-Type: multipart/form-data\nfield: fw_update`}</pre>
-                    <div className="osccvt-selected-file">
+                    <div className="oscvt-selected-file">
                       {selectedFile ? selectedFile.name : 'No firmware file selected'}
                     </div>
-                    {uploadResult && <div className="osccvt-selected-file">{uploadResult}</div>}
+                    {uploadResult && <div className="oscvt-selected-file">{uploadResult}</div>}
                   </div>
                 </div>
               </section>
             )}
           </main>
 
-          <aside className="osccvt-side">
-            <section className="card osccvt-card">
+          <aside className="oscvt-side">
+            <section className="card oscvt-card">
               <div className="card-header">Live Draft Preview</div>
               <div className="card-body">
-                <pre className="osccvt-json">{JSON.stringify(payloadPreview, null, 2)}</pre>
+                <pre className="oscvt-json">{JSON.stringify(payloadPreview, null, 2)}</pre>
               </div>
             </section>
 
-            <section className="card osccvt-card">
+            <section className="card oscvt-card">
               <div className="card-header">NVS Keys</div>
               <div className="card-body">
-                <div className="osccvt-pill-list">
+                <div className="oscvt-pill-list">
                   {NVS_KEYS.map(key => (
-                    <span key={key} className="osccvt-mini-pill">{key}</span>
+                    <span key={key} className="oscvt-mini-pill">{key}</span>
                   ))}
                 </div>
               </div>
@@ -484,10 +484,10 @@ export default function OscvtPane() {
 
 function StatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="osccvt-stat-card">
-      <div className="osccvt-stat-label">{label}</div>
-      <div className="osccvt-stat-value">{value}</div>
-      <div className="osccvt-stat-detail">{detail}</div>
+    <div className="oscvt-stat-card">
+      <div className="oscvt-stat-label">{label}</div>
+      <div className="oscvt-stat-value">{value}</div>
+      <div className="oscvt-stat-detail">{detail}</div>
     </div>
   );
 }
@@ -504,17 +504,17 @@ function SchemaBlock({
   accent: 'blue' | 'green' | 'amber' | 'slate';
 }) {
   return (
-    <div className={`osccvt-schema-block osccvt-schema-${accent}`}>
-      <div className="osccvt-panel-label">{title}</div>
-      <div className="osccvt-panel-subtitle">{subtitle}</div>
-      <div className="osccvt-schema-rows">
+    <div className={`oscvt-schema-block oscvt-schema-${accent}`}>
+      <div className="oscvt-panel-label">{title}</div>
+      <div className="oscvt-panel-subtitle">{subtitle}</div>
+      <div className="oscvt-schema-rows">
         {rows.map(row => (
-          <div key={row.key} className="osccvt-schema-row">
+          <div key={row.key} className="oscvt-schema-row">
             <div>
-              <div className="osccvt-row-label">{row.label}</div>
-              <div className="osccvt-row-key">{row.key}</div>
+              <div className="oscvt-row-label">{row.label}</div>
+              <div className="oscvt-row-key">{row.key}</div>
             </div>
-            <span className="osccvt-schema-value">{row.value}</span>
+            <span className="oscvt-schema-value">{row.value}</span>
           </div>
         ))}
       </div>
@@ -536,11 +536,11 @@ function SettingInput({
   helper?: string;
 }) {
   return (
-    <label className="osccvt-setting">
-      <span className="osccvt-setting-label">{label}</span>
-      <span className="osccvt-setting-key">{keyName}</span>
+    <label className="oscvt-setting">
+      <span className="oscvt-setting-label">{label}</span>
+      <span className="oscvt-setting-key">{keyName}</span>
       <input value={value} onChange={e => onChange(e.target.value)} />
-      {helper && <span className="osccvt-setting-helper">{helper}</span>}
+      {helper && <span className="oscvt-setting-helper">{helper}</span>}
     </label>
   );
 }
@@ -561,13 +561,13 @@ function SettingSelect({
   helper?: string;
 }) {
   return (
-    <label className="osccvt-setting">
-      <span className="osccvt-setting-label">{label}</span>
-      <span className="osccvt-setting-key">{keyName}</span>
+    <label className="oscvt-setting">
+      <span className="oscvt-setting-label">{label}</span>
+      <span className="oscvt-setting-key">{keyName}</span>
       <select value={value} onChange={e => onChange(e.target.value)}>
         {options.map(option => <option key={option} value={option}>{option}</option>)}
       </select>
-      {helper && <span className="osccvt-setting-helper">{helper}</span>}
+      {helper && <span className="oscvt-setting-helper">{helper}</span>}
     </label>
   );
 }

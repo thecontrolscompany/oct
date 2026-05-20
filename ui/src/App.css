@@ -182,3 +182,421 @@
     border-right-color: var(--border);
   }
 }
+
+.oscvt-page {
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 34%),
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(10, 12, 16, 0.3), transparent 22%);
+}
+
+.oscvt-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+.oscvt-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  align-items: stretch;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.3), 0 22px 60px rgba(0, 0, 0, 0.18);
+  position: relative;
+  overflow: hidden;
+}
+
+.oscvt-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.14), transparent 42%),
+    linear-gradient(225deg, rgba(34, 197, 94, 0.09), transparent 36%);
+  pointer-events: none;
+}
+
+.oscvt-hero-copy,
+.oscvt-hero-panel {
+  position: relative;
+  z-index: 1;
+}
+
+.oscvt-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.oscvt-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(30, 41, 59, 0.85);
+  color: #8ab4ff;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.oscvt-hero h1 {
+  font-size: clamp(30px, 4vw, 48px);
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.oscvt-hero p {
+  max-width: 760px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-dim);
+}
+
+.oscvt-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.oscvt-chip,
+.oscvt-route-pill,
+.oscvt-row-pill,
+.oscvt-mode-tag,
+.oscvt-mini-pill,
+.oscvt-schema-value {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.oscvt-chip {
+  padding: 6px 10px;
+  background: rgba(30, 41, 59, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: var(--text);
+}
+
+.oscvt-hero-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.oscvt-panel-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9fb7ff;
+}
+
+.oscvt-panel-subtitle,
+.oscvt-route-row span:first-child,
+.oscvt-row-key,
+.oscvt-stat-detail,
+.oscvt-setting-helper {
+  color: var(--text-dim);
+}
+
+.oscvt-route-list,
+.oscvt-schema-rows,
+.oscvt-diagnostic-list,
+.oscvt-pill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oscvt-route-row,
+.oscvt-schema-row,
+.oscvt-diagnostic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(10, 12, 16, 0.25);
+}
+
+.oscvt-route-pill,
+.oscvt-row-pill,
+.oscvt-mode-tag,
+.oscvt-mini-pill,
+.oscvt-schema-value {
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: var(--text-dim);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.oscvt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.oscvt-main,
+.oscvt-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.oscvt-card {
+  margin-bottom: 0;
+}
+
+.oscvt-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.oscvt-stat-card {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.4));
+  min-height: 120px;
+}
+
+.oscvt-stat-label,
+.oscvt-setting-label,
+.oscvt-row-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #93c5fd;
+  margin-bottom: 6px;
+}
+
+.oscvt-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.oscvt-schema-grid,
+.oscvt-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.oscvt-schema-block {
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.68), rgba(15, 23, 42, 0.44));
+}
+
+.oscvt-schema-blue { box-shadow: inset 0 1px 0 rgba(59, 130, 246, 0.14); }
+.oscvt-schema-green { box-shadow: inset 0 1px 0 rgba(34, 197, 94, 0.12); }
+.oscvt-schema-amber { box-shadow: inset 0 1px 0 rgba(245, 158, 11, 0.12); }
+.oscvt-schema-slate { box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.12); }
+
+.oscvt-schema-block .oscvt-panel-subtitle {
+  margin: 4px 0 12px;
+  font-size: 12px;
+}
+
+.oscvt-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(10, 12, 16, 0.25);
+}
+
+.oscvt-setting-key,
+.oscvt-row-key {
+  font-size: 11px;
+  font-family: Consolas, monospace;
+}
+
+.oscvt-setting input,
+.oscvt-setting select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.oscvt-setting input:focus,
+.oscvt-setting select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.oscvt-setting-helper {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.oscvt-diagnostic-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.oscvt-diagnostic-list {
+  gap: 10px;
+}
+
+.oscvt-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.oscvt-mode-card {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 14px;
+  background: rgba(10, 12, 16, 0.28);
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.oscvt-mode-card.documented {
+  box-shadow: inset 0 1px 0 rgba(34, 197, 94, 0.16);
+}
+
+.oscvt-mode-card.hidden {
+  box-shadow: inset 0 1px 0 rgba(245, 158, 11, 0.12);
+}
+
+.oscvt-mode-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.oscvt-mode-name {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.oscvt-update-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+}
+
+.oscvt-upload-drop {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 14px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  background: rgba(10, 12, 16, 0.22);
+}
+
+.oscvt-upload-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(59, 130, 246, 0.18);
+  color: #bfdbfe;
+  font-size: 18px;
+}
+
+.oscvt-upload-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.oscvt-upload-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.oscvt-upload-drop input[type='file'] {
+  max-width: 180px;
+  color: var(--text-dim);
+}
+
+.oscvt-update-notes {
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.64);
+}
+
+.oscvt-update-notes pre,
+.oscvt-json {
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 8px;
+  color: #bfdbfe;
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.oscvt-selected-file {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.oscvt-pill-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.oscvt-mini-pill {
+  padding: 4px 8px;
+}
+
+@media (max-width: 1200px) {
+  .oscvt-hero,
+  .oscvt-grid,
+  .oscvt-update-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .oscvt-diagnostic-strip,
+  .oscvt-overview-grid,
+  .oscvt-schema-grid,
+  .oscvt-settings-grid,
+  .oscvt-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .oscvt-upload-drop {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+}

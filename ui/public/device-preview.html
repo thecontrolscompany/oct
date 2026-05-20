@@ -5,534 +5,804 @@
 <meta name="viewport" content="width=800, initial-scale=1.0">
 <title>OSCVT Pro — Device UI Preview</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Exo+2:wght@300;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Exo+2:wght@300;400;600&display=swap');
 
-  :root {
-    --bg:      #0a0c0f;
-    --surface: #111418;
-    --card:    #161b22;
-    --border:  #1e2730;
-    --accent:  #00d4ff;
-    --accent2: #00ff9d;
-    --warn:    #ffb800;
-    --danger:  #ff4454;
-    --text:    #e8edf2;
-    --muted:   #5a6a7a;
-    --dim:     #2a3540;
-  }
+:root {
+  --bg:      #0a0c0f;
+  --surface: #111418;
+  --card:    #161b22;
+  --border:  #1e2730;
+  --accent:  #00d4ff;
+  --accent2: #00ff9d;
+  --warn:    #ffb800;
+  --danger:  #ff4454;
+  --text:    #e8edf2;
+  --muted:   #5a6a7a;
+  --dim:     #2a3540;
+}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin:0; padding:0; box-sizing:border-box; }
 
-  /* ── Preview wrapper — centres the 800×480 frame on the page ── */
-  html, body {
-    background: #06080a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    font-family: 'Exo 2', system-ui, sans-serif;
-  }
+html, body {
+  background: #04060a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Exo 2', system-ui, sans-serif;
+}
 
-  .device-frame {
-    width: 800px;
-    height: 480px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    background: var(--bg);
-    color: var(--text);
-    box-shadow: 0 0 0 1px #1e2730, 0 0 80px rgba(0,212,255,0.08), 0 24px 60px rgba(0,0,0,0.8);
-    border-radius: 4px;
-  }
+/* ── Device frame ─────────────────────────────────────────── */
+.device-frame {
+  width: 800px; height: 480px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+  box-shadow: 0 0 0 1px #1e2730, 0 0 80px rgba(0,212,255,0.07), 0 24px 60px rgba(0,0,0,0.85);
+  border-radius: 4px; position: relative;
+}
+.device-frame::before {
+  content:''; position:absolute; inset:0;
+  background-image: linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size: 40px 40px; opacity:0.22; pointer-events:none; z-index:0;
+}
 
-  /* Grid background */
-  .device-frame::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(var(--border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 40px 40px;
-    opacity: 0.25;
-    pointer-events: none;
-  }
+/* ── Topbar ───────────────────────────────────────────────── */
+.topbar {
+  height:36px; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 16px; gap:16px;
+  position:relative; z-index:10; flex-shrink:0;
+}
+.topbar-logo { font-family:'Rajdhani',sans-serif; font-weight:700; font-size:15px; letter-spacing:3px; color:var(--accent); text-transform:uppercase; }
+.topbar-div  { width:1px; height:18px; background:var(--border); }
+.spill { display:flex; align-items:center; gap:6px; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.dot.live  { background:var(--accent2); box-shadow:0 0 6px var(--accent2); animation:pulse 2s infinite; }
+.dot.blue  { background:var(--accent);  box-shadow:0 0 5px rgba(0,212,255,0.6); }
+.dot.warn  { background:var(--warn); }
+.dot.off   { background:var(--muted); }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.topbar-r  { margin-left:auto; display:flex; align-items:center; gap:14px; }
+.batt      { display:flex; align-items:center; gap:5px; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--accent2); }
+.batt-icon { width:20px; height:10px; border:1.5px solid var(--accent2); border-radius:2px; position:relative; display:flex; align-items:center; padding:1.5px; }
+.batt-icon::after { content:''; position:absolute; right:-4px; top:50%; transform:translateY(-50%); width:2.5px; height:5px; background:var(--accent2); border-radius:0 1px 1px 0; }
+.batt-fill { height:100%; width:70%; background:var(--accent2); border-radius:1px; }
+.clock { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); }
 
-  /* ── TOP STATUS BAR ─────────────────────────────────────── */
-  .topbar {
-    height: 36px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 18px;
-    position: relative;
-    z-index: 10;
-    flex-shrink: 0;
-  }
+/* ── Main ─────────────────────────────────────────────────── */
+.main { flex:1; display:flex; overflow:hidden; position:relative; z-index:1; }
 
-  .topbar-logo {
-    font-family: 'Rajdhani', sans-serif;
-    font-weight: 700;
-    font-size: 15px;
-    letter-spacing: 3px;
-    color: var(--accent);
-    text-transform: uppercase;
-  }
+/* ── Screen wrapper ───────────────────────────────────────── */
+.sw { flex:1; display:flex; overflow:hidden; }
+.sw.hidden { display:none; }
 
-  .topbar-divider { width: 1px; height: 18px; background: var(--border); }
+/* ── Left content area ────────────────────────────────────── */
+.sc { flex:1; padding:16px 18px 14px; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
+.sc-title { font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:var(--muted); }
 
-  .status-pill {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--muted);
-  }
+/* ── Right side panel ─────────────────────────────────────── */
+.rp {
+  width:214px; border-left:1px solid var(--border); background:var(--surface);
+  display:flex; flex-direction:column; padding:14px; gap:11px; flex-shrink:0; overflow:hidden;
+}
+.rp-title { font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:600; letter-spacing:2.5px; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+.rp-div   { height:1px; background:var(--border); }
+.row      { display:flex; justify-content:space-between; align-items:center; }
+.lbl      { font-size:11px; color:var(--muted); }
+.val      { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text); }
+.val.g { color:var(--accent2); }
+.val.b { color:var(--accent); }
+.val.w { color:var(--warn); }
+.val.r { color:var(--danger); }
 
-  .status-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--muted);
-    flex-shrink: 0;
-  }
-  .status-dot.live { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); animation: pulse 2s infinite; }
-  .status-dot.blue { background: var(--accent);  box-shadow: 0 0 6px rgba(0,212,255,0.6); }
-  .status-dot.off  { background: var(--muted); }
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn { border-radius:7px; padding:9px; font-family:'Rajdhani',sans-serif; font-weight:700; font-size:12px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; width:100%; transition:all .15s; border:none; }
+.btn-ghost   { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+.btn-primary { background:var(--accent); color:#000; }
+.btn-danger  { background:transparent; color:var(--danger); border:1px solid var(--danger); }
+.btn-success { background:var(--accent2); color:#000; }
+.btn-primary:hover { background:#33ddff; }
+.btn-success:hover { background:#33ffb0; }
+.btn-ghost:hover   { background:rgba(0,212,255,.08); }
+.btn-danger:hover  { background:rgba(255,68,84,.1); }
+.mt-auto { margin-top:auto; }
 
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+/* ── Pill / badge ─────────────────────────────────────────── */
+.badge { font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:1px; }
+.badge-live   { background:rgba(0,255,157,.15); color:var(--accent2); border:1px solid rgba(0,255,157,.3); }
+.badge-ready  { background:rgba(0,212,255,.12); color:var(--accent);  border:1px solid rgba(0,212,255,.25); }
+.badge-detect { background:rgba(255,184,0,.12);  color:var(--warn);   border:1px solid rgba(255,184,0,.25); }
+.badge-off    { background:transparent;           color:var(--muted);  border:1px solid var(--border); }
+.badge-eol    { background:rgba(255,184,0,.12);  color:var(--warn);   border:1px solid rgba(255,184,0,.3); }
+.badge-err    { background:rgba(255,68,84,.12);  color:var(--danger); border:1px solid rgba(255,68,84,.3); }
+.badge-cap    { background:rgba(0,255,157,.15);  color:var(--accent2); border:1px solid rgba(0,255,157,.3); animation:pulse 1.5s infinite; }
 
-  .topbar-right {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
+/* ── Polarity row ─────────────────────────────────────────── */
+.pol-row { display:flex; align-items:center; gap:8px; background:rgba(0,255,157,.07); border:1px solid rgba(0,255,157,.2); border-radius:6px; padding:7px 10px; }
+.pol-txt { font-size:10px; color:var(--accent2); font-family:'JetBrains Mono',monospace; letter-spacing:.5px; }
 
-  .battery {
-    display: flex; align-items: center; gap: 5px;
-    font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--accent2);
-  }
-  .battery-icon {
-    width: 20px; height: 10px;
-    border: 1.5px solid var(--accent2); border-radius: 2px;
-    position: relative; display: flex; align-items: center; padding: 1.5px;
-  }
-  .battery-icon::after {
-    content: ''; position: absolute; right: -4px; top: 50%; transform: translateY(-50%);
-    width: 2.5px; height: 5px; background: var(--accent2); border-radius: 0 1px 1px 0;
-  }
-  .battery-fill { height: 100%; width: 70%; background: var(--accent2); border-radius: 1px; }
+/* ─────────────────────────────────────────────────────────── */
+/* SCREEN 1 — PROTOCOL                                         */
+/* ─────────────────────────────────────────────────────────── */
+.proto-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; flex:1; }
+.proto-card {
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  padding:13px; display:flex; flex-direction:column; gap:8px;
+  cursor:pointer; position:relative; overflow:hidden; transition:all .15s;
+}
+.proto-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--dim); transition:background .15s; }
+.proto-card.active  { border-color:var(--accent);  background:#0d1a22; }
+.proto-card.active::before  { background:var(--accent); }
+.proto-hdr { display:flex; align-items:center; justify-content:space-between; }
+.proto-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; }
+.proto-icon.b { background:rgba(0,212,255,.12); }
+.proto-icon.g { background:rgba(0,255,157,.12); }
+.proto-icon.a { background:rgba(255,184,0,.12); }
+.proto-icon.x { background:rgba(90,106,122,.15); }
+.proto-name { font-family:'Rajdhani',sans-serif; font-weight:700; font-size:15px; letter-spacing:1px; }
+.proto-name.b { color:var(--accent); }
+.proto-name.g { color:var(--accent2); }
+.proto-name.a { color:var(--warn); }
+.proto-name.x { color:var(--muted); }
+.proto-desc { font-size:10px; color:var(--muted); line-height:1.4; }
+.proto-stat { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted); border-top:1px solid var(--border); padding-top:6px; display:flex; justify-content:space-between; }
+.proto-stat span { color:var(--text); }
 
-  .time { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+/* ─────────────────────────────────────────────────────────── */
+/* SCREEN 2 — DEVICES                                          */
+/* ─────────────────────────────────────────────────────────── */
+.dev-table-wrap { flex:1; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+.dev-table { width:100%; border-collapse:collapse; font-size:12px; }
+.dev-table th { position:sticky; top:0; text-align:left; padding:8px 10px; background:#0d1118; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--border); font-weight:500; }
+.dev-table td { padding:7px 10px; border-bottom:1px solid #13181f; font-family:'JetBrains Mono',monospace; font-size:11px; vertical-align:middle; }
+.dev-table tr:last-child td { border-bottom:none; }
+.dev-table tbody tr { cursor:pointer; transition:background .1s; }
+.dev-table tbody tr:hover td { background:rgba(0,212,255,.05); }
+.dev-table tbody tr.selected td { background:rgba(0,212,255,.08); }
+.dev-table tbody tr.eol td { color:var(--warn); }
+.dev-table tbody tr.err td:nth-child(5) { color:var(--danger); }
+.name-col { color:var(--text) !important; font-family:'Exo 2',sans-serif !important; font-weight:500; }
+.resp-bar-wrap { display:flex; align-items:center; gap:6px; }
+.resp-bar { height:4px; border-radius:2px; background:var(--accent2); }
+.resp-bar.warn { background:var(--warn); }
 
-  /* ── MAIN CONTENT ───────────────────────────────────────── */
-  .main {
-    flex: 1; display: flex; overflow: hidden;
-    position: relative; z-index: 1;
-  }
+/* ─────────────────────────────────────────────────────────── */
+/* SCREEN 3 — STATS                                            */
+/* ─────────────────────────────────────────────────────────── */
+.stat-grid6 { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.stat-card {
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  padding:12px 14px; display:flex; flex-direction:column; gap:4px;
+}
+.stat-card.hi-b { box-shadow:inset 0 1px 0 rgba(0,212,255,.18); }
+.stat-card.hi-g { box-shadow:inset 0 1px 0 rgba(0,255,157,.18); }
+.stat-card.hi-w { box-shadow:inset 0 1px 0 rgba(255,184,0,.22); }
+.s-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); }
+.s-val { font-family:'JetBrains Mono',monospace; font-size:24px; font-weight:700; letter-spacing:-.03em; }
+.s-val.b { color:var(--accent); }
+.s-val.g { color:var(--accent2); }
+.s-val.w { color:var(--warn); }
+.s-sub { font-size:10px; color:var(--muted); }
+.ctr-table { width:100%; border-collapse:collapse; font-size:11px; }
+.ctr-table td { padding:5px 8px; border-bottom:1px solid #13181f; }
+.ctr-table tr:last-child td { border-bottom:none; }
+.ctr-key  { font-family:'JetBrains Mono',monospace; color:var(--muted); font-size:10px; }
+.ctr-val  { font-family:'JetBrains Mono',monospace; color:var(--text); text-align:right; }
 
-  /* ── PROTOCOL SCREEN ────────────────────────────────────── */
-  .screen {
-    flex: 1; padding: 18px 20px 14px;
-    display: flex; flex-direction: column; gap: 14px;
-  }
+/* ─────────────────────────────────────────────────────────── */
+/* SCREEN 4 — CAPTURE                                          */
+/* ─────────────────────────────────────────────────────────── */
+.cap-status {
+  display:flex; align-items:center; gap:14px;
+  background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px;
+}
+.cap-big { font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:700; color:var(--accent2); letter-spacing:-.02em; }
+.cap-meta { display:flex; flex-direction:column; gap:4px; }
+.cap-sub  { font-size:11px; color:var(--muted); }
+.cap-file { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--accent); margin-top:2px; }
+.file-list { flex:1; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+.file-row  { display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid #13181f; font-size:11px; cursor:pointer; transition:background .1s; }
+.file-row:last-child { border-bottom:none; }
+.file-row:hover { background:rgba(0,212,255,.04); }
+.file-row.active-file { background:rgba(0,255,157,.06); }
+.file-name { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text); flex:1; }
+.file-size { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted); }
+.file-time { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted); }
 
-  .screen-title {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 12px; font-weight: 600;
-    letter-spacing: 3px; text-transform: uppercase;
-    color: var(--muted);
-  }
+/* SD gauge */
+.sd-gauge-wrap { background:var(--dim); border-radius:4px; height:6px; overflow:hidden; }
+.sd-gauge-fill { height:100%; background:var(--accent); border-radius:4px; }
 
-  .protocol-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    flex: 1;
-  }
+/* ─────────────────────────────────────────────────────────── */
+/* SCREEN 5 — REPORTS                                          */
+/* ─────────────────────────────────────────────────────────── */
+.report-form { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.field { display:flex; flex-direction:column; gap:5px; }
+.field label { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-family:'Rajdhani',sans-serif; font-weight:600; }
+.field input, .field select {
+  background:var(--card); border:1px solid var(--border); border-radius:6px;
+  padding:7px 10px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:12px;
+  outline:none; width:100%;
+}
+.field input:focus, .field select:focus { border-color:var(--accent); }
+.report-summary { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; gap:7px; flex:1; }
+.summary-title { font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:2px; }
+.summary-row   { display:flex; justify-content:space-between; font-size:11px; }
+.summary-key   { color:var(--muted); }
+.summary-val   { font-family:'JetBrains Mono',monospace; color:var(--text); }
 
-  .protocol-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px;
-    display: flex; flex-direction: column; gap: 9px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    position: relative; overflow: hidden;
-  }
-  .protocol-card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0;
-    height: 2px; background: var(--dim); transition: background 0.15s;
-  }
+/* ─────────────────────────────────────────────────────────── */
+/* SCREEN 6 — SETTINGS                                         */
+/* ─────────────────────────────────────────────────────────── */
+.settings-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; flex:1; }
+.settings-group { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+.sg-title { font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:600; letter-spacing:2.5px; text-transform:uppercase; color:var(--muted); margin-bottom:2px; }
+.sf { display:flex; flex-direction:column; gap:3px; }
+.sf label { font-size:10px; color:var(--muted); }
+.sf input, .sf select {
+  background:var(--bg); border:1px solid var(--border); border-radius:5px;
+  padding:6px 8px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:11px;
+  outline:none; width:100%;
+}
+.sf input:focus, .sf select:focus { border-color:var(--accent); }
+.sf .hint { font-size:9px; color:var(--dim); }
 
-  .protocol-card.active   { border-color: var(--accent);  background: #0d1a22; }
-  .protocol-card.active::before { background: var(--accent); }
+/* ── Bottom nav ───────────────────────────────────────────── */
+.bottomnav {
+  height:54px; background:var(--surface); border-top:1px solid var(--border);
+  display:flex; align-items:stretch; position:relative; z-index:10; flex-shrink:0;
+}
+.ni {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  cursor:pointer; position:relative; transition:background .15s; border-right:1px solid var(--border);
+}
+.ni:last-child { border-right:none; }
+.ni.active { background:rgba(0,212,255,.06); }
+.ni.active::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); }
+.ni-icon  { font-size:17px; line-height:1; }
+.ni-label { font-family:'Rajdhani',sans-serif; font-size:9px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); }
+.ni.active .ni-label { color:var(--accent); }
 
-  .protocol-card.active2  { border-color: var(--accent2); background: #0a1a12; }
-  .protocol-card.active2::before { background: var(--accent2); }
-
-  .protocol-card.warn-card { border-color: var(--warn); background: #1a1500; }
-  .protocol-card.warn-card::before { background: var(--warn); }
-
-  .proto-header { display: flex; align-items: center; justify-content: space-between; }
-
-  .proto-icon {
-    width: 34px; height: 34px; border-radius: 8px;
-    display: flex; align-items: center; justify-content: center; font-size: 17px;
-  }
-  .proto-icon.blue  { background: rgba(0,212,255,0.12); }
-  .proto-icon.green { background: rgba(0,255,157,0.12); }
-  .proto-icon.amber { background: rgba(255,184,0,0.12); }
-  .proto-icon.gray  { background: rgba(90,106,122,0.15); }
-
-  .proto-badge {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px; padding: 3px 7px; border-radius: 4px;
-    text-transform: uppercase; letter-spacing: 1px;
-  }
-  .badge-live   { background: rgba(0,255,157,0.15); color: var(--accent2); border: 1px solid rgba(0,255,157,0.3); }
-  .badge-ready  { background: rgba(0,212,255,0.12); color: var(--accent);  border: 1px solid rgba(0,212,255,0.25); }
-  .badge-detect { background: rgba(255,184,0,0.12); color: var(--warn);    border: 1px solid rgba(255,184,0,0.25); }
-  .badge-off    { background: transparent;          color: var(--muted);   border: 1px solid var(--border); }
-
-  .proto-name {
-    font-family: 'Rajdhani', sans-serif;
-    font-weight: 700; font-size: 16px; letter-spacing: 1px;
-  }
-  .proto-name.blue  { color: var(--accent); }
-  .proto-name.green { color: var(--accent2); }
-  .proto-name.amber { color: var(--warn); }
-  .proto-name.gray  { color: var(--muted); }
-
-  .proto-desc { font-size: 10.5px; color: var(--muted); line-height: 1.4; }
-
-  .proto-stat {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; color: var(--muted);
-    border-top: 1px solid var(--border); padding-top: 7px;
-    display: flex; justify-content: space-between;
-  }
-  .proto-stat span { color: var(--text); }
-
-  /* ── RIGHT SIDE PANEL ───────────────────────────────────── */
-  .side-panel {
-    width: 216px; border-left: 1px solid var(--border);
-    background: var(--surface);
-    display: flex; flex-direction: column;
-    padding: 14px; gap: 12px; flex-shrink: 0;
-  }
-
-  .panel-section-title {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 10px; font-weight: 600;
-    letter-spacing: 2.5px; text-transform: uppercase;
-    color: var(--muted); margin-bottom: 4px;
-  }
-
-  .stat-row {
-    display: flex; justify-content: space-between; align-items: center; font-size: 12px;
-  }
-  .stat-label { color: var(--muted); font-size: 11px; }
-  .stat-value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; color: var(--text);
-  }
-  .stat-value.green { color: var(--accent2); }
-  .stat-value.blue  { color: var(--accent); }
-  .stat-value.warn  { color: var(--warn); }
-
-  .divider { height: 1px; background: var(--border); }
-
-  .polarity-row {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(0,255,157,0.07);
-    border: 1px solid rgba(0,255,157,0.2);
-    border-radius: 6px; padding: 7px 10px;
-  }
-  .polarity-text {
-    font-size: 10px; color: var(--accent2);
-    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px;
-  }
-
-  .btn {
-    border-radius: 8px; padding: 10px;
-    font-family: 'Rajdhani', sans-serif; font-weight: 700;
-    font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
-    cursor: pointer; width: 100%; transition: all 0.15s;
-  }
-  .btn-outline {
-    background: transparent; color: var(--accent);
-    border: 1px solid var(--accent);
-  }
-  .btn-primary {
-    background: var(--accent); color: #000; border: none; margin-top: auto;
-  }
-  .btn-primary:hover { background: #33ddff; }
-
-  /* ── BOTTOM NAV ─────────────────────────────────────────── */
-  .bottomnav {
-    height: 54px; background: var(--surface);
-    border-top: 1px solid var(--border);
-    display: flex; align-items: stretch;
-    position: relative; z-index: 10; flex-shrink: 0;
-  }
-
-  .nav-item {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 3px;
-    cursor: pointer; position: relative;
-    transition: background 0.15s;
-    border-right: 1px solid var(--border);
-  }
-  .nav-item:last-child { border-right: none; }
-  .nav-item.active { background: rgba(0,212,255,0.06); }
-  .nav-item.active::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0;
-    height: 2px; background: var(--accent);
-  }
-
-  .nav-icon { font-size: 17px; line-height: 1; }
-  .nav-label {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 9px; font-weight: 600;
-    letter-spacing: 1.5px; text-transform: uppercase;
-    color: var(--muted);
-  }
-  .nav-item.active .nav-label { color: var(--accent); }
-
-  /* ── Preview label beneath frame ────────────────────────── */
-  .preview-note {
-    margin-top: 20px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: #2a3540;
-    text-align: center;
-    letter-spacing: 1px;
-  }
+/* ── Preview label ────────────────────────────────────────── */
+.preview-note { margin-top:18px; font-family:'JetBrains Mono',monospace; font-size:10px; color:#1e2730; text-align:center; letter-spacing:1px; }
 </style>
 </head>
 <body>
+<div style="display:flex;flex-direction:column;align-items:center;">
+<div class="device-frame">
 
-<div style="display:flex; flex-direction:column; align-items:center;">
-
-  <div class="device-frame">
-
-    <!-- TOP STATUS BAR -->
-    <div class="topbar">
-      <span class="topbar-logo">OSCVT</span>
-      <div class="topbar-divider"></div>
-      <div class="status-pill">
-        <div class="status-dot live"></div>
-        BUS ACTIVE
-      </div>
-      <div class="status-pill">
-        <div class="status-dot blue"></div>
-        OSCVT-B09BA5
-      </div>
-      <div class="status-pill">
-        <div class="status-dot off"></div>
-        BLE OFF
-      </div>
-      <div class="topbar-right">
-        <div class="battery">
-          <div class="battery-icon"><div class="battery-fill"></div></div>
-          73%
-        </div>
-        <span class="time">14:32</span>
-      </div>
+  <!-- ── TOPBAR ── -->
+  <div class="topbar">
+    <span class="topbar-logo">OSCVT</span>
+    <div class="topbar-div"></div>
+    <div class="spill"><div class="dot live"></div>BUS ACTIVE</div>
+    <div class="spill"><div class="dot blue"></div>OSCVT-B09BA5</div>
+    <div class="spill"><div class="dot off"></div>BLE OFF</div>
+    <div class="topbar-r">
+      <div class="batt"><div class="batt-icon"><div class="batt-fill"></div></div>73%</div>
+      <span class="clock">14:32</span>
     </div>
-
-    <!-- MAIN -->
-    <div class="main">
-
-      <!-- PROTOCOL SELECTOR SCREEN -->
-      <div class="screen">
-        <div class="screen-title">Select Protocol</div>
-
-        <div class="protocol-grid">
-
-          <!-- BACnet MS/TP -->
-          <div class="protocol-card active">
-            <div class="proto-header">
-              <div class="proto-icon blue">🔗</div>
-              <span class="proto-badge badge-live">LIVE</span>
-            </div>
-            <div class="proto-name blue">BACnet MS/TP</div>
-            <div class="proto-desc">ASHRAE 135 token-passing over RS-485. Auto-baud, auto-polarity.</div>
-            <div class="proto-stat">
-              <span>BAUD</span><span>76800</span>
-            </div>
-          </div>
-
-          <!-- Modbus RTU -->
-          <div class="protocol-card">
-            <div class="proto-header">
-              <div class="proto-icon green">⚡</div>
-              <span class="proto-badge badge-ready">READY</span>
-            </div>
-            <div class="proto-name green">Modbus RTU</div>
-            <div class="proto-desc">RS-485 master/slave. Poll registers, monitor, bridge to TCP.</div>
-            <div class="proto-stat">
-              <span>BAUD</span><span>9600</span>
-            </div>
-          </div>
-
-          <!-- N2 Bus (Legacy) — no brand names -->
-          <div class="protocol-card">
-            <div class="proto-header">
-              <div class="proto-icon amber">⚙</div>
-              <span class="proto-badge badge-detect">DETECT</span>
-            </div>
-            <div class="proto-name amber">N2 Bus (Legacy)</div>
-            <div class="proto-desc">Legacy RS-485 field protocol. Fixed 9600 8N1. Pre-2000 HVAC field devices.</div>
-            <div class="proto-stat">
-              <span>BAUD</span><span>9600 8N1</span>
-            </div>
-          </div>
-
-          <!-- BACnet/IP -->
-          <div class="protocol-card">
-            <div class="proto-header">
-              <div class="proto-icon blue">🌐</div>
-              <span class="proto-badge badge-ready">READY</span>
-            </div>
-            <div class="proto-name blue">BACnet / IP</div>
-            <div class="proto-desc">Ethernet trunk scan via USB dongle. Device discovery, BBMD, routing.</div>
-            <div class="proto-stat">
-              <span>PORT</span><span>47808</span>
-            </div>
-          </div>
-
-          <!-- BACnet ARC156 — no brand names -->
-          <div class="protocol-card">
-            <div class="proto-header">
-              <div class="proto-icon gray">🔄</div>
-              <span class="proto-badge badge-off">V2.0</span>
-            </div>
-            <div class="proto-name gray">BACnet ARC156</div>
-            <div class="proto-desc">ARCnet-based BACnet per ASHRAE 135. 156K baud. Requires external controller chip.</div>
-            <div class="proto-stat">
-              <span>BAUD</span><span>156K</span>
-            </div>
-          </div>
-
-          <!-- Siemens FLN -->
-          <div class="protocol-card">
-            <div class="proto-header">
-              <div class="proto-icon gray">🔧</div>
-              <span class="proto-badge badge-off">V2.0</span>
-            </div>
-            <div class="proto-name gray">Siemens FLN</div>
-            <div class="proto-desc">Siemens Apogee P1/P2 field level network over RS-485.</div>
-            <div class="proto-stat">
-              <span>STATUS</span><span>—</span>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- RIGHT SIDE PANEL -->
-      <div class="side-panel">
-        <div>
-          <div class="panel-section-title">Bus Status</div>
-          <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
-            <div class="stat-row">
-              <span class="stat-label">Protocol</span>
-              <span class="stat-value blue">MS/TP</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Baud</span>
-              <span class="stat-value">76,800</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Devices</span>
-              <span class="stat-value green">12</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Token Loop</span>
-              <span class="stat-value">38 ms</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Errors</span>
-              <span class="stat-value warn">3</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div>
-          <div class="panel-section-title">Hardware</div>
-          <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
-            <div class="stat-row">
-              <span class="stat-label">EOL Term</span>
-              <span class="stat-value green">ON</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Bus Power</span>
-              <span class="stat-value">18.4 V</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Net #</span>
-              <span class="stat-value">65001</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="polarity-row">
-          <span style="font-size:13px;">↔</span>
-          <span class="polarity-text">POLARITY AUTO-CORRECTED</span>
-        </div>
-
-        <div class="divider"></div>
-
-        <button class="btn btn-outline">⟳ Auto-Detect</button>
-        <button class="btn btn-primary">Connect →</button>
-      </div>
-
-    </div>
-
-    <!-- BOTTOM NAV -->
-    <div class="bottomnav">
-      <div class="nav-item active">
-        <span class="nav-icon">📡</span>
-        <span class="nav-label">Protocol</span>
-      </div>
-      <div class="nav-item">
-        <span class="nav-icon">📋</span>
-        <span class="nav-label">Devices</span>
-      </div>
-      <div class="nav-item">
-        <span class="nav-icon">📊</span>
-        <span class="nav-label">Stats</span>
-      </div>
-      <div class="nav-item">
-        <span class="nav-icon">🔍</span>
-        <span class="nav-label">Capture</span>
-      </div>
-      <div class="nav-item">
-        <span class="nav-icon">📁</span>
-        <span class="nav-label">Reports</span>
-      </div>
-      <div class="nav-item">
-        <span class="nav-icon">⚙️</span>
-        <span class="nav-label">Settings</span>
-      </div>
-    </div>
-
-  </div><!-- /device-frame -->
-
-  <div class="preview-note">
-    OSCVT PRO — 800×480 DISPLAY PREVIEW — oct.trimrespond.com/device-preview.html
   </div>
 
-</div><!-- /wrapper -->
+  <!-- ── MAIN ── -->
+  <div class="main">
 
+    <!-- ══════════════════════════════════════════════════════
+         SCREEN 1 — PROTOCOL
+    ══════════════════════════════════════════════════════ -->
+    <div id="sw-protocol" class="sw">
+      <div class="sc">
+        <div class="sc-title">Select Protocol</div>
+        <div class="proto-grid">
+          <div class="proto-card active">
+            <div class="proto-hdr">
+              <div class="proto-icon b">🔗</div>
+              <span class="badge badge-live">LIVE</span>
+            </div>
+            <div class="proto-name b">BACnet MS/TP</div>
+            <div class="proto-desc">ASHRAE 135 token-passing over RS-485. Auto-baud, auto-polarity.</div>
+            <div class="proto-stat"><span>BAUD</span><span>76800</span></div>
+          </div>
+          <div class="proto-card">
+            <div class="proto-hdr">
+              <div class="proto-icon g">⚡</div>
+              <span class="badge badge-ready">READY</span>
+            </div>
+            <div class="proto-name g">Modbus RTU</div>
+            <div class="proto-desc">RS-485 master/slave. Poll registers, monitor, bridge to TCP.</div>
+            <div class="proto-stat"><span>BAUD</span><span>9600</span></div>
+          </div>
+          <div class="proto-card">
+            <div class="proto-hdr">
+              <div class="proto-icon a">⚙</div>
+              <span class="badge badge-detect">DETECT</span>
+            </div>
+            <div class="proto-name a">N2 Bus (Legacy)</div>
+            <div class="proto-desc">Legacy RS-485 field protocol. Fixed 9600 8N1. Pre-2000 HVAC field devices.</div>
+            <div class="proto-stat"><span>BAUD</span><span>9600 8N1</span></div>
+          </div>
+          <div class="proto-card">
+            <div class="proto-hdr">
+              <div class="proto-icon b">🌐</div>
+              <span class="badge badge-ready">READY</span>
+            </div>
+            <div class="proto-name b">BACnet / IP</div>
+            <div class="proto-desc">Ethernet trunk scan via USB dongle. Device discovery, BBMD, routing.</div>
+            <div class="proto-stat"><span>PORT</span><span>47808</span></div>
+          </div>
+          <div class="proto-card">
+            <div class="proto-hdr">
+              <div class="proto-icon x">🔄</div>
+              <span class="badge badge-off">V2.0</span>
+            </div>
+            <div class="proto-name x">BACnet ARC156</div>
+            <div class="proto-desc">ARCnet-based BACnet per ASHRAE 135. 156K baud. Requires external controller chip.</div>
+            <div class="proto-stat"><span>BAUD</span><span>156K</span></div>
+          </div>
+          <div class="proto-card">
+            <div class="proto-hdr">
+              <div class="proto-icon x">🔧</div>
+              <span class="badge badge-off">V2.0</span>
+            </div>
+            <div class="proto-name x">Siemens FLN</div>
+            <div class="proto-desc">Siemens Apogee P1/P2 field level network over RS-485.</div>
+            <div class="proto-stat"><span>STATUS</span><span>—</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="rp">
+        <div><div class="rp-title">Bus Status</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <div class="row"><span class="lbl">Protocol</span><span class="val b">MS/TP</span></div>
+            <div class="row"><span class="lbl">Baud</span><span class="val">76,800</span></div>
+            <div class="row"><span class="lbl">Devices</span><span class="val g">12</span></div>
+            <div class="row"><span class="lbl">Token Loop</span><span class="val">38 ms</span></div>
+            <div class="row"><span class="lbl">Errors</span><span class="val w">3</span></div>
+          </div>
+        </div>
+        <div class="rp-div"></div>
+        <div><div class="rp-title">Hardware</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <div class="row"><span class="lbl">EOL Term</span><span class="val g">ON</span></div>
+            <div class="row"><span class="lbl">Bus Power</span><span class="val">18.4 V</span></div>
+            <div class="row"><span class="lbl">Net #</span><span class="val">65001</span></div>
+          </div>
+        </div>
+        <div class="pol-row"><span style="font-size:13px;">↔</span><span class="pol-txt">POLARITY AUTO-CORRECTED</span></div>
+        <div class="rp-div"></div>
+        <button class="btn btn-ghost">⟳ Auto-Detect</button>
+        <button class="btn btn-primary mt-auto">Connect →</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         SCREEN 2 — DEVICES
+    ══════════════════════════════════════════════════════ -->
+    <div id="sw-devices" class="sw hidden">
+      <div class="sc">
+        <div class="sc-title">MS/TP Devices — 12 nodes</div>
+        <div class="dev-table-wrap">
+          <table class="dev-table">
+            <thead>
+              <tr><th>#</th><th>MAC</th><th>BACnet ID</th><th>Name</th><th>Resp</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr onclick="selectDev(this,'AHU-01',2,201002,'OK',8,'—')">
+                <td>1</td><td>2</td><td>201002</td><td class="name-col">AHU-01</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:16px"></div>8 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'AHU-02',5,201005,'OK',9,'—')">
+                <td>2</td><td>5</td><td>201005</td><td class="name-col">AHU-02</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:18px"></div>9 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'VAV-101',8,201008,'OK',11,'—')">
+                <td>3</td><td>8</td><td>201008</td><td class="name-col">VAV-101</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:22px"></div>11 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'VAV-102',11,201011,'OK',10,'—')">
+                <td>4</td><td>11</td><td>201011</td><td class="name-col">VAV-102</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:20px"></div>10 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'VAV-103',15,201015,'OK',12,'—')">
+                <td>5</td><td>15</td><td>201015</td><td class="name-col">VAV-103</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:24px"></div>12 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'FCU-201',18,201018,'OK',13,'—')">
+                <td>6</td><td>18</td><td>201018</td><td class="name-col">FCU-201</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:26px"></div>13 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'FCU-202',22,201022,'OK',14,'—')">
+                <td>7</td><td>22</td><td>201022</td><td class="name-col">FCU-202</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:28px"></div>14 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr class="err" onclick="selectDev(this,'FCU-203',25,201025,'ERR',15,'2 framing errors')">
+                <td>8</td><td>25</td><td>201025</td><td class="name-col">FCU-203</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:30px"></div>15 ms</div></td>
+                <td><span class="badge badge-err">2 ERR</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'RTU-01',30,201030,'OK',18,'—')">
+                <td>9</td><td>30</td><td>201030</td><td class="name-col">RTU-01</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:36px"></div>18 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr onclick="selectDev(this,'VAV-204',35,201035,'OK',22,'—')">
+                <td>10</td><td>35</td><td>201035</td><td class="name-col">VAV-204</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar" style="width:44px"></div>22 ms</div></td>
+                <td><span class="badge badge-ready">OK</span></td>
+              </tr>
+              <tr class="eol" onclick="selectDev(this,'VAV-205',40,201040,'EOL',29,'EOL candidate')">
+                <td>11</td><td>40</td><td>201040</td><td class="name-col">VAV-205</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar warn" style="width:58px"></div>29 ms</div></td>
+                <td><span class="badge badge-eol">EOL?</span></td>
+              </tr>
+              <tr class="eol" onclick="selectDev(this,'VAV-206',45,201045,'EOL',38,'EOL candidate')">
+                <td>12</td><td>45</td><td>201045</td><td class="name-col">VAV-206</td>
+                <td><div class="resp-bar-wrap"><div class="resp-bar warn" style="width:76px"></div>38 ms</div></td>
+                <td><span class="badge badge-eol">EOL?</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="rp">
+        <div><div class="rp-title">Selected Device</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;" id="dev-detail">
+            <div class="row"><span class="lbl">Name</span><span class="val b" id="dd-name">—</span></div>
+            <div class="row"><span class="lbl">MAC</span><span class="val" id="dd-mac">—</span></div>
+            <div class="row"><span class="lbl">BACnet ID</span><span class="val" id="dd-id">—</span></div>
+            <div class="row"><span class="lbl">Response</span><span class="val" id="dd-resp">—</span></div>
+            <div class="row"><span class="lbl">Token #</span><span class="val" id="dd-tok">—</span></div>
+            <div class="row"><span class="lbl">Notes</span><span class="val w" id="dd-note" style="font-size:10px">tap a row</span></div>
+          </div>
+        </div>
+        <div class="rp-div"></div>
+        <div><div class="rp-title">EOL Candidates</div>
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:5px;">
+            <div class="row"><span class="lbl">MAC 40</span><span class="val w">VAV-205</span></div>
+            <div class="row"><span class="lbl">MAC 45</span><span class="val w">VAV-206</span></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4;">High response time suggests end-of-line position. Verify termination.</div>
+        </div>
+        <div class="rp-div"></div>
+        <button class="btn btn-ghost mt-auto">↓ Export List</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         SCREEN 3 — STATS
+    ══════════════════════════════════════════════════════ -->
+    <div id="sw-stats" class="sw hidden">
+      <div class="sc">
+        <div class="sc-title">Bus Diagnostics</div>
+        <div class="stat-grid6">
+          <div class="stat-card hi-b">
+            <div class="s-lbl">Token Loop</div>
+            <div class="s-val b">38</div>
+            <div class="s-sub">ms average</div>
+          </div>
+          <div class="stat-card hi-w">
+            <div class="s-lbl">Frame Errors</div>
+            <div class="s-val w">3</div>
+            <div class="s-sub">total</div>
+          </div>
+          <div class="stat-card hi-g">
+            <div class="s-lbl">Devices</div>
+            <div class="s-val g">12</div>
+            <div class="s-sub">nodes on bus</div>
+          </div>
+          <div class="stat-card hi-b">
+            <div class="s-lbl">APDU Rate</div>
+            <div class="s-val b">124</div>
+            <div class="s-sub">per second</div>
+          </div>
+          <div class="stat-card hi-g">
+            <div class="s-lbl">Active Baud</div>
+            <div class="s-val g">76.8K</div>
+            <div class="s-sub">bps detected</div>
+          </div>
+          <div class="stat-card">
+            <div class="s-lbl">Dropped Tokens</div>
+            <div class="s-val" style="color:var(--text)">0</div>
+            <div class="s-sub">total</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+          <table class="ctr-table">
+            <tbody>
+              <tr><td class="ctr-key">mstp-rx-cnt</td><td>MS/TP Rx Bytes</td><td class="ctr-val">1,204,831</td></tr>
+              <tr><td class="ctr-key">mstp-msgs</td><td>APDU Rate</td><td class="ctr-val">124/s</td></tr>
+              <tr><td class="ctr-key">mstp-bcasts</td><td>Broadcast Rate</td><td class="ctr-val">12/s</td></tr>
+              <tr><td class="ctr-key">mstp-m2w</td><td>MS/TP → Wi-Fi</td><td class="ctr-val">81/s</td></tr>
+              <tr><td class="ctr-key">mstp-w2m</td><td>Wi-Fi → MS/TP</td><td class="ctr-val">43/s</td></tr>
+              <tr><td class="ctr-key">mstp-tx-f</td><td>TX Failures</td><td class="ctr-val">0</td></tr>
+              <tr><td class="ctr-key">bip-tx-f</td><td>BACnet/IP TX Failures</td><td class="ctr-val">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="rp">
+        <div><div class="rp-title">Signal</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <div class="row"><span class="lbl">Polarity</span><span class="val w">INVERTED</span></div>
+            <div class="row"><span class="lbl">Correction</span><span class="val g">AUTO</span></div>
+            <div class="row"><span class="lbl">EOL Term</span><span class="val g">ON</span></div>
+            <div class="row"><span class="lbl">Bus Voltage</span><span class="val">18.4 V</span></div>
+          </div>
+        </div>
+        <div class="pol-row"><span style="font-size:13px;">↔</span><span class="pol-txt">POLARITY AUTO-CORRECTED</span></div>
+        <div class="rp-div"></div>
+        <div><div class="rp-title">Baud Detection</div>
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">
+            <div style="font-size:10px;color:var(--muted);">Preamble timing (0x55 0xFF):</div>
+            <div style="display:flex;flex-direction:column;gap:3px;">
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-family:'JetBrains Mono',monospace;">
+                <span style="color:var(--muted);width:42px;">9600</span>
+                <div style="height:4px;width:24px;background:var(--dim);border-radius:2px;"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-family:'JetBrains Mono',monospace;">
+                <span style="color:var(--muted);width:42px;">38400</span>
+                <div style="height:4px;width:48px;background:var(--dim);border-radius:2px;"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-family:'JetBrains Mono',monospace;">
+                <span style="color:var(--accent);width:42px;">76800</span>
+                <div style="height:4px;width:88px;background:var(--accent);border-radius:2px;"></div>
+                <span style="color:var(--accent);font-size:9px;">✓</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-family:'JetBrains Mono',monospace;">
+                <span style="color:var(--muted);width:42px;">115200</span>
+                <div style="height:4px;width:12px;background:var(--dim);border-radius:2px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="rp-div"></div>
+        <button class="btn btn-ghost mt-auto">↺ Clear Stats</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         SCREEN 4 — CAPTURE
+    ══════════════════════════════════════════════════════ -->
+    <div id="sw-capture" class="sw hidden">
+      <div class="sc">
+        <div class="sc-title">PCAP Capture</div>
+        <div class="cap-status">
+          <span class="badge badge-cap">● CAPTURING</span>
+          <div class="cap-meta">
+            <div class="cap-big">00:04:23</div>
+            <div class="cap-sub">1,847 frames · DLT_BACNET_MS_TP</div>
+            <div class="cap-file">mstp_20260520_143207.pcap</div>
+          </div>
+        </div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-weight:600;">SD Card — Files</div>
+        <div class="file-list">
+          <div class="file-row active-file">
+            <span class="badge badge-cap" style="font-size:8px;">LIVE</span>
+            <span class="file-name">mstp_20260520_143207.pcap</span>
+            <span class="file-time">14:32</span>
+            <span class="file-size">2.3 MB</span>
+          </div>
+          <div class="file-row">
+            <span style="width:32px;"></span>
+            <span class="file-name">mstp_20260520_091542.pcap</span>
+            <span class="file-time">09:15</span>
+            <span class="file-size">8.7 MB</span>
+          </div>
+          <div class="file-row">
+            <span style="width:32px;"></span>
+            <span class="file-name">mstp_20260519_163420.pcap</span>
+            <span class="file-time">Yesterday</span>
+            <span class="file-size">12.1 MB</span>
+          </div>
+          <div class="file-row">
+            <span style="width:32px;"></span>
+            <span class="file-name">mstp_20260519_094331.pcap</span>
+            <span class="file-time">Yesterday</span>
+            <span class="file-size">5.4 MB</span>
+          </div>
+        </div>
+      </div>
+      <div class="rp">
+        <div><div class="rp-title">SD Card</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <div class="row"><span class="lbl">Used</span><span class="val">28.5 MB</span></div>
+            <div class="row"><span class="lbl">Free</span><span class="val g">31.97 GB</span></div>
+            <div class="sd-gauge-wrap"><div class="sd-gauge-fill" style="width:0.1%"></div></div>
+          </div>
+        </div>
+        <div class="rp-div"></div>
+        <div><div class="rp-title">Filter</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <div class="row"><span class="lbl">All frames</span><span class="val g">ON</span></div>
+            <div class="row"><span class="lbl">Token only</span><span class="val">OFF</span></div>
+            <div class="row"><span class="lbl">Errors only</span><span class="val">OFF</span></div>
+          </div>
+        </div>
+        <div class="rp-div"></div>
+        <button class="btn btn-ghost">New File</button>
+        <button class="btn btn-danger mt-auto">■ Stop Capture</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         SCREEN 5 — REPORTS
+    ══════════════════════════════════════════════════════ -->
+    <div id="sw-reports" class="sw hidden">
+      <div class="sc">
+        <div class="sc-title">Field Report</div>
+        <div class="report-form">
+          <div class="field">
+            <label>Job Number</label>
+            <input type="text" value="26-0142" placeholder="e.g. 26-0001">
+          </div>
+          <div class="field">
+            <label>Technician</label>
+            <input type="text" value="T. Collins" placeholder="Full name">
+          </div>
+          <div class="field">
+            <label>Site Name</label>
+            <input type="text" value="Gulf Winds CU — Main" placeholder="Site">
+          </div>
+          <div class="field">
+            <label>Bus ID</label>
+            <input type="text" value="MSTP-01" placeholder="Bus label">
+          </div>
+        </div>
+        <div class="report-summary">
+          <div class="summary-title">Report Preview</div>
+          <div class="summary-row"><span class="summary-key">Protocol</span><span class="summary-val">BACnet MS/TP</span></div>
+          <div class="summary-row"><span class="summary-key">Baud (detected)</span><span class="summary-val">76,800 bps</span></div>
+          <div class="summary-row"><span class="summary-key">Polarity</span><span class="summary-val">Inverted (auto-corrected)</span></div>
+          <div class="summary-row"><span class="summary-key">Devices</span><span class="summary-val">12 nodes</span></div>
+          <div class="summary-row"><span class="summary-key">EOL candidates</span><span class="summary-val">MAC 40, MAC 45</span></div>
+          <div class="summary-row"><span class="summary-key">Frame errors</span><span class="summary-val">3 (FCU-203)</span></div>
+          <div class="summary-row"><span class="summary-key">Token loop</span><span class="summary-val">38 ms avg</span></div>
+          <div class="summary-row"><span class="summary-key">PCAP attached</span><span class="summary-val">mstp_20260520_143207.pcap</span></div>
+        </div>
+      </div>
+      <div class="rp">
+        <div><div class="rp-title">Export</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+            <button class="btn btn-ghost">📄 Save to SD (JSON)</button>
+            <button class="btn btn-ghost">📄 Save to SD (PDF)</button>
+          </div>
+        </div>
+        <div class="rp-div"></div>
+        <div><div class="rp-title">ProjectHub</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <div class="row"><span class="lbl">Status</span><span class="val b">Wi-Fi STA</span></div>
+            <div class="row"><span class="lbl">Last push</span><span class="val">Never</span></div>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:8px;">↑ Push to ProjectHub</button>
+        <div class="rp-div"></div>
+        <button class="btn btn-success mt-auto">✓ Generate Report</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         SCREEN 6 — SETTINGS
+    ══════════════════════════════════════════════════════ -->
+    <div id="sw-settings" class="sw hidden">
+      <div class="sc">
+        <div class="sc-title">Settings</div>
+        <div class="settings-cols">
+          <div class="settings-group">
+            <div class="sg-title">BACnet</div>
+            <div class="sf"><label>MS/TP MAC Address</label><input type="text" value="254"><div class="hint">0–254 · 254 = listen-only</div></div>
+            <div class="sf"><label>MS/TP Network Number</label><input type="text" value="65001"></div>
+            <div class="sf"><label>BACnet/IP Port</label><input type="text" value="47808"></div>
+            <div class="sf"><label>Device Object ID</label><input type="text" value="65001"></div>
+          </div>
+          <div class="settings-group">
+            <div class="sg-title">Wi-Fi</div>
+            <div class="sf"><label>AP SSID</label><input type="text" value="OSCVT-B09BA5"><div class="hint">Auto-generated from MAC</div></div>
+            <div class="sf"><label>AP Password</label><input type="password" value="fieldtech2026"><div class="hint">10–64 chars</div></div>
+            <div class="sf"><label>Channel</label>
+              <select><option>6</option><option>1</option><option>11</option></select>
+            </div>
+            <div class="sf"><label>Mode</label>
+              <select><option>AP Only</option><option>AP + STA</option><option>STA Only</option></select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rp">
+        <div><div class="rp-title">Device Info</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <div class="row"><span class="lbl">Serial</span><span class="val b" style="font-size:10px;">OSCVT-B09BA5</span></div>
+            <div class="row"><span class="lbl">Firmware</span><span class="val">1.0.0-dev</span></div>
+            <div class="row"><span class="lbl">Hardware</span><span class="val">Pro</span></div>
+            <div class="row"><span class="lbl">Uptime</span><span class="val">4h 23m</span></div>
+            <div class="row"><span class="lbl">EOL Switch</span><span class="val g">ON</span></div>
+          </div>
+        </div>
+        <div class="rp-div"></div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.5;">Changes take effect on save. BACnet settings require a bus reconnect.</div>
+        <div class="rp-div"></div>
+        <button class="btn btn-ghost">↺ Reset to Defaults</button>
+        <button class="btn btn-primary mt-auto">✓ Save Settings</button>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ── BOTTOM NAV ── -->
+  <div class="bottomnav">
+    <div class="ni active" id="nav-protocol" onclick="showScreen('protocol')">
+      <span class="ni-icon">📡</span><span class="ni-label">Protocol</span>
+    </div>
+    <div class="ni" id="nav-devices" onclick="showScreen('devices')">
+      <span class="ni-icon">📋</span><span class="ni-label">Devices</span>
+    </div>
+    <div class="ni" id="nav-stats" onclick="showScreen('stats')">
+      <span class="ni-icon">📊</span><span class="ni-label">Stats</span>
+    </div>
+    <div class="ni" id="nav-capture" onclick="showScreen('capture')">
+      <span class="ni-icon">🔍</span><span class="ni-label">Capture</span>
+    </div>
+    <div class="ni" id="nav-reports" onclick="showScreen('reports')">
+      <span class="ni-icon">📁</span><span class="ni-label">Reports</span>
+    </div>
+    <div class="ni" id="nav-settings" onclick="showScreen('settings')">
+      <span class="ni-icon">⚙️</span><span class="ni-label">Settings</span>
+    </div>
+  </div>
+
+</div><!-- /device-frame -->
+<div class="preview-note">OSCVT PRO · 800×480 DISPLAY PREVIEW · oct.trimrespond.com/device-preview.html</div>
+</div>
+
+<script>
+  function showScreen(name) {
+    document.querySelectorAll('.sw').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
+    document.getElementById('sw-' + name).classList.remove('hidden');
+    document.getElementById('nav-' + name).classList.add('active');
+  }
+
+  let devRowIndex = 0;
+  function selectDev(row, name, mac, id, status, resp, note) {
+    document.querySelectorAll('.dev-table tbody tr').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    devRowIndex = Array.from(row.parentNode.children).indexOf(row) + 1;
+    document.getElementById('dd-name').textContent = name;
+    document.getElementById('dd-mac').textContent = mac;
+    document.getElementById('dd-id').textContent = id;
+    document.getElementById('dd-resp').textContent = resp + ' ms';
+    document.getElementById('dd-tok').textContent = devRowIndex;
+    const noteEl = document.getElementById('dd-note');
+    noteEl.textContent = note;
+    noteEl.className = 'val ' + (status === 'EOL' ? 'w' : status === 'ERR' ? 'r' : 'g');
+  }
+
+  // Live clock
+  function tick() {
+    const now = new Date();
+    document.querySelector('.clock').textContent =
+      String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  }
+  tick();
+  setInterval(tick, 30000);
+
+  // Animate capture timer
+  let capSecs = 263;
+  setInterval(() => {
+    if (!document.getElementById('sw-capture').classList.contains('hidden')) {
+      capSecs++;
+      const h = String(Math.floor(capSecs/3600)).padStart(2,'0');
+      const m = String(Math.floor((capSecs%3600)/60)).padStart(2,'0');
+      const s = String(capSecs%60).padStart(2,'0');
+      document.querySelector('.cap-big').textContent = h+':'+m+':'+s;
+    }
+  }, 1000);
+</script>
 </body>
 </html>

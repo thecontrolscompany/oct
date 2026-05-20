@@ -220,6 +220,11 @@ export default function LivePane() {
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div className="node-label">{d.name ?? `Device ${d.deviceId}`}</div>
                     {d.modelName && <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{d.modelName}</div>}
+                    {isRoutedBacnetDevice(d) && (
+                      <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                        Routed net {d.routeNetworkNumber ?? '—'} · path {formatRouteAddress(d.routeAddress)}
+                      </div>
+                    )}
                   </div>
                   <span className="node-type-badge">{d.deviceId}</span>
                 </div>
@@ -321,14 +326,25 @@ function DeviceDetail({
   onSelectObj: (o: BacnetObject) => void;
 }) {
   const isRouter = /cwcvt|oscvt|bacnet.router|converter/i.test(`${device.name ?? ''} ${device.modelName ?? ''}`) || device.deviceId >= 39000;
-  const [detailTab, setDetailTab] = useState<'objects' | 'commissioning' | 'io'>('objects');
+  const isCwcvt = /cwcvt/i.test(`${device.name ?? ''} ${device.modelName ?? ''}`) || device.deviceId >= 39000;
+  const isRoutedDevice = isRoutedBacnetDevice(device);
+  const [detailTab, setDetailTab] = useState<'summary' | 'objects' | 'commissioning' | 'io'>(
+    isRouter || isRoutedDevice ? 'summary' : 'objects'
+  );
+  const [loadObjectsRequested, setLoadObjectsRequested] = useState(!isRouter && !isRoutedDevice);
   const [filterType, setFilterType] = useState('');
   const trendManager = useTrendManager(device);
+
+  useEffect(() => {
+    setDetailTab(isRouter || isRoutedDevice ? 'summary' : 'objects');
+    setLoadObjectsRequested(!isRouter && !isRoutedDevice);
+    setFilterType('');
+  }, [device.deviceId, isRouter, isRoutedDevice]);
 
   const { data: objects = [], isLoading } = useQuery({
     queryKey: ['bacnet', 'objects', device.deviceId],
     queryFn: () => api.bacnet.objects(device.deviceId),
-    enabled: !isRouter,
+    enabled: detailTab === 'objects' && !isRouter && (!isRoutedDevice || loadObjectsRequested),
   });
 
   const filtered = filterType ? objects.filter(o => o.typeName === filterType) : objects;
@@ -337,6 +353,9 @@ function DeviceDetail({
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: 'column' }}>
       <div className="tabs">
+        <div className={`tab${detailTab === 'summary' ? ' active' : ''}`} onClick={() => setDetailTab('summary')}>
+          Summary
+        </div>
         <div className={`tab${detailTab === 'objects' ? ' active' : ''}`} onClick={() => setDetailTab('objects')}>
           Object Browser
         </div>
@@ -348,22 +367,52 @@ function DeviceDetail({
         </div>
       </div>
 
-      {detailTab === 'objects' && isRouter && (
+      {detailTab === 'summary' && (
         <div className="content" style={{ flex: 1, overflow: 'auto' }}>
           <div className="card">
-            <div className="card-header">BACnet Router</div>
+            <div className="card-header">
+              {isRouter ? 'BACnet Router' : isRoutedDevice ? 'Routed Device Summary' : 'Device Summary'}
+            </div>
             <div className="card-body" style={{ lineHeight: 1.6 }}>
               <p style={{ marginTop: 0 }}>
-                This is the converter, not the controller beneath it.
+                {isRouter
+                  ? 'This is the converter, not the controller beneath it.'
+                  : isRoutedDevice
+                    ? 'This controller was discovered behind CWCVT, so OCT starts with a summary instead of forcing a full object browse.'
+                    : 'This is a live BACnet device discovered on the network.'}
               </p>
               <p>
-                Use the <strong>Behind Router</strong> nodes to promote downstream devices into the live list.
-                The converter itself only gives us the bridge and diagnostics layer.
+                {isRouter
+                  ? 'Use the Behind CWCVT nodes to promote downstream devices into the live list. The converter itself only gives us the router and diagnostics layer.'
+                  : isRoutedDevice
+                    ? 'Open Object Browser only when you need the full object list. The routed path is already known.'
+                    : 'Use the object browser, commissioning, and I/O tabs as needed.'}
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
-                <MiniStat label="Converter" value={device.name ?? 'BACnet router'} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 11, padding: '3px 10px' }}
+                  onClick={() => {
+                    setDetailTab('objects');
+                    if (isRoutedDevice) setLoadObjectsRequested(true);
+                  }}
+                >
+                  {isRoutedDevice ? 'Load Object Browser' : 'Open Object Browser'}
+                </button>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setDetailTab('commissioning')}>
+                  Open Commissioning
+                </button>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setDetailTab('io')}>
+                  Open I/O
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginTop: 16 }}>
+                <MiniStat label={isCwcvt ? 'Converter' : 'Device'} value={device.name ?? 'BACnet device'} />
                 <MiniStat label="Device ID" value={device.deviceId} />
                 <MiniStat label="Address" value={device.address} />
+                {isRoutedDevice && <MiniStat label="Route net" value={device.routeNetworkNumber ?? '—'} />}
+                {isRoutedDevice && <MiniStat label="Route path" value={formatRouteAddress(device.routeAddress)} />}
+                {device.modelName && <MiniStat label="Model" value={device.modelName} />}
               </div>
             </div>
           </div>
@@ -392,6 +441,16 @@ function DeviceDetail({
                 </button>
               ))}
             </div>
+            {isRoutedDevice && (
+              <div style={{ padding: '0 12px 8px', fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                Routed controllers can take longer to enumerate. Use Summary first if you only need the topology and device identity.
+              </div>
+            )}
+            {isRoutedDevice && !loadObjectsRequested && (
+              <div style={{ padding: '8px 12px', color: 'var(--text-dim)', fontSize: 12, lineHeight: 1.5 }}>
+                The object browser is intentionally paused for routed devices until you ask for it. Open Summary or click Load Object Browser when you need the full list.
+              </div>
+            )}
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {isLoading ? <div className="loading">Loading objects…</div> : filtered.map(obj => (
                 <div
@@ -537,7 +596,7 @@ function LiveCommissioningTab({ device, trendManager }: { device: BacnetDevice; 
         </div>
         {!HAS_API_HOST && (
           <div className="card-body" style={{ color: 'var(--text-dim)', lineHeight: 1.6 }}>
-            Commissioning preview is disabled here because this deployment does not have a reachable router/API bridge.
+            Commissioning preview is disabled here because this deployment does not have a reachable router API.
           </div>
         )}
         {(loadingCaf || loadingPerspective) && <div className="card-body" style={{ color: 'var(--text-dim)' }}>Loading reference layout…</div>}
@@ -1170,6 +1229,15 @@ function MiniStat({ label, value }: { label: string; value: string | number }) {
       <div className="stat-value" style={{ fontSize: 14 }}>{value}</div>
     </div>
   );
+}
+
+function isRoutedBacnetDevice(device: BacnetDevice): boolean {
+  return (device.routeNetworkNumber ?? null) !== null || (device.routeAddress?.length ?? 0) > 0;
+}
+
+function formatRouteAddress(routeAddress?: number[] | null): string {
+  if (!routeAddress || routeAddress.length === 0) return '—';
+  return routeAddress.join('.');
 }
 
 function TrendPanel({ trendManager, title }: { trendManager: TrendManager; title: string }) {

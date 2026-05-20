@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=800, initial-scale=1.0">
+<title>OSCVT Pro — Device UI Preview</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Exo+2:wght@300;400;600&display=swap');
+
+  :root {
+    --bg:      #0a0c0f;
+    --surface: #111418;
+    --card:    #161b22;
+    --border:  #1e2730;
+    --accent:  #00d4ff;
+    --accent2: #00ff9d;
+    --warn:    #ffb800;
+    --danger:  #ff4454;
+    --text:    #e8edf2;
+    --muted:   #5a6a7a;
+    --dim:     #2a3540;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ── Preview wrapper — centres the 800×480 frame on the page ── */
+  html, body {
+    background: #06080a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Exo 2', system-ui, sans-serif;
+  }
+
+  .device-frame {
+    width: 800px;
+    height: 480px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: 0 0 0 1px #1e2730, 0 0 80px rgba(0,212,255,0.08), 0 24px 60px rgba(0,0,0,0.8);
+    border-radius: 4px;
+  }
+
+  /* Grid background */
+  .device-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.25;
+    pointer-events: none;
+  }
+
+  /* ── TOP STATUS BAR ─────────────────────────────────────── */
+  .topbar {
+    height: 36px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 18px;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+
+  .topbar-logo {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .topbar-divider { width: 1px; height: 18px; background: var(--border); }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .status-dot.live { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); animation: pulse 2s infinite; }
+  .status-dot.blue { background: var(--accent);  box-shadow: 0 0 6px rgba(0,212,255,0.6); }
+  .status-dot.off  { background: var(--muted); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .battery {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--accent2);
+  }
+  .battery-icon {
+    width: 20px; height: 10px;
+    border: 1.5px solid var(--accent2); border-radius: 2px;
+    position: relative; display: flex; align-items: center; padding: 1.5px;
+  }
+  .battery-icon::after {
+    content: ''; position: absolute; right: -4px; top: 50%; transform: translateY(-50%);
+    width: 2.5px; height: 5px; background: var(--accent2); border-radius: 0 1px 1px 0;
+  }
+  .battery-fill { height: 100%; width: 70%; background: var(--accent2); border-radius: 1px; }
+
+  .time { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  /* ── MAIN CONTENT ───────────────────────────────────────── */
+  .main {
+    flex: 1; display: flex; overflow: hidden;
+    position: relative; z-index: 1;
+  }
+
+  /* ── PROTOCOL SCREEN ────────────────────────────────────── */
+  .screen {
+    flex: 1; padding: 18px 20px 14px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  .screen-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .protocol-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    flex: 1;
+  }
+
+  .protocol-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 9px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative; overflow: hidden;
+  }
+  .protocol-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 2px; background: var(--dim); transition: background 0.15s;
+  }
+
+  .protocol-card.active   { border-color: var(--accent);  background: #0d1a22; }
+  .protocol-card.active::before { background: var(--accent); }
+
+  .protocol-card.active2  { border-color: var(--accent2); background: #0a1a12; }
+  .protocol-card.active2::before { background: var(--accent2); }
+
+  .protocol-card.warn-card { border-color: var(--warn); background: #1a1500; }
+  .protocol-card.warn-card::before { background: var(--warn); }
+
+  .proto-header { display: flex; align-items: center; justify-content: space-between; }
+
+  .proto-icon {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+  }
+  .proto-icon.blue  { background: rgba(0,212,255,0.12); }
+  .proto-icon.green { background: rgba(0,255,157,0.12); }
+  .proto-icon.amber { background: rgba(255,184,0,0.12); }
+  .proto-icon.gray  { background: rgba(90,106,122,0.15); }
+
+  .proto-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; padding: 3px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .badge-live   { background: rgba(0,255,157,0.15); color: var(--accent2); border: 1px solid rgba(0,255,157,0.3); }
+  .badge-ready  { background: rgba(0,212,255,0.12); color: var(--accent);  border: 1px solid rgba(0,212,255,0.25); }
+  .badge-detect { background: rgba(255,184,0,0.12); color: var(--warn);    border: 1px solid rgba(255,184,0,0.25); }
+  .badge-off    { background: transparent;          color: var(--muted);   border: 1px solid var(--border); }
+
+  .proto-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700; font-size: 16px; letter-spacing: 1px;
+  }
+  .proto-name.blue  { color: var(--accent); }
+  .proto-name.green { color: var(--accent2); }
+  .proto-name.amber { color: var(--warn); }
+  .proto-name.gray  { color: var(--muted); }
+
+  .proto-desc { font-size: 10.5px; color: var(--muted); line-height: 1.4; }
+
+  .proto-stat {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--muted);
+    border-top: 1px solid var(--border); padding-top: 7px;
+    display: flex; justify-content: space-between;
+  }
+  .proto-stat span { color: var(--text); }
+
+  /* ── RIGHT SIDE PANEL ───────────────────────────────────── */
+  .side-panel {
+    width: 216px; border-left: 1px solid var(--border);
+    background: var(--surface);
+    display: flex; flex-direction: column;
+    padding: 14px; gap: 12px; flex-shrink: 0;
+  }
+
+  .panel-section-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 2.5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 4px;
+  }
+
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center; font-size: 12px;
+  }
+  .stat-label { color: var(--muted); font-size: 11px; }
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text);
+  }
+  .stat-value.green { color: var(--accent2); }
+  .stat-value.blue  { color: var(--accent); }
+  .stat-value.warn  { color: var(--warn); }
+
+  .divider { height: 1px; background: var(--border); }
+
+  .polarity-row {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,255,157,0.07);
+    border: 1px solid rgba(0,255,157,0.2);
+    border-radius: 6px; padding: 7px 10px;
+  }
+  .polarity-text {
+    font-size: 10px; color: var(--accent2);
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px;
+  }
+
+  .btn {
+    border-radius: 8px; padding: 10px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700;
+    font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; width: 100%; transition: all 0.15s;
+  }
+  .btn-outline {
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .btn-primary {
+    background: var(--accent); color: #000; border: none; margin-top: auto;
+  }
+  .btn-primary:hover { background: #33ddff; }
+
+  /* ── BOTTOM NAV ─────────────────────────────────────────── */
+  .bottomnav {
+    height: 54px; background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: stretch;
+    position: relative; z-index: 10; flex-shrink: 0;
+  }
+
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px;
+    cursor: pointer; position: relative;
+    transition: background 0.15s;
+    border-right: 1px solid var(--border);
+  }
+  .nav-item:last-child { border-right: none; }
+  .nav-item.active { background: rgba(0,212,255,0.06); }
+  .nav-item.active::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 2px; background: var(--accent);
+  }
+
+  .nav-icon { font-size: 17px; line-height: 1; }
+  .nav-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .nav-item.active .nav-label { color: var(--accent); }
+
+  /* ── Preview label beneath frame ────────────────────────── */
+  .preview-note {
+    margin-top: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #2a3540;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div style="display:flex; flex-direction:column; align-items:center;">
+
+  <div class="device-frame">
+
+    <!-- TOP STATUS BAR -->
+    <div class="topbar">
+      <span class="topbar-logo">OSCVT</span>
+      <div class="topbar-divider"></div>
+      <div class="status-pill">
+        <div class="status-dot live"></div>
+        BUS ACTIVE
+      </div>
+      <div class="status-pill">
+        <div class="status-dot blue"></div>
+        OSCVT-B09BA5
+      </div>
+      <div class="status-pill">
+        <div class="status-dot off"></div>
+        BLE OFF
+      </div>
+      <div class="topbar-right">
+        <div class="battery">
+          <div class="battery-icon"><div class="battery-fill"></div></div>
+          73%
+        </div>
+        <span class="time">14:32</span>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <!-- PROTOCOL SELECTOR SCREEN -->
+      <div class="screen">
+        <div class="screen-title">Select Protocol</div>
+
+        <div class="protocol-grid">
+
+          <!-- BACnet MS/TP -->
+          <div class="protocol-card active">
+            <div class="proto-header">
+              <div class="proto-icon blue">🔗</div>
+              <span class="proto-badge badge-live">LIVE</span>
+            </div>
+            <div class="proto-name blue">BACnet MS/TP</div>
+            <div class="proto-desc">ASHRAE 135 token-passing over RS-485. Auto-baud, auto-polarity.</div>
+            <div class="proto-stat">
+              <span>BAUD</span><span>76800</span>
+            </div>
+          </div>
+
+          <!-- Modbus RTU -->
+          <div class="protocol-card active2">
+            <div class="proto-header">
+              <div class="proto-icon green">⚡</div>
+              <span class="proto-badge badge-ready">READY</span>
+            </div>
+            <div class="proto-name green">Modbus RTU</div>
+            <div class="proto-desc">RS-485 master/slave. Poll registers, monitor, bridge to TCP.</div>
+            <div class="proto-stat">
+              <span>BAUD</span><span>9600</span>
+            </div>
+          </div>
+
+          <!-- N2 Bus (Legacy) — no brand names -->
+          <div class="protocol-card warn-card">
+            <div class="proto-header">
+              <div class="proto-icon amber">⚙</div>
+              <span class="proto-badge badge-detect">DETECT</span>
+            </div>
+            <div class="proto-name amber">N2 Bus (Legacy)</div>
+            <div class="proto-desc">Legacy RS-485 field protocol. Fixed 9600 8N1. Pre-2000 HVAC field devices.</div>
+            <div class="proto-stat">
+              <span>BAUD</span><span>9600 8N1</span>
+            </div>
+          </div>
+
+          <!-- BACnet/IP -->
+          <div class="protocol-card">
+            <div class="proto-header">
+              <div class="proto-icon blue">🌐</div>
+              <span class="proto-badge badge-ready">READY</span>
+            </div>
+            <div class="proto-name blue">BACnet / IP</div>
+            <div class="proto-desc">Ethernet trunk scan via USB dongle. Device discovery, BBMD, routing.</div>
+            <div class="proto-stat">
+              <span>PORT</span><span>47808</span>
+            </div>
+          </div>
+
+          <!-- BACnet ARC156 — no brand names -->
+          <div class="protocol-card">
+            <div class="proto-header">
+              <div class="proto-icon gray">🔄</div>
+              <span class="proto-badge badge-off">V2.0</span>
+            </div>
+            <div class="proto-name gray">BACnet ARC156</div>
+            <div class="proto-desc">ARCnet-based BACnet per ASHRAE 135. 156K baud. Requires external controller chip.</div>
+            <div class="proto-stat">
+              <span>BAUD</span><span>156K</span>
+            </div>
+          </div>
+
+          <!-- Siemens FLN -->
+          <div class="protocol-card">
+            <div class="proto-header">
+              <div class="proto-icon gray">🔧</div>
+              <span class="proto-badge badge-off">V2.0</span>
+            </div>
+            <div class="proto-name gray">Siemens FLN</div>
+            <div class="proto-desc">Siemens Apogee P1/P2 field level network over RS-485.</div>
+            <div class="proto-stat">
+              <span>STATUS</span><span>—</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT SIDE PANEL -->
+      <div class="side-panel">
+        <div>
+          <div class="panel-section-title">Bus Status</div>
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+            <div class="stat-row">
+              <span class="stat-label">Protocol</span>
+              <span class="stat-value blue">MS/TP</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Baud</span>
+              <span class="stat-value">76,800</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Devices</span>
+              <span class="stat-value green">12</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Token Loop</span>
+              <span class="stat-value">38 ms</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Errors</span>
+              <span class="stat-value warn">3</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="panel-section-title">Hardware</div>
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+            <div class="stat-row">
+              <span class="stat-label">EOL Term</span>
+              <span class="stat-value green">ON</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Bus Power</span>
+              <span class="stat-value">18.4 V</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Net #</span>
+              <span class="stat-value">65001</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="polarity-row">
+          <span style="font-size:13px;">↔</span>
+          <span class="polarity-text">POLARITY AUTO-CORRECTED</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <button class="btn btn-outline">⟳ Auto-Detect</button>
+        <button class="btn btn-primary">Connect →</button>
+      </div>
+
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div class="bottomnav">
+      <div class="nav-item active">
+        <span class="nav-icon">📡</span>
+        <span class="nav-label">Protocol</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">Devices</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Stats</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">🔍</span>
+        <span class="nav-label">Capture</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">📁</span>
+        <span class="nav-label">Reports</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Settings</span>
+      </div>
+    </div>
+
+  </div><!-- /device-frame -->
+
+  <div class="preview-note">
+    OSCVT PRO — 800×480 DISPLAY PREVIEW — oct.trimrespond.com/device-preview.html
+  </div>
+
+</div><!-- /wrapper -->
+
+</body>
+</html>

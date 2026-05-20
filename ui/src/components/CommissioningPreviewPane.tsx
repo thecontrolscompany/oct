@@ -92,7 +92,7 @@ export default function CommissioningPreviewPane() {
         </div>
         {!HAS_API_HOST && (
           <div className="card-body" style={{ color: 'var(--text-dim)', lineHeight: 1.6 }}>
-            Commissioning preview needs a configured backend. This deployment only has the UI, so CAF and Perspective lookups are disabled here.
+            Commissioning preview needs a reachable OCT API bridge. This deployment only has the UI, so CAF and Perspective lookups are disabled here.
           </div>
         )}
         {(loadingCaf || loadingPerspective) && <div className="card-body" style={{ color: 'var(--text-dim)' }}>Loading preview…</div>}

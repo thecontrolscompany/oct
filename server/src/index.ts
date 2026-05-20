@@ -20,6 +20,7 @@ import dbexportRouter from './routes/dbexport';
 import sctArchiveRouter from './routes/sctArchive';
 import perspectivesRouter from './routes/perspectives';
 import metasysApiRouter from './routes/metasysApi';
+import routerRouter from './routes/router';
 import { isConnected, getDevices, readMultiple, PROP, OBJECT_TYPE_NAME } from './bacnetService';
 import { onFrame, offFrame, getSession } from './mstpSerial';
 import type { MstpFrame } from './mstpSerial';
@@ -55,6 +56,7 @@ app.use('/api/dbexport', dbexportRouter);
 app.use('/api/sct-archive', sctArchiveRouter);
 app.use('/api/perspectives', perspectivesRouter);
 app.use('/api/metasys', metasysApiRouter);
+app.use('/api/router', routerRouter);
 
 app.get('/api/health', (_req, res) => {
   const s = getSession();

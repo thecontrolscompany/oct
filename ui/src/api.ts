@@ -212,6 +212,19 @@ export interface CwcvtNodeResolution {
   device: BacnetDevice | null;
 }
 
+export interface RouterStatus {
+  reachable: boolean;
+  converterIp?: string | null;
+  raw?: unknown;
+  error?: string;
+}
+
+export interface RouterUploadResult {
+  status: number;
+  contentType: string | null;
+  body: string;
+}
+
 export interface ArchiveTableCount {
   name: string;
   rowCount: number;
@@ -356,6 +369,42 @@ export const api = {
       get<BacnetObjectDetail>(`/bacnet/devices/${deviceId}/objects/${type}/${instance}`),
     writeValue: (deviceId: number, type: number, instance: number, value: unknown, bacnetType: number) =>
       put<{ written: boolean }>(`/bacnet/devices/${deviceId}/objects/${type}/${instance}/present-value`, { value, bacnetType }),
+  },
+
+  router: {
+    status: () => get<RouterStatus>('/router/status'),
+    diagnostics: () => get<unknown>('/router/diagnostics'),
+    bacnetSettings: () => get<unknown>('/router/settings/bacnet'),
+    wifiSettings: () => get<unknown>('/router/settings/wifi'),
+    bleSettings: () => get<unknown>('/router/settings/ble'),
+    uploadFirmware: async (file: File): Promise<RouterUploadResult> => {
+      const form = new FormData();
+      form.append('fw_update', file, file.name);
+
+      let lastError: Error | null = null;
+      const candidates = apiBaseCandidates();
+      for (const base of candidates) {
+        try {
+          const res = await fetch(base + '/router/upload', { method: 'POST', body: form });
+          const body = await res.text();
+          if (!res.ok) {
+            lastError = new Error(body || `HTTP ${res.status}`);
+            if (base !== candidates[candidates.length - 1]) continue;
+            throw lastError;
+          }
+          return {
+            status: res.status,
+            contentType: res.headers.get('content-type'),
+            body,
+          };
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          if (base === candidates[candidates.length - 1]) break;
+        }
+      }
+
+      throw lastError ?? new Error('Backend unreachable');
+    },
   },
 
   caf: {

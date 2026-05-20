@@ -43,7 +43,7 @@ type HelpContext = {
 
 const CIDR_OPTIONS = [8, 16, 24, 28, 30];
 
-// TL-CWCVT-0 / MAP adapter defaults
+// Router defaults
 const DEFAULTS = { ip: '192.168.142.1', cidr: 24, networkNumber: 65001 };
 
 function getHelpContext(view: View, onlineMode: boolean): HelpContext {
@@ -224,13 +224,13 @@ function getHelpContext(view: View, onlineMode: boolean): HelpContext {
     case 'oscvt':
       return {
         title: 'OSCVT',
-        intro: 'Explore the Open Source Converter section for the CWCVT-derived web console, hidden modes, diagnostics, and firmware behavior.',
+        intro: 'View live diagnostics, settings, and firmware update behavior from the connected BACnet router.',
         sections: [
           {
             title: 'What you can inspect',
             items: [
-              'BACnet and Wi-Fi settings surfaced from the documented UI schemas.',
-              'Diagnostics, hidden modes, and OTA update behavior from the firmware.',
+              'BACnet, Wi-Fi, and BLE settings surfaced from the documented UI schemas.',
+              'Diagnostics, hidden modes, and OTA update behavior from the router firmware.',
               'The naming and route map for the current OSCVT workstream.',
             ],
           },
@@ -361,9 +361,7 @@ function AppShell() {
       {onlineMode
         ? (bacnetConnected
           ? `${health?.bacnet?.converterIp} · Net ${connNetNum} · ${health?.bacnet?.deviceCount ?? 0} device(s)`
-          : HAS_API_HOST
-            ? 'Backend unavailable'
-            : 'Offline')
+          : 'No router connected')
         : 'Offline archive browser'}
       <button
         className="topbar-help"
@@ -479,7 +477,7 @@ function AppShell() {
             onKeyDown={e => e.key === 'Enter' && !bacnetConnected && handleConnect()}
             disabled={bacnetConnected}
             style={{ width: 130 }}
-            title="TL-CWCVT-0 IP address"
+            title="BACnet router IP address"
           />
 
           <label>/</label>

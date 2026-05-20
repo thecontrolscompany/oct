@@ -95,7 +95,7 @@ export default function LivePane() {
       <div className="content">
         <div className="empty-state">
           <div className="icon">📡</div>
-          <p>Enter the TL-CWCVT-0 IP address above and click Connect</p>
+          <p>Enter a router IP address above and click Connect</p>
         </div>
       </div>
     );
@@ -361,7 +361,7 @@ function DeviceDetail({
                 The converter itself only gives us the bridge and diagnostics layer.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
-                <MiniStat label="Converter" value={device.name ?? 'TL-CWCVT-0'} />
+                <MiniStat label="Converter" value={device.name ?? 'BACnet router'} />
                 <MiniStat label="Device ID" value={device.deviceId} />
                 <MiniStat label="Address" value={device.address} />
               </div>
@@ -537,7 +537,7 @@ function LiveCommissioningTab({ device, trendManager }: { device: BacnetDevice; 
         </div>
         {!HAS_API_HOST && (
           <div className="card-body" style={{ color: 'var(--text-dim)', lineHeight: 1.6 }}>
-            Commissioning preview is disabled here because this deployment does not have a configured backend API.
+            Commissioning preview is disabled here because this deployment does not have a reachable router/API bridge.
           </div>
         )}
         {(loadingCaf || loadingPerspective) && <div className="card-body" style={{ color: 'var(--text-dim)' }}>Loading reference layout…</div>}

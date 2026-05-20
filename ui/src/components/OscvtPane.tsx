@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { api } from '../api';
 
 type Page = 'overview' | 'settings' | 'diagnostics' | 'modes' | 'update';
 
@@ -127,6 +129,53 @@ export default function OscvtPane() {
   const [page, setPage] = useState<Page>('overview');
   const [draft, setDraft] = useState<DraftState>(() => baseDraft());
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] = useState<string>('');
+
+  const { data: routerStatus } = useQuery({
+    queryKey: ['router', 'status'],
+    queryFn: api.router.status,
+    refetchInterval: 5_000,
+  });
+
+  const routerReachable = routerStatus?.reachable ?? false;
+
+  const { data: diagnostics } = useQuery({
+    queryKey: ['router', 'diagnostics'],
+    queryFn: api.router.diagnostics,
+    enabled: routerReachable,
+    refetchInterval: 10_000,
+  });
+
+  const { data: bacnetSettings } = useQuery({
+    queryKey: ['router', 'settings', 'bacnet'],
+    queryFn: api.router.bacnetSettings,
+    enabled: routerReachable,
+    refetchInterval: 10_000,
+  });
+
+  const { data: wifiSettings } = useQuery({
+    queryKey: ['router', 'settings', 'wifi'],
+    queryFn: api.router.wifiSettings,
+    enabled: routerReachable,
+    refetchInterval: 10_000,
+  });
+
+  const { data: bleSettings } = useQuery({
+    queryKey: ['router', 'settings', 'ble'],
+    queryFn: api.router.bleSettings,
+    enabled: routerReachable,
+    refetchInterval: 10_000,
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => api.router.uploadFirmware(file),
+    onSuccess: result => {
+      setUploadResult(`Router responded with HTTP ${result.status}`);
+    },
+    onError: err => {
+      setUploadResult(String(err));
+    },
+  });
 
   const payloadPreview = useMemo(() => ({
     bacnet: {
@@ -149,6 +198,10 @@ export default function OscvtPane() {
     upload: selectedFile?.name ?? null,
   }), [draft, selectedFile]);
 
+  const routerBanner = routerStatus?.reachable
+    ? `Connected to ${routerStatus.converterIp ?? 'router'}`
+    : 'Router diagnostics unavailable - connect through a reachable router bridge';
+
   return (
     <div className="content osccvt-page">
       <div className="osccvt-shell">
@@ -157,26 +210,31 @@ export default function OscvtPane() {
             <div className="osccvt-kicker">OSCVT</div>
             <h1>Open Source Converter</h1>
             <p>
-              A focused UI for the documented web console behind the TL-CWCVT-0 family:
-              BACnet settings, diagnostics, hidden modes, and the firmware update path.
+              A live UI for the connected BACnet router console: settings, diagnostics, hidden modes, and firmware upload.
             </p>
             <div className="osccvt-chip-row">
-              <span className="osccvt-chip">Firmware 1.1.0.371</span>
-              <span className="osccvt-chip">APSTA default</span>
+              <span className="osccvt-chip">{routerBanner}</span>
+              <span className="osccvt-chip">APSTA / router mode</span>
               <span className="osccvt-chip">BTCVT hidden</span>
               <span className="osccvt-chip">Multipart OTA</span>
             </div>
           </div>
 
           <div className="osccvt-hero-panel">
-            <div className="osccvt-panel-label">Route Map</div>
+            <div className="osccvt-panel-label">Live Router</div>
             <div className="osccvt-route-list">
-              {ROUTES.map(route => (
-                <div key={route} className="osccvt-route-row">
-                  <span>{route}</span>
-                  <span className="osccvt-route-pill">documented</span>
-                </div>
-              ))}
+              <div className="osccvt-route-row">
+                <span>Status</span>
+                <span className={`osccvt-route-pill ${routerReachable ? 'ready' : 'warn'}`}>{routerReachable ? 'reachable' : 'unavailable'}</span>
+              </div>
+              <div className="osccvt-route-row">
+                <span>IP</span>
+                <span className="osccvt-route-pill">{routerStatus?.converterIp ?? draft.ip}</span>
+              </div>
+              <div className="osccvt-route-row">
+                <span>Diagnostics</span>
+                <span className="osccvt-route-pill">{diagnostics ? 'loaded' : 'pending'}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -197,18 +255,45 @@ export default function OscvtPane() {
           <main className="osccvt-main">
             {page === 'overview' && (
               <>
+                {!routerReachable && (
+                  <section className="card osccvt-card">
+                    <div className="card-header">Router Diagnostics</div>
+                    <div className="card-body" style={{ color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                      Router diagnostics unavailable - connect through a reachable router bridge.
+                    </div>
+                  </section>
+                )}
+
                 <section className="card osccvt-card">
                   <div className="card-header">What OSCVT is showing</div>
                   <div className="card-body osccvt-overview-grid">
-                    <StatCard label="Web shell" value="JSON-driven SPA" detail="Static HTML + main.bundle.js + /ui_views/*.json" />
-                    <StatCard label="Transport" value="APSTA / STA / AP" detail="APSTA is compiled in; Wi-Fi router is the default document path." />
-                    <StatCard label="Legacy mode" value="BTCVT" detail="Bluetooth Classic SPP is hidden but still present." />
-                    <StatCard label="Firmware update" value="POST /upload/*" detail="File input named fw_update, delivered as multipart/form-data." />
+                    <StatCard label="Router" value={routerReachable ? 'Reachable' : 'Unavailable'} detail={routerBanner} />
+                    <StatCard label="BACnet" value="Live" detail="BACnet settings come from the router proxy." />
+                    <StatCard label="Diagnostics" value={diagnostics ? 'Loaded' : 'Waiting'} detail="Live router diagnostics surface from /api/router/diagnostics." />
+                    <StatCard label="Firmware update" value="Ready" detail="File input named fw_update, delivered through the router proxy." />
                   </div>
                 </section>
 
                 <section className="card osccvt-card">
-                  <div className="card-header">Schema Explorer</div>
+                  <div className="card-header">Live Router Snapshot</div>
+                  <div className="card-body">
+                    <pre className="osccvt-json">{JSON.stringify(routerStatus?.raw ?? { reachable: false }, null, 2)}</pre>
+                  </div>
+                </section>
+
+                <section className="card osccvt-card">
+                  <div className="card-header">Documented Routes</div>
+                  <div className="card-body">
+                    <div className="osccvt-pill-list">
+                      {ROUTES.map(route => (
+                        <span key={route} className="osccvt-mini-pill">{route}</span>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="card osccvt-card">
+                  <div className="card-header">Documented Surface</div>
                   <div className="card-body osccvt-schema-grid">
                     <SchemaBlock title="BACnet Settings" subtitle="Core network and addressing controls" rows={BACNET_KEYS} accent="blue" />
                     <SchemaBlock title="Wi-Fi Settings" subtitle="Hosted AP and client connectivity" rows={WIFI_KEYS} accent="green" />
@@ -227,6 +312,13 @@ export default function OscvtPane() {
             {page === 'settings' && (
               <>
                 <section className="card osccvt-card">
+                  <div className="card-header">BACnet Settings</div>
+                  <div className="card-body">
+                    <pre className="osccvt-json">{JSON.stringify(bacnetSettings ?? { reachable: false }, null, 2)}</pre>
+                  </div>
+                </section>
+
+                <section className="card osccvt-card">
                   <div className="card-header">BACnet Settings Draft</div>
                   <div className="card-body osccvt-settings-grid">
                     <SettingInput label="IP Address" keyName="ip" value={draft.ip} onChange={value => setDraft(prev => ({ ...prev, ip: value }))} />
@@ -238,6 +330,20 @@ export default function OscvtPane() {
                     <SettingInput label="BACnet/IP Network" keyName="bipNet" value={draft.bipNet} onChange={value => setDraft(prev => ({ ...prev, bipNet: value }))} />
                     <SettingInput label="Device Object ID" keyName="devNum" value={draft.devNum} onChange={value => setDraft(prev => ({ ...prev, devNum: value }))} />
                     <SettingInput label="BLE Network" keyName="bleNet" value={draft.bleNet} onChange={value => setDraft(prev => ({ ...prev, bleNet: value }))} />
+                  </div>
+                </section>
+
+                <section className="card osccvt-card">
+                  <div className="card-header">Wi-Fi Settings</div>
+                  <div className="card-body">
+                    <pre className="osccvt-json">{JSON.stringify(wifiSettings ?? { reachable: false }, null, 2)}</pre>
+                  </div>
+                </section>
+
+                <section className="card osccvt-card">
+                  <div className="card-header">BLE Settings</div>
+                  <div className="card-body">
+                    <pre className="osccvt-json">{JSON.stringify(bleSettings ?? { reachable: false }, null, 2)}</pre>
                   </div>
                 </section>
 
@@ -269,6 +375,13 @@ export default function OscvtPane() {
                     <StatCard label="Wi-Fi" value="Ready" detail="RSSI, current channel, and station list live here." />
                     <StatCard label="BLE" value="Ready" detail="Connection count, MTU, packet stats, and pairing failures." />
                     <StatCard label="Capture" value="SD card PCAP" detail="MSTP capture files exposed under /sd_card/mstp_captures/." />
+                  </div>
+                </section>
+
+                <section className="card osccvt-card">
+                  <div className="card-header">Live Diagnostics</div>
+                  <div className="card-body">
+                    <pre className="osccvt-json">{JSON.stringify(diagnostics ?? { reachable: false }, null, 2)}</pre>
                   </div>
                 </section>
 
@@ -322,8 +435,12 @@ export default function OscvtPane() {
                       type="file"
                       onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
                     />
-                    <button className="btn btn-primary" disabled={!selectedFile}>
-                      {selectedFile ? 'Ready to upload' : 'Choose file'}
+                    <button
+                      className="btn btn-primary"
+                      disabled={!selectedFile || uploadMutation.isPending}
+                      onClick={() => selectedFile && uploadMutation.mutate(selectedFile)}
+                    >
+                      {uploadMutation.isPending ? 'Uploading…' : (selectedFile ? 'Upload firmware' : 'Choose file')}
                     </button>
                   </div>
 
@@ -333,6 +450,7 @@ export default function OscvtPane() {
                     <div className="osccvt-selected-file">
                       {selectedFile ? selectedFile.name : 'No firmware file selected'}
                     </div>
+                    {uploadResult && <div className="osccvt-selected-file">{uploadResult}</div>}
                   </div>
                 </div>
               </section>

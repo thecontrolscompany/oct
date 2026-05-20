@@ -99,11 +99,11 @@ export default function Sidebar({ selected, onSelect }: Props) {
   if (isLoading) return <div className="loading">Loading controllers…</div>;
   if (error) return (
     <div style={{ padding: '16px 12px', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-      <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Live backend unavailable</div>
-      This deployment needs a reachable OCT API to browse controller data.
+      <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Live router unavailable</div>
+      This deployment needs a reachable router bridge to browse controller data.
       <br /><br />
       <span style={{ fontFamily: 'Consolas, monospace', fontSize: 11, color: 'var(--border)' }}>
-        If you have a bridge running, refresh and try again.
+        If the router is reachable, refresh and try again.
       </span>
     </div>
   );

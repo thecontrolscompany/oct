@@ -1395,7 +1395,7 @@ export function GraphicViewer({
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {bindings.length === 0 ? (
                 <div style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>
-                  No binding data. The binding file may not have been parsed (server-side parse or re-upload required).
+                  No binding data. The binding file may not have been parsed yet or may need to be re-uploaded.
                 </div>
               ) : filteredBindings.length === 0 ? (
                 <div style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>

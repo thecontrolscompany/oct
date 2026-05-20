@@ -1,0 +1,453 @@
+=== Block 0 (len=1413) ===
+{
+  "content": [
+   {
+    "group": "bacnet",
+    "content": [
+     {
+      "label": "Bacnet Info / Settings",
+      "type": "label"
+     },
+     {
+      "label": "MS/TP Address List",
+      "key": "mstp-dev-list",
+      "type": "data",
+      "read_only": true
+     },
+     {
+      "label": "Active Baud Rate",
+      "key": "b-a-baud",
+      "type": "int",
+      "read_only": true
+     },
+     {
+      "label": "Bus-Start Baud Rate",
+      "key": "b-c-baud",
+      "type": "enum",
+      "enums": [9600,19200,38400,76800]
+     },
+     {
+      "label": "MS/TP MAC",
+      "key": "b-mac",
+      "type": "int",
+      "range": [0,254]
+     },
+     {
+      "label": "MS/TP Network Number",
+      "key": "mstp-net",
+      "type": "int",
+      "range": [0,65535]
+     },
+     {
+      "label": "BACnet IP Port",
+      "key": "bip-port",
+      "type": "int",
+      "range": [0,65535]
+     },
+     {
+      "label": "BACnet IP Network Number",
+      "key": "bip-net",
+      "type": "int",
+      "range": [0,65535]
+     },
+     {
+      "label": "Device Object Identifier",
+      "key": "dev-num",
+      "type": "int",
+      "range": [0,65535]
+     },
+     {
+      "label": "BLE Network Number",
+      "key": "ble-net",
+      "type": "int",
+      "range": [0,65535]
+     }
+    ],
+    "control": [
+      {
+       "label": "Force Baud Rate",
+       "type": "button",
+       "command": "mstp-force-baud"
+      }
+     ]
+    }
+  ]
+ }
+
+=== Block 1 (len=5479) ===
+{
+  "content": [
+   {
+    "group": "mstp-diag",
+    "content": [
+     {
+      "label": "Bacnet Diagnostics",
+      "type": "label"
+     },
+     {
+      "type": "table",
+      "value": [
+       {
+        "label": "MS/TP Device Count",
+        "key": "mstp-dev-cnt"
+       },
+       {
+        "label": "MS/TP Address List",
+        "key": "mstp-dev-list"
+       },
+       {
+        "label": "Framing Errors",
+        "key": "frame-err"
+       },
+       {
+        "label": "MS/TP Rx Bytes",
+        "key": "mstp-rx-cnt"
+       },
+       {
+        "label": "APDU Rate",
+        "key": "mstp-msgs"
+       },
+       {
+        "label": "Broadcast Rate",
+        "key": "mstp-bcasts"
+       },
+       {
+        "label": "MS/TP -> Wireless APDU Rate",
+        "key": "mstp-m2w"
+       },
+       {
+        "label": "MS/TP <- Wireless APDU Rate",
+        "key": "mstp-w2m"
+       },
+       {
+        "label": "Token Loop Time (ms)",
+        "key": "mstp-loop-time"
+       },
+       {
+        "label": "Dropped Tokens",
+        "key": "mstp-drop-cnt"
+       },
+       {
+        "label": "MS/TP Tx Failures",
+        "key": "mstp-tx-f"
+       },
+       {
+        "label": "BIP Tx Failures",
+        "key": "bip-tx-f"
+       }
+      ]
+     }
+    ],
+    "hide_save": 1,
+    "control": [
+     {
+      "label": "Reset Diagnostics",
+      "type": "button",
+      "command": "mstp-clear-stats"
+     }
+    ]
+   },
+   {
+    "group": "capture",
+    "content": [
+      {
+        "label": "MSTP Capture",
+        "type": "label"
+      },
+      {
+        "label": "Log Filename",
+        "key": "sd_f_name",
+        "type": "data"
+      },
+      {
+        "label": "Log MS/TP to SD card",
+        "key": "sd_m_log",
+        "type": "enum",
+        "enums": [ "Disabled", "Enabled"]
+      },
+      {
+        "key": "pcap_html",
+        "type": "html"
+      }
+    ]
+   },
+   {
+    "group": "system-diag",
+    "content": [
+     {
+      "label": "Device Diagnostics",
+      "type": "label"
+     },
+     {
+      "type": "table",
+      "value": [
+       {
+        "label": "Firmware Version",
+        "key": "version"
+       },
+       {
+        "label": "Mode",
+        "key": "op_mode"
+       },
+       {
+        "label": "Memory Utilization",
+        "key": "mem_util"
+       },
+       {
+        "label": "Boot Count",
+        "key": "boot_cnt"
+       },
+       {
+        "label": "Last Reboot Reason",
+        "key": "boot_rsn"
+       },
+       {
+        "label": "Uptime",
+        "key": "uptime"
+       },
+       {
+        "label": "Hardware Type",
+        "key": "hw_type"
+       },
+       {
+        "label": "Release Mode",
+        "key": "release_mode"
+       },
+       {
+        "label": "Security Version",
+        "key": "security_version"
+       },
+       {
+        "label": "Model",
+        "key": "model"
+       }
+      ]
+     }
+    ],
+    "hide_save": 1
+   },
+   {
+    "group": "wifi-diag",
+    "content": [
+     {
+      "label": "Wi-Fi Diagnostics",
+      "type": "label"
+     },
+     {
+      "type": "table",
+      "value": [
+       {
+        "label": "RSSI",
+        "key": "w-rssi"
+       },
+       {
+        "label": "Channel",
+        "key": "w-cur-ch",
+        "read_only": true
+      },
+       {
+        "label": "Max Tx Power",
+        "key": "w-pwr"
+       },
+       {
+        "label": "Station Count",
+        "key": "w-sta-ct"
+       },
+       {
+        "label": "Station List",
+        "key": "w-sta-list"
+       },
+       {
+        "label": "Station Disconnects",
+        "key": "w-sta-dis"
+       }
+      ]
+     }
+    ],
+    "hide_save": 1
+   },
+   {
+    "group": "ble-diag",
+    "content": [
+     {
+      "label": "BLE Diagnostics",
+      "type": "label"
+     },
+     {
+      "type": "table",
+      "value": [
+       {
+        "label": "RSSI",
+        "key": "bt-rssi"
+       },
+       {
+        "label": "Connection Count",
+        "key": "bt-conn-cnt"
+       },
+       {
+        "label": "Connection Interval",
+        "key": "bt-conn-int"
+       },
+       {
+        "label": "Tx Packet Count",
+        "key": "bt-tx-cnt"
+       },
+       {
+        "label": "Rx Packet Count",
+        "key": "bt-rx-cnt"
+       },
+       {
+        "label": "BLE Tx Power",
+        "key": "bt-pwr"
+       },
+       {
+        "label": "MTU Size",
+        "key": "bt-mtu"
+       },
+       {
+        "label": "Tx Failures",
+        "key": "bt-tx-f"
+       },
+       {
+        "label": "Pairing Failures",
+        "key": "bt-pair-f"
+       }
+      ]
+     }
+    ],
+    "hide_save": 1,
+    "control": [
+     {
+      "label": "Reset BLE Diagnostics",
+      "type": "button",
+      "command": "ble-clear-stats"
+     }
+    ]
+   },
+   {
+    "group": "btcvt",
+    "content": [
+      {
+        "label": "BTCVT Mode Support",
+        "type": "label"
+      },
+      {
+        "label": "BTCVT Mode",
+        "key": "btcvt_mode",
+        "type": "enum",
+        "enums": [ "Disabled", "Enabled"]
+      },
+      {
+        "label": "Note, BTCVT as a mode option is an unsupported feature but can be enabled for legacy use cases. Enabling this will add BTCVT to the mode selection through the \"B\" button.",
+        "type": "text"
+      }
+    ]
+   },
+   {
+    "group": "update_fw",
+    "content": [
+      {
+        "label": "Firmware Update",
+        "type": "label"
+      },
+      {
+        "label": "Use this to update the firmware on your CWCVT",
+        "type": "text"
+      },
+      {
+        "type": "file",
+        "key": "fw_update"
+      }
+    ],
+    "hide_cntrl_defaults": 1,
+    "no_data": 1
+   }
+  ]
+}
+
+=== Block 2 (len=471) ===
+{
+  "content": [
+   {
+    "group": "help",
+    "content": [
+     {
+      "label": "Help / Information",
+      "type": "label"
+     },
+     {
+      "label": "CWCVT quick start guide and additional documentation can be found at this link: [placeholder for doc link]",
+      "type": "text"
+     },
+     {
+      "label": "For further support, FSC can be contacted here: [placeholder] ",
+      "type": "text"
+     }
+    ],
+    "hide_cntrl_defaults": 1,
+    "no_data": 1
+  }]
+}
+
+=== Block 3 (len=1171) ===
+{
+  "content": [
+   {
+    "group": "wifi",
+    "content": [
+     {
+      "label": "WiFi Settings",
+      "type": "label"
+     },
+     {
+      "label": "Set CWCVT's hosted AP parameters here. A restart is required and will result in connection loss.",
+      "type": "text"
+     },
+     {
+      "label": "Access Point Name",
+      "key": "w-ssid",
+      "type": "data"
+     },
+     {
+      "label": "Requires 8 to 32 characters",
+      "type": "text"
+     },
+     {
+      "label": "Access Point Password",
+      "key": "w-pw",
+      "type": "data"
+     },
+     {
+      "label": "Requires 10 to 64 characters including 1 upper case, 1 lower case, and 1 numeric",
+      "type": "text"
+     },
+     {
+      "label": "Configured Channel",
+      "key": "w-cfg-ch",
+      "type": "int",
+      "range": [1,11]
+     },
+     {
+      "label": "Current Channel",
+      "key": "w-cur-ch",
+      "type": "int",
+      "read_only": true
+     },
+     {
+      "label": "Max Tx Power",
+      "key": "w-pwr",
+      "type": "int",
+      "read_only": true
+     }
+    ],
+    "control": [
+     {
+      "label": "Restart",
+      "type": "button",
+      "command": "restart"
+     }
+    ]
+   }
+  ]
+}
+

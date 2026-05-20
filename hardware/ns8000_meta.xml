@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<Package xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Sha256Hash="5e5be705efd16085eb65390c50f28d48c87ccad6a4513384c1300de4e039d26f">
+  <Name>NS8000</Name>
+  <Type>Generic</Type>
+  <Description>NS8000 SAB Zone Sensor Devices</Description>
+  <IsRemoveable>true</IsRemoveable>
+  <BuildDateTime>2025-10-23T01:09:03</BuildDateTime>
+  <BuildNumber>4.0.0.105</BuildNumber>
+  <Hash>b4147f6b85e2af5ae877059636b2f1c8</Hash>
+</Package>

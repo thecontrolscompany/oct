@@ -1,0 +1,78 @@
+======================================================================
+CWCVT Probe Script
+Started: 2026-05-18 19:30:02
+======================================================================
+
+[1] Disconnecting from Tell My Wi-Fi Lover_EXT...
+[2] Connecting to CWCVT-B0:9B:A5...
+[3] Waiting for IP from CWCVT DHCP (192.168.142.x)...
+    IP acquired: False
+    WARNING: No IP assigned, probing anyway...
+
+[4] HTTP endpoint probe
+----------------------------------------------------------------------
+  ERR  /                                   <urlopen error timed out>
+  ERR  /index.html                         <urlopen error timed out>
+  ERR  /index.htm                          <urlopen error timed out>
+  ERR  /api                                <urlopen error timed out>
+  ERR  /api/status                         <urlopen error timed out>
+  ERR  /api/info                           <urlopen error timed out>
+  ERR  /api/device                         <urlopen error timed out>
+  ERR  /api/diagnostics                    <urlopen error timed out>
+  ERR  /api/settings                       <urlopen error timed out>
+  ERR  /api/bacnet                         <urlopen error timed out>
+  ERR  /api/mstp                           <urlopen error timed out>
+  ERR  /api/wifi                           <urlopen error timed out>
+  ERR  /api/ble                            <urlopen error timed out>
+  ERR  /api/pcap                           <urlopen error timed out>
+  ERR  /bacnet                             <urlopen error timed out>
+  ERR  /settings                           <urlopen error timed out>
+  ERR  /diagnostics                        <urlopen error timed out>
+  ERR  /mstp                               <urlopen error timed out>
+  ERR  /wifi                               <urlopen error timed out>
+  ERR  /ble                                <urlopen error timed out>
+  ERR  /status                             <urlopen error timed out>
+  ERR  /info                               <urlopen error timed out>
+  ERR  /about                              <urlopen error timed out>
+  ERR  /config                             <urlopen error timed out>
+  ERR  /diag                               <urlopen error timed out>
+  ERR  /ws                                 <urlopen error timed out>
+  ERR  /static/                            <urlopen error timed out>
+  ERR  /js/                                <urlopen error timed out>
+  ERR  /css/                               <urlopen error timed out>
+  ERR  /favicon.ico                        <urlopen error timed out>
+  ERR  /robots.txt                         <urlopen error timed out>
+  ERR  /sitemap.xml                        <urlopen error timed out>
+
+[5] Full root page content
+----------------------------------------------------------------------
+<urlopen error timed out>
+
+[6] BACnet Who-Is broadcast
+----------------------------------------------------------------------
+  No responses
+
+[7] Port scan (key ports)
+----------------------------------------------------------------------
+     80: closed
+    443: closed
+   8080: closed
+   8443: closed
+  47808: closed
+   4840: closed
+    102: closed
+     23: closed
+     22: closed
+     21: closed
+
+[8] WebSocket probe on ws://192.168.142.1/
+----------------------------------------------------------------------
+  Error: timed out
+
+======================================================================
+[9] Reconnecting to Tell My Wi-Fi Lover_EXT...
+    WARNING: May not be connected yet — check Wi-Fi manually.
+
+Done: 2026-05-18 19:35:25
+Results saved to: C:\Users\TimothyCollins\dev\cct\hardware\cwcvt_probe_results.txt
+======================================================================

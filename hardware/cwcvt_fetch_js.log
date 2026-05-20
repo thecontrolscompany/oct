@@ -1,0 +1,17 @@
+======================================================================
+CWCVT JS Fetch  —  2026-05-18 21:20:02
+======================================================================
+
+[1] Disconnecting from Tell My Wi-Fi Lover_EXT...
+[2] Connecting to CWCVT-B0:9B:A5...
+    IP acquired: True
+
+[3] Fetching /main.bundle.js ...
+    Status: None, Size: 25 bytes
+    FAILED to fetch main.bundle.js: HTTP Error 404: Not Found
+
+[8] Reconnecting to Tell My Wi-Fi Lover_EXT...
+    Reconnected.
+
+Done: 2026-05-18 21:20:11
+======================================================================

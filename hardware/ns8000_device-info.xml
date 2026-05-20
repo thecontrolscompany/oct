@@ -1,0 +1,179 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Interface xmlns="urn:JohnsonControls:Tools:Metasys:Modeling:Devices" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:MSEA="urn:JohnsonControls:Metasys:Dictionary" xsi:schemaLocation="urn:JohnsonControls:Tools:Metasys:Modeling:Devices DynamicHardwareDefinition.xsd" name="NS8000" revision="0" schemaVersion="1.0" description="NS8000 SAB Zone Sensor Devices">
+  <Device>
+    <Vendor number="5" name="Johnson Controls International plc" />
+    <Communication>
+      <SensorActuatorBus>
+        <BACnetMSTP minAddress="199" maxAddress="206" />
+      </SensorActuatorBus>
+    </Communication>
+  </Device>
+  <Definitions>
+    <EnumerationSet id="RHSPTEMP">
+      <Entry value="0">Humidity</Entry>
+      <Entry value="1">Setpoint</Entry>
+      <Entry value="2">Temperature</Entry>
+    </EnumerationSet>
+    <EnumerationSet id="RHSP">
+      <Entry value="0">Unused</Entry>
+      <Entry value="1">Setpoint</Entry>
+      <Entry value="2">Temperature</Entry>
+    </EnumerationSet>
+    <Attribute id="offset" type="configurable" name="Offset" property="956" linked="true">
+      <Float min="-10.0" max="1200.0" />
+    </Attribute>
+  </Definitions>
+  <Points defaultPrefix="ZN-" updateRate="5">
+    <Input id="temperature" name="T" description="Zone Temperature" updateRate="5" class="0" instance="0">
+      <Value>
+        <Float>
+          <Measurement system="imperial" min="32.0" max="104.0" default="72.0" displayPrecision="1" covIncrement="0.3" units="64" />
+          <Measurement system="metric" min="0.0" max="40.0" default="22.0" displayPrecision="1" covIncrement="0.15" units="62" />
+        </Float>
+      </Value>
+      <Attribute ref="offset">
+        <Float min="-10" max="10" default="0" covIncrement="0.1" />
+      </Attribute>
+    </Input>
+    <Input id="humidity" name="H" description="Relative Humidity" updateRate="5" class="0" instance="1">
+      <Value>
+        <Float min="0.0" max="100.0" displayPrecision="1" covIncrement="0.15" units="29" />
+      </Value>
+      <Attribute ref="offset">
+        <Float min="-10" max="10" default="0" covIncrement="0.1" />
+      </Attribute>
+    </Input>
+    <Input id="tempoccupancy" name="TOCC" description="Occupancy Request" updateRate="5" class="5" instance="0">
+      <Value>
+        <Boolean set="MSEA:set649" />
+      </Value>
+    </Input>
+    <Input id="setpoint" name="SP" description="Zone Setpoint" updateRate="5" class="2" instance="0">
+      <Value>
+        <Float>
+          <Measurement system="imperial" min="55.0" max="85.0" default="72.0" displayPrecision="1" covIncrement="0.3" units="64" />
+          <Measurement system="metric" min="12.0" max="28.0" default="22.0" displayPrecision="1" covIncrement="0.15" units="62" />
+        </Float>
+      </Value>
+    </Input>
+    <Input id="warmercooler" name="WC-ADJ" description="Warmer/Cooler Request" updateRate="5" class="2" instance="0">
+      <Value>
+        <Float min="-3.0" max="3.0" displayPrecision="1">
+          <Measurement system="imperial" covIncrement="0.3" units="64" />
+          <Measurement system="metric" covIncrement="0.15" units="62" />
+        </Float>
+      </Value>
+    </Input>
+    <Input id="fanSpeed" name="F-O" description="Fan Speed Request" updateRate="5" class="19" instance="1">
+      <Value>
+        <Enum set="MSEA:set389" />
+      </Value>
+    </Input>
+    <Input id="occupancy" name="OCC-S" description="Occupancy Status" updateRate="5" class="5" instance="1">
+      <Value>
+        <Boolean set="MSEA:set1706" />
+      </Value>
+    </Input>
+    <Input id="co2" name="CO2" description="Carbon Dioxide" updateRate="5" class="0" instance="2">
+      <Value>
+        <Float min="0" max="2000" default="0" covIncrement="4" units="96" />
+      </Value>
+      <Attribute ref="offset">
+        <Float min="0" max="1200" default="978" covIncrement="4" />
+      </Attribute>
+    </Input>
+    <Output id="occupancyDisplay" name="OCC-MODE" description="Occupancy Status Display" updateRate="5" class="19" instance="0">
+      <Value writeStrategy="outOfService">
+        <Enum set="MSEA:set345" />
+      </Value>
+    </Output>
+    <Output id="fanSpeedDisplay" name="F-%" description="Fan Speed Status Display" updateRate="5" class="19" instance="2">
+      <Value writeStrategy="outOfService">
+        <Enum set="MSEA:set428" />
+      </Value>
+    </Output>
+    <Output id="temperatureDisplay" name="T DISP" description="Temperature Display" updateRate="5" class="2" instance="1">
+      <Value writeStrategy="outOfService">
+        <Float min="-99.9" max="99.9" covIncrement="0.01" displayPrecision="1">
+          <Measurement system="imperial" default="70.0" units="64" />
+          <Measurement system="metric" default="21.0" units="62" />
+        </Float>
+      </Value>
+    </Output>
+    <Output id="humidityDisplay" name="H DISP" description="Humidity Display" updateRate="5" class="2" instance="2">
+      <Value writeStrategy="outOfService">
+        <Float min="0.0" max="100.0" displayPrecision="1" covIncrement="0.15" units="29" />
+      </Value>
+    </Output>
+    <Output id="co2Display" name="CO2 DISP" description="Carbon Dioxide Display" updateRate="5" class="2" instance="3">
+      <Value writeStrategy="outOfService">
+        <Float min="0" max="9999" default="0" covIncrement="4" units="96" />
+      </Value>
+    </Output>
+    <Output id="faultDisplay" name="FAULT-S-DISP" description="Fault Status Display" updateRate="5" class="19" instance="3">
+      <Value writeStrategy="outOfService">
+        <Enum set="MSEA:set473" />
+      </Value>
+    </Output>
+    <Output id="setpointTemp" name="SP-TEMP" description="Upper Right Display Setpoint" updateRate="5" class="19" instance="5">
+      <Value writeStrategy="outOfService">
+        <Enum set="RHSP" default="2" />
+      </Value>
+    </Output>
+    <Output id="rhTempSetpoint" name="RH-TEMP-SP" description="Main Display Object" updateRate="5" class="19" instance="4">
+      <Value writeStrategy="outOfService">
+        <Enum set="RHSPTEMP" />
+      </Value>
+    </Output>
+    <Output id="humDispBlank" name="HUM-BLANK" description="Humidity Display Blank" updateRate="5" class="5" instance="3">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set854" default="1" />
+      </Value>
+    </Output>
+    <Output id="co2DispBlank" name="CO2-BLANK" description="Carbon Dioxide Display Blank" updateRate="5" class="5" instance="4">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set854" default="1" />
+      </Value>
+    </Output>
+    <Output id="setpointBlank" name="SP-BLANK" description="Setpoint Display Blank" updateRate="5" class="5" instance="5">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set854" default="1" />
+      </Value>
+    </Output>
+    <Output id="mainDispBlank" name="MAIN-BLANK" description="Main Display Blank" updateRate="5" class="5" instance="6">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set854" default="1" />
+      </Value>
+    </Output>
+    <Output id="fanDispBlank" name="FAN-BLANK" description="Fan Display Blank" updateRate="5" class="5" instance="7">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set854" default="1" />
+      </Value>
+    </Output>
+    <Output id="decValueDelim" name="COMMA-DELIMITER" description="Main Value Delimiter" updateRate="5" class="5" instance="8">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set1698" default="0" />
+      </Value>
+    </Output>
+    <Output id="dispLockout" name="LOCKOUT" description="Display Lockout" updateRate="5" class="5" instance="9">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set854" default="1" />
+      </Value>
+    </Output>
+    <Output id="networkOnline" name="ONLINE-BLANK" description="Network Online Blank" updateRate="5" class="5" instance="10">
+      <Value writeStrategy="outOfService">
+        <Boolean set="MSEA:set854" default="1" />
+      </Value>
+    </Output>
+    <Output id="maxFanSpeed" name="MAX-FAN-SPD" description="Maximum Fan Speed Request" updateRate="5" class="19" instance="6">
+      <Value writeStrategy="outOfService">
+        <Enum set="MSEA:set71" default="2" />
+      </Value>
+    </Output>
+  </Points>
+  <Applications>
+    <Preset id="zoneTemp" name="Zone/Temperature">
+      <Point ref="temperature" />
+    </Preset>
+  </Applications>
+</Interface>

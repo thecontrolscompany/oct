@@ -1,20 +1,19 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Dashboard from './panes/Dashboard';
-import BusPane from './panes/BusPane';
-import SettingsPane from './panes/SettingsPane';
-import DiagnosticsPane from './panes/DiagnosticsPane';
-import FirmwarePane from './panes/FirmwarePane';
+import OverviewPane   from './panes/OverviewPane';
+import HardwarePane   from './panes/HardwarePane';
+import OperationPane  from './panes/OperationPane';
+import FirmwarePane   from './panes/FirmwarePane';
+import LivePane       from './panes/LivePane';
 
-const TABS = ['dashboard', 'bus', 'settings', 'diagnostics', 'firmware'] as const;
+const TABS = ['overview', 'hardware', 'operation', 'firmware', 'live'] as const;
 type Tab = typeof TABS[number];
-
 const TAB_LABELS: Record<Tab, string> = {
-  dashboard:   'Dashboard',
-  bus:         'MS/TP Bus',
-  settings:    'Settings',
-  diagnostics: 'Diagnostics',
-  firmware:    'Firmware',
+  overview:  'Overview',
+  hardware:  'Hardware',
+  operation: 'Operation',
+  firmware:  'Firmware',
+  live:      'Live Device',
 };
 
 const STORED_IP_KEY = 'oscvt-device-ip';
@@ -23,10 +22,10 @@ function storedIp() {
 }
 
 export interface RouterStatus {
-  reachable: boolean;
+  reachable:    boolean;
   converterIp?: string;
-  raw?: Record<string, unknown>;
-  error?: string;
+  raw?:         Record<string, unknown>;
+  error?:       string;
 }
 
 export interface OscvtApi {
@@ -53,8 +52,8 @@ export function makeApi(ip: string): OscvtApi {
 }
 
 export default function OscvtApp() {
-  const [tab, setTab]         = useState<Tab>('dashboard');
-  const [ipInput, setIpInput] = useState(storedIp);
+  const [tab, setTab]           = useState<Tab>('overview');
+  const [ipInput, setIpInput]   = useState(storedIp);
   const [deviceIp, setDeviceIp] = useState(storedIp);
 
   const api = makeApi(deviceIp);
@@ -62,64 +61,66 @@ export default function OscvtApp() {
   const { data: status } = useQuery({
     queryKey: ['oscvt', 'status', deviceIp],
     queryFn:  api.status,
-    refetchInterval: 5_000,
-    enabled: !!deviceIp,
+    refetchInterval: 10_000,
+    enabled: tab === 'live' && !!deviceIp,
   });
 
   const connected = status?.reachable ?? false;
 
-  const handleConnect = useCallback(() => {
-    const ip = ipInput.trim();
-    if (!ip) return;
-    try { localStorage.setItem(STORED_IP_KEY, ip); } catch { /* */ }
-    setDeviceIp(ip);
-  }, [ipInput]);
+  const handleConnect = (ip: string) => {
+    const trimmed = ip.trim();
+    if (!trimmed) return;
+    try { localStorage.setItem(STORED_IP_KEY, trimmed); } catch { /* */ }
+    setDeviceIp(trimmed);
+  };
 
   return (
     <div className="ov-layout">
-      <header className="ov-header">
-        <div className="ov-header-top">
+      <header className="ov-topbar">
+        <div className="ov-topbar-left">
           <span className="ov-logo">OSCVT</span>
-          <span className="ov-logo-sub">Pro</span>
-          <div className="ov-header-gap" />
-          <div className="ov-connect-bar">
-            <span className={`ov-status-dot ${connected ? 'on' : 'off'}`} />
-            <span className="ov-status-label">
-              {connected ? `Connected · ${deviceIp}` : 'Not connected'}
-            </span>
-            <input
-              className="ov-ip-input"
-              value={ipInput}
-              onChange={e => setIpInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleConnect()}
-              placeholder="192.168.142.1"
-              spellCheck={false}
-            />
-            <button className="ov-btn ov-btn-primary" onClick={handleConnect}>
-              Connect
-            </button>
-          </div>
+          <a className="ov-back" href="/">← OCT</a>
         </div>
-        <nav className="ov-nav">
-          {TABS.map(t => (
-            <button
-              key={t}
-              className={`ov-tab${tab === t ? ' active' : ''}`}
-              onClick={() => setTab(t)}
-            >
-              {TAB_LABELS[t]}
-            </button>
-          ))}
-        </nav>
+        <div className="ov-topbar-title">Open Source Converter</div>
+        <div className="ov-topbar-right">
+          {tab === 'live' && (
+            <>
+              <span className={`ov-status-dot ${connected ? 'on' : 'off'}`} />
+              <span>{connected ? `${deviceIp}` : 'Not connected'}</span>
+            </>
+          )}
+        </div>
       </header>
 
-      <main className="ov-content">
-        {tab === 'dashboard'   && <Dashboard    deviceIp={deviceIp} connected={connected} status={status} api={api} />}
-        {tab === 'bus'         && <BusPane       deviceIp={deviceIp} connected={connected} api={api} />}
-        {tab === 'settings'    && <SettingsPane  deviceIp={deviceIp} connected={connected} api={api} />}
-        {tab === 'diagnostics' && <DiagnosticsPane deviceIp={deviceIp} connected={connected} api={api} />}
-        {tab === 'firmware'    && <FirmwarePane  deviceIp={deviceIp} connected={connected} api={api} />}
-      </main>
+      <div className="ov-tabs">
+        {TABS.map(t => (
+          <button
+            key={t}
+            className={`ov-tab${tab === t ? ' active' : ''}`}
+            onClick={() => setTab(t)}
+          >
+            {TAB_LABELS[t]}
+          </button>
+        ))}
+      </div>
+
+      <div className="ov-content">
+        {tab === 'overview'   && <OverviewPane />}
+        {tab === 'hardware'   && <HardwarePane />}
+        {tab === 'operation'  && <OperationPane />}
+        {tab === 'firmware'   && (
+          <FirmwarePane
+            deviceIp={deviceIp} connected={connected} api={api}
+            ipInput={ipInput} setIpInput={setIpInput} onConnect={handleConnect}
+          />
+        )}
+        {tab === 'live'       && (
+          <LivePane
+            deviceIp={deviceIp} connected={connected} status={status} api={api}
+            ipInput={ipInput} setIpInput={setIpInput} onConnect={handleConnect}
+          />
+        )}
+      </div>
     </div>
   );
 }

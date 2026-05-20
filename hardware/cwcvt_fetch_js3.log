@@ -1,0 +1,73 @@
+======================================================================
+CWCVT JS Probe v3  —  2026-05-18 21:23:02
+======================================================================
+
+[1] Connecting to CWCVT...
+    IP: True
+
+[2] Catch-all test
+  HTTP/1.1 404 Not Fou   fake path                                           23b  text/html
+  HTTP/1.1 404 Not Fou   /ui/ dir                                            19b  text/html
+  HTTP/1.1 404 Not Fou   /ui/main.bundle.js                                  19b  text/html
+
+[3] Full browser headers on JS paths
+  HTTP/1.1 404 Not Fou   /main.bundle.js                                     23b  text/html
+  HTTP/1.1 404 Not Fou   /main.bundle.js.gz                                  23b  text/html
+  HTTP/1.1 404 Not Fou   /main.bundle.js.br                                  23b  text/html
+  HTTP/1.1 404 Not Fou   /js.gz                                              23b  text/html
+  HTTP/1.1 404 Not Fou   /bundle.gz                                          23b  text/html
+  HTTP/1.1 404 Not Fou   /app.gz                                             23b  text/html
+
+[4] Query string / fragment variations
+  HTTP/1.1 404 Not Fou   /main.bundle.js?v=1                                 23b  text/html
+  HTTP/1.1 404 Not Fou   /main.bundle.js?1.1.0.371                           23b  text/html
+  ERR:timed out          /?js=1                                               0b  
+  HTTP/1.1 404 Not Fou   /index?bundle=main                                  23b  text/html
+
+[5] HTTP/1.0 request
+  HTTP/1.0 response: HTTP/1.1 404 Not Found
+Content-Type: text/html
+Content-Length: 23
+
+This URI does not exist
+
+[6] OPTIONS request (server fingerprint)
+HTTP/1.1 405 Method Not Allowed
+Content-Type: text/html
+Content-Length: 52
+
+Request method for this URI is not handled by server
+
+[7] Expanded path scan
+  HTTP/1.1 404 Not Fou   /api/v1/                                            23b  text/html
+  HTTP/1.1 404 Not Fou   /api/v2/                                            23b  text/html
+  HTTP/1.1 404 Not Fou   /api/settings/bacnet                                23b  text/html
+  HTTP/1.1 404 Not Fou   /api/settings/mstp                                  23b  text/html
+  HTTP/1.1 404 Not Fou   /api/settings/wifi                                  23b  text/html
+  HTTP/1.1 404 Not Fou   /api/settings/ble                                   23b  text/html
+  HTTP/1.1 404 Not Fou   /api/diagnostics/mstp                               23b  text/html
+  HTTP/1.1 404 Not Fou   /api/diagnostics/device                             23b  text/html
+  HTTP/1.1 404 Not Fou   /api/diagnostics/wifi                               23b  text/html
+  HTTP/1.1 404 Not Fou   /api/diagnostics/ble                                23b  text/html
+  HTTP/1.1 404 Not Fou   /api/capture                                        23b  text/html
+  HTTP/1.1 404 Not Fou   /api/pcap/start                                     23b  text/html
+  HTTP/1.1 404 Not Fou   /api/pcap/stop                                      23b  text/html
+  HTTP/1.1 404 Not Fou   /api/pcap/status                                    23b  text/html
+  HTTP/1.1 404 Not Fou   /api/factory-reset                                  23b  text/html
+  HTTP/1.1 404 Not Fou   /api/reboot                                         23b  text/html
+  HTTP/1.1 404 Not Fou   /bacnet/settings                                    23b  text/html
+  HTTP/1.1 404 Not Fou   /bacnet/diagnostics                                 23b  text/html
+  HTTP/1.1 404 Not Fou   /settings/bacnet                                    23b  text/html
+  HTTP/1.1 404 Not Fou   /settings/mstp                                      23b  text/html
+  HTTP/1.1 404 Not Fou   /diag/mstp                                          23b  text/html
+  HTTP/1.1 404 Not Fou   /diag/wifi                                          23b  text/html
+  HTTP/1.1 404 Not Fou   /diag/ble                                           23b  text/html
+  HTTP/1.1 404 Not Fou   /diag/device                                        23b  text/html
+  HTTP/1.1 404 Not Fou   /sys/info                                           23b  text/html
+  HTTP/1.1 404 Not Fou   /sys/status                                         23b  text/html
+
+[8] Reconnecting to Tell My Wi-Fi Lover_EXT...
+    OK.
+
+Done: 2026-05-18 21:23:23
+======================================================================

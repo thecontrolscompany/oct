@@ -1,0 +1,52 @@
+======================================================================
+CWCVT JS Fetch v2  —  2026-05-18 21:21:02
+======================================================================
+
+[1] Disconnect + connect to CWCVT...
+    IP: True
+
+[2] Full headers from GET /
+    Status: 200
+    Content-Type: text/html
+    Content-Length: 214
+    Body (214 bytes):
+<!DOCTYPE html>
+
+<head>
+    <title>JCI</title>
+	<meta name="viewport" content="initial-scale=1,user-scalable=no,width=device-width">
+</head>
+
+<body>
+    <script src="main.bundle.js" type='module'></script>
+</body>
+
+
+[3] Trying JS file paths...
+
+[4] Raw TCP GET /main.bundle.js (exact wire bytes):
+  Headers: HTTP/1.1 404 Not Found
+Content-Type: text/html
+Content-Length: 23
+  Body (23 bytes): b'This URI does not exist'
+  404  /main.bundle.js                                23b  text/html
+  404  /main.bundle.js                                23b  text/html
+  404  /bundle.js                                     23b  text/html
+  404  /app.js                                        23b  text/html
+  404  /app.bundle.js                                 23b  text/html
+  404  /index.js                                      23b  text/html
+  404  /js/main.bundle.js                             23b  text/html
+  404  /static/main.bundle.js                         23b  text/html
+  404  /assets/main.bundle.js                         23b  text/html
+  404  /www/main.bundle.js                            23b  text/html
+  404  /dist/main.bundle.js                           23b  text/html
+  404  /ui/main.bundle.js                             19b  text/html
+  404  /web/main.bundle.js                            23b  text/html
+
+[5] Broad path scan (looking for any 200)...
+
+[6] Reconnecting to Tell My Wi-Fi Lover_EXT...
+    OK.
+
+Done: 2026-05-18 21:21:13
+======================================================================

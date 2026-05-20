@@ -14,7 +14,9 @@ type ProxyResult = {
   parsed: unknown;
 };
 
-function getRouterIp(): string {
+function getRouterIp(req: Request): string {
+  const override = typeof req.query['ip'] === 'string' ? req.query['ip'].trim() : null;
+  if (override) return override;
   const ip = svc.getConverterIp();
   if (!svc.isConnected() || !ip) throw new Error('No router connected');
   return ip;
@@ -72,9 +74,9 @@ function proxyGet(ip: string, path: string): Promise<ProxyResult> {
 
 // GET /api/router/status
 // Check whether the router console is reachable and return ui_info.json if so.
-router.get('/status', async (_req: Request, res: Response) => {
+router.get('/status', async (req: Request, res: Response) => {
   try {
-    const ip = getRouterIp();
+    const ip = getRouterIp(req);
     const result = await proxyGet(ip, '/ui_views/ui_info.json');
     res.json({
       reachable: true,
@@ -90,9 +92,9 @@ router.get('/status', async (_req: Request, res: Response) => {
 });
 
 // GET /api/router/diagnostics
-router.get('/diagnostics', async (_req: Request, res: Response) => {
+router.get('/diagnostics', async (req: Request, res: Response) => {
   try {
-    const ip = getRouterIp();
+    const ip = getRouterIp(req);
     const result = await proxyGet(ip, '/ui_views/diagnostics.json');
     respondProxyResult(res, result);
   } catch (err) {
@@ -101,9 +103,9 @@ router.get('/diagnostics', async (_req: Request, res: Response) => {
 });
 
 // GET /api/router/settings/bacnet
-router.get('/settings/bacnet', async (_req: Request, res: Response) => {
+router.get('/settings/bacnet', async (req: Request, res: Response) => {
   try {
-    const ip = getRouterIp();
+    const ip = getRouterIp(req);
     const result = await proxyGet(ip, '/ui_views/bac_settings.json');
     respondProxyResult(res, result);
   } catch (err) {
@@ -112,9 +114,9 @@ router.get('/settings/bacnet', async (_req: Request, res: Response) => {
 });
 
 // GET /api/router/settings/wifi
-router.get('/settings/wifi', async (_req: Request, res: Response) => {
+router.get('/settings/wifi', async (req: Request, res: Response) => {
   try {
-    const ip = getRouterIp();
+    const ip = getRouterIp(req);
     const result = await proxyGet(ip, '/ui_views/wifi_settings.json');
     respondProxyResult(res, result);
   } catch (err) {
@@ -123,9 +125,9 @@ router.get('/settings/wifi', async (_req: Request, res: Response) => {
 });
 
 // GET /api/router/settings/ble
-router.get('/settings/ble', async (_req: Request, res: Response) => {
+router.get('/settings/ble', async (req: Request, res: Response) => {
   try {
-    const ip = getRouterIp();
+    const ip = getRouterIp(req);
     const result = await proxyGet(ip, '/ui_views/ble_settings.json');
     respondProxyResult(res, result);
   } catch (err) {
@@ -137,7 +139,7 @@ router.get('/settings/ble', async (_req: Request, res: Response) => {
 // Accept fw_update as multipart/form-data and re-post it to the router's OTA path.
 router.post('/upload', upload.single('fw_update'), async (req: Request, res: Response) => {
   try {
-    const ip = getRouterIp();
+    const ip = getRouterIp(req);
     const file = req.file;
     if (!file) {
       res.status(400).json({ error: 'fw_update file required' });

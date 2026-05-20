@@ -77,6 +77,12 @@ app.get('/api/health', (_req, res) => {
 const uiDist = path.resolve(__dirname, '../../ui/dist');
 if (fs.existsSync(uiDist)) {
   app.use(express.static(uiDist));
+  // OSCVT sub-app — must come before the OCT catch-all
+  const oscvtIndex = path.join(uiDist, 'oscvt', 'index.html');
+  if (fs.existsSync(oscvtIndex)) {
+    app.get('/oscvt',    (_req, res) => res.sendFile(oscvtIndex));
+    app.get('/oscvt/*',  (_req, res) => res.sendFile(oscvtIndex));
+  }
   app.get('*', (_req, res) => {
     res.sendFile(path.join(uiDist, 'index.html'));
   });

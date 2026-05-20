@@ -5,19 +5,18 @@ export default function OverviewPane() {
         <div className="ov-hero-kicker">Open Source BACnet MS/TP Wireless Converter</div>
         <h1>OSCVT</h1>
         <p>
-          OSCVT is an open-source ESP32-S3 device that replaces the Johnson Controls TL-CWCVT-0
-          ($500) and TL-MAP1810-0Px ($600+) — two proprietary adapters that field technicians rely
-          on to commission and troubleshoot BACnet MS/TP networks. OSCVT delivers the same
-          BACnet MS/TP to BACnet/IP routing with auto-baud detection, auto-polarity correction,
-          and a live web UI, at a fraction of the cost and with full visibility into the hardware
+          OSCVT is an open-source ESP32-S3 wireless BACnet adapter built for field technicians who
+          commission and troubleshoot BACnet MS/TP networks. It delivers BACnet MS/TP to BACnet/IP
+          routing with auto-baud detection, auto-polarity correction, and a live web UI — at a
+          fraction of the cost of proprietary alternatives, with full visibility into the hardware
           and firmware.
         </p>
         <p>
           OSCVT works alongside OCT. The device provides the live BACnet transport; OCT provides
-          the software. Together they replace the full CCT + CWCVT field stack.
+          the software. Together they form a complete open-source field commissioning stack.
         </p>
         <div className="ov-hero-chips">
-          <span className="ov-chip">Replaces TL-CWCVT-0</span>
+          <span className="ov-chip">Open-source BACnet adapter</span>
           <span className="ov-chip">ESP32-S3</span>
           <span className="ov-chip">BACnet MS/TP ↔ BACnet/IP</span>
           <span className="ov-chip">Auto-baud</span>
@@ -42,13 +41,13 @@ export default function OverviewPane() {
       </div>
 
       <div className="ov-card">
-        <div className="ov-card-header">Comparison — OSCVT vs TL-CWCVT-0</div>
+        <div className="ov-card-header">Comparison — OSCVT vs Proprietary Wireless BACnet Adapters</div>
         <div className="ov-card-body" style={{ padding: 0 }}>
           <table className="ov-table">
             <thead>
               <tr>
                 <th>Feature</th>
-                <th>TL-CWCVT-0</th>
+                <th>Proprietary adapter</th>
                 <th>OSCVT Pro</th>
                 <th>OSCVT Mini</th>
               </tr>

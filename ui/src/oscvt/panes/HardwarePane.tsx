@@ -73,7 +73,7 @@ export default function HardwarePane() {
               <tr><td>OTA update</td><td>ESP-IDF OTA partition scheme</td><td>Planned — 1a</td></tr>
               <tr><td>PCAP capture</td><td>DLT_BACNET_MS_TP (165) to SD card</td><td>Planned — 1b</td></tr>
               <tr><td>Modbus RTU</td><td>eModbus</td><td>Planned — 1c</td></tr>
-              <tr><td>JCI N2 bus</td><td>Custom (requires capture session)</td><td>Planned — 1c</td></tr>
+              <tr><td>N2 bus (legacy)</td><td>Custom (requires protocol capture session)</td><td>Planned — 1c</td></tr>
               <tr><td>LVGL display (Pro only)</td><td>LVGL 9.x</td><td>Planned — 1a (Pro)</td></tr>
             </tbody>
           </table>
@@ -112,6 +112,60 @@ export default function HardwarePane() {
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="ov-card">
+        <div className="ov-card-header">Platform Compatibility</div>
+        <div className="ov-card-body">
+          <div className="ov-info" style={{ marginBottom: 16 }}>
+            OSCVT firmware is developed and tested on ESP32-S3. The two boards listed above are the
+            only <strong>known supported</strong> platforms. Other ESP32 variants may work but are
+            not validated. Non-ESP32 platforms are out of scope and receive no support.
+          </div>
+          <table className="ov-table">
+            <thead>
+              <tr><th>Board / Platform</th><th>Support</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Waveshare ESP32-S3-Touch-LCD-4.3B</strong></td>
+                <td style={{ color: '#166534', fontWeight: 600 }}>Known supported (Pro)</td>
+                <td>Primary target. All features tested on this board.</td>
+              </tr>
+              <tr>
+                <td><strong>Waveshare ESP32-S3-RS485-CAN</strong></td>
+                <td style={{ color: '#166534', fontWeight: 600 }}>Known supported (Mini)</td>
+                <td>Primary target. Display layer compiled out.</td>
+              </tr>
+              <tr>
+                <td>Other ESP32-S3 boards with isolated RS-485</td>
+                <td style={{ color: '#92400e', fontWeight: 600 }}>May work — not validated</td>
+                <td>Pin assignments will differ. Requires manual board config. No support provided.</td>
+              </tr>
+              <tr>
+                <td>ESP32 (original, non-S3) with RS-485</td>
+                <td style={{ color: '#92400e', fontWeight: 600 }}>May work — not validated</td>
+                <td>Different pin capabilities, no PSRAM. Reduced feature set likely. No support provided.</td>
+              </tr>
+              <tr>
+                <td>ESP32-C3, ESP32-C6, ESP32-H2</td>
+                <td style={{ color: '#6b7280', fontWeight: 600 }}>Unknown</td>
+                <td>Single-core or different architecture. Untested. MS/TP timing may be inadequate.</td>
+              </tr>
+              <tr>
+                <td>Arduino, STM32, Raspberry Pi, other</td>
+                <td style={{ color: '#991b1b', fontWeight: 600 }}>Not supported</td>
+                <td>Firmware targets ESP-IDF 5.x. Porting to other SDKs is out of scope.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="ov-note" style={{ marginTop: 12 }}>
+            The ESP32-S3 was chosen for its dual-core 240 MHz architecture, large SRAM, native USB OTG,
+            and mature ESP-IDF 5.x toolchain. BACnet MS/TP token-ring timing is latency-sensitive —
+            platforms without hardware UART and sufficient CPU headroom may not meet timing
+            requirements reliably.
+          </p>
         </div>
       </div>
     </>

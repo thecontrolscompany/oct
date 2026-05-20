@@ -48,7 +48,7 @@ export default function OperationPane() {
         <div className="ov-card-body">
           <div className="ov-steps">
             <Step n={10} title="Check bus health from OCT"
-              text="In OCT's Live Devices tab, open MS/TP Diagnostics. The Router Health card shows token loop time, framing errors, and dropped tokens pulled from the OSCVT. Per-device stats show response times and JCI proprietary MS/TP health counters." />
+              text="In OCT's Live Devices tab, open MS/TP Diagnostics. The Router Health card shows token loop time, framing errors, and dropped tokens pulled from the OSCVT. Per-device stats show response times and vendor-specific MS/TP health counters where available." />
             <Step n={11} title="Check bus health from OSCVT web UI"
               text="On the OSCVT web UI dashboard, the bus health section shows the same counters updated every 5 seconds. The device table shows all MS/TP nodes in token-passing order with their response times." />
             <Step n={12} title="Export a field report"

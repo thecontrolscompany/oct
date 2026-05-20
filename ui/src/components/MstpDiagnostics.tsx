@@ -80,7 +80,7 @@ export default function MstpDiagnostics() {
       <div className="tabs">
         {([
           ['scan',     'Bus Scanner'],
-          ['health',   'JCI Node Health'],
+          ['health',   'Vendor Node Health'],
           ['standard', 'Standard BACnet'],
           ['netport',  'Network Ports'],
         ] as const).map(([id, label]) => (
@@ -332,7 +332,7 @@ function NodeStatsDetail({ stats }: { stats: NodeStats }) {
         </div>
         <div className="card-body">
           <div className="grid-3">
-            <Kv label="JCI MAC" value={stats.jciMac ?? '—'} accent />
+            <Kv label="Vendor MAC" value={stats.jciMac ?? '—'} accent />
             <Kv label="SA Bus MAC" value={stats.saBusMac ?? '—'} />
             <Kv label="Supervisor MAC" value={stats.supervisorMac ?? '—'} />
           </div>

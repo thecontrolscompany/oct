@@ -168,7 +168,115 @@ router.post('/upload', upload.single('fw_update'), async (req: Request, res: Res
   }
 });
 
-// TODO: POST /api/router/settings — endpoint and body shape TBD after live write verification.
+// POST /api/router/settings
+// Write a settings group back to the router.
+// Body: { group: string, values: Record<string, unknown> }
+// The router accepts a POST to /data/group/:group with JSON key/value pairs.
+// The write method was determined by observing network traffic from the
+// device web UI — no source code was copied.
+router.post('/settings', async (req: Request, res: Response) => {
+  try {
+    const ip = getRouterIp(req);
+    const { group, values } = req.body as { group?: string; values?: Record<string, unknown> };
+    if (!group || !values) {
+      res.status(400).json({ error: 'group and values required' });
+      return;
+    }
+    const upstream = await fetch(`http://${ip}/data/group/${encodeURIComponent(group)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin:  `http://${ip}`,
+        Referer: `http://${ip}/`,
+      },
+      signal: AbortSignal.timeout(4000),
+      body: JSON.stringify(values),
+    });
+    const text = await upstream.text();
+    res.status(upstream.status).json({ ok: upstream.ok, response: text });
+  } catch (err) {
+    sendRouterError(res, err);
+  }
+});
+
+// POST /api/router/command
+// Send a named command to the router.
+// Body: { command: string }
+// Known commands: mstp-clear-stats, ble-clear-stats, restart
+router.post('/command', async (req: Request, res: Response) => {
+  try {
+    const ip = getRouterIp(req);
+    const { command } = req.body as { command?: string };
+    if (!command) {
+      res.status(400).json({ error: 'command required' });
+      return;
+    }
+    const ALLOWED = new Set(['mstp-clear-stats', 'ble-clear-stats', 'mstp-force-baud', 'restart']);
+    if (!ALLOWED.has(command)) {
+      res.status(400).json({ error: `Unknown command: ${command}. Allowed: ${[...ALLOWED].join(', ')}` });
+      return;
+    }
+    const upstream = await fetch(`http://${ip}/data/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin:  `http://${ip}`,
+        Referer: `http://${ip}/`,
+      },
+      signal: AbortSignal.timeout(4000),
+      body: JSON.stringify({ command }),
+    });
+    const text = await upstream.text();
+    res.status(upstream.status).json({ ok: upstream.ok, response: text });
+  } catch (err) {
+    sendRouterError(res, err);
+  }
+});
+
+// GET /api/router/captures
+// List PCAP capture files available on the router SD card.
+// Proxies /sd_card/mstp_captures/ — returns raw HTML from the device
+// which contains download links; also parses out filenames if possible.
+router.get('/captures', async (req: Request, res: Response) => {
+  try {
+    const ip = getRouterIp(req);
+    const result = await proxyGet(ip, '/sd_card/mstp_captures/');
+    // Return raw HTML so the client can render download links,
+    // and attempt to extract a structured file list from the HTML.
+    const files = extractPcapFiles(String(result.rawText), ip);
+    res.json({ html: result.rawText, files });
+  } catch (err) {
+    sendRouterError(res, err);
+  }
+});
+
+// POST /api/router/captures/toggle
+// Enable or disable PCAP capture on the router.
+// Body: { enabled: boolean }
+router.post('/captures/toggle', async (req: Request, res: Response) => {
+  try {
+    const ip = getRouterIp(req);
+    const { enabled } = req.body as { enabled?: boolean };
+    if (enabled === undefined) {
+      res.status(400).json({ error: 'enabled (boolean) required' });
+      return;
+    }
+    const upstream = await fetch(`http://${ip}/data/group/capture`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin:  `http://${ip}`,
+        Referer: `http://${ip}/`,
+      },
+      signal: AbortSignal.timeout(4000),
+      body: JSON.stringify({ 'sd_m_log': enabled ? 'Enabled' : 'Disabled' }),
+    });
+    const text = await upstream.text();
+    res.status(upstream.status).json({ ok: upstream.ok, enabled, response: text });
+  } catch (err) {
+    sendRouterError(res, err);
+  }
+});
 
 function respondProxyResult(res: Response, result: ProxyResult): void {
   if ((result.contentType ?? '').includes('json')) {
@@ -199,6 +307,25 @@ function sendRouterError(res: Response, err: unknown): void {
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[\\/]/g, '_').trim() || 'firmware.bin';
+}
+
+type PcapFile = { name: string; url: string; size?: string };
+
+function extractPcapFiles(html: string, ip: string): PcapFile[] {
+  const files: PcapFile[] = [];
+  // Match anchor tags whose href ends in .pcap or .pcapng
+  const linkRe = /<a\s+[^>]*href="([^"]*\.pcap(?:ng)?)"[^>]*>([^<]*)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(html)) !== null) {
+    const href = m[1];
+    const label = m[2].trim();
+    const name = label || href.split('/').pop() || href;
+    // href may be absolute or relative; build a full URL through our proxy
+    const encodedPath = href.startsWith('/') ? href : `/sd_card/mstp_captures/${href}`;
+    const url = `http://${ip}${encodedPath}`;
+    files.push({ name, url });
+  }
+  return files;
 }
 
 export default router;

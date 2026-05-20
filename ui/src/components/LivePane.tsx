@@ -38,7 +38,7 @@ export default function LivePane() {
     refetchInterval: 15_000,
   });
 
-  const { data: cwcvtMstp } = useQuery({
+  const { data: routerMstp } = useQuery({
     queryKey: ['bacnet', 'cwcvt', 'mstp-diag'],
     queryFn: () => api.bacnet.cwcvtGroup('mstp-diag'),
     enabled: status?.connected ?? false,
@@ -46,8 +46,8 @@ export default function LivePane() {
   });
 
   const downstreamNodes = useMemo(
-    () => parseDownstreamNodes(cwcvtMstp?.content.find(x => x.key === 'mstp-dev-list')?.value),
-    [cwcvtMstp]
+    () => parseDownstreamNodes(routerMstp?.content.find(x => x.key === 'mstp-dev-list')?.value),
+    [routerMstp]
   );
   const downstreamCount = downstreamNodes.length;
 
@@ -129,14 +129,14 @@ export default function LivePane() {
               </button>
             </div>
 
-            {cwcvtMstp && (
+            {routerMstp && (
               <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-dim)' }}>
-                <div style={{ fontWeight: 600, color: 'var(--text)' }}>CWCVT MS/TP</div>
-                <div>Count: {String(cwcvtMstp.content.find(x => x.key === 'mstp-dev-cnt')?.value ?? '—')}</div>
-                <div>List: {String(cwcvtMstp.content.find(x => x.key === 'mstp-dev-list')?.value ?? '—')}</div>
+                <div style={{ fontWeight: 600, color: 'var(--text)' }}>Router MS/TP</div>
+                <div>Count: {String(routerMstp.content.find(x => x.key === 'mstp-dev-cnt')?.value ?? '—')}</div>
+                <div>List: {String(routerMstp.content.find(x => x.key === 'mstp-dev-list')?.value ?? '—')}</div>
                 {downstreamCount > 0 && (
                   <div style={{ marginTop: 8 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Behind CWCVT</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Behind Router</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {downstreamNodes.map(node => {
                         const liveDevice = devices.find(d => d.deviceId === node);
@@ -233,7 +233,7 @@ export default function LivePane() {
             <div className="content" style={{ flex: 1 }}>
               <div className="empty-state">
                 <div className="icon">🌿</div>
-                <p>Downstream node {selectedDownstreamNode} is visible behind CWCVT, but OCT does not yet have a routed BACnet identity for it.</p>
+                <p>Downstream node {selectedDownstreamNode} is visible behind the router, but OCT does not yet have a routed BACnet identity for it.</p>
                 <p style={{ fontSize: 11, color: 'var(--text-dim)', maxWidth: 520, lineHeight: 1.5 }}>
                   That means the converter is reporting the node on its bus, but the node has not been promoted into the flat BACnet device list yet.
                   We can still track it here and use it as the next target for routed discovery.
@@ -320,7 +320,7 @@ function DeviceDetail({
   selectedObj: BacnetObject | null;
   onSelectObj: (o: BacnetObject) => void;
 }) {
-  const isCwcvt = /cwcvt/i.test(`${device.name ?? ''} ${device.modelName ?? ''}`) || device.deviceId >= 39000;
+  const isRouter = /cwcvt|oscvt|bacnet.router|converter/i.test(`${device.name ?? ''} ${device.modelName ?? ''}`) || device.deviceId >= 39000;
   const [detailTab, setDetailTab] = useState<'objects' | 'commissioning' | 'io'>('objects');
   const [filterType, setFilterType] = useState('');
   const trendManager = useTrendManager(device);
@@ -328,7 +328,7 @@ function DeviceDetail({
   const { data: objects = [], isLoading } = useQuery({
     queryKey: ['bacnet', 'objects', device.deviceId],
     queryFn: () => api.bacnet.objects(device.deviceId),
-    enabled: !isCwcvt,
+    enabled: !isRouter,
   });
 
   const filtered = filterType ? objects.filter(o => o.typeName === filterType) : objects;
@@ -348,16 +348,16 @@ function DeviceDetail({
         </div>
       </div>
 
-      {detailTab === 'objects' && isCwcvt && (
+      {detailTab === 'objects' && isRouter && (
         <div className="content" style={{ flex: 1, overflow: 'auto' }}>
           <div className="card">
-            <div className="card-header">CWCVT Overview</div>
+            <div className="card-header">BACnet Router</div>
             <div className="card-body" style={{ lineHeight: 1.6 }}>
               <p style={{ marginTop: 0 }}>
                 This is the converter, not the controller beneath it.
               </p>
               <p>
-                Use the <strong>Behind CWCVT</strong> nodes to promote downstream devices into the live list.
+                Use the <strong>Behind Router</strong> nodes to promote downstream devices into the live list.
                 The converter itself only gives us the bridge and diagnostics layer.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
